@@ -1,0 +1,55 @@
+services:
+  # LocalStack - AWS 서비스 로컬 에뮬레이션 (SQS, Step Functions, Lambda, S3 등)
+  localstack:
+    image: localstack/localstack-pro
+    container_name: unisync-localstack
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # 외부 서비스 포트 범위
+    environment:
+      - SERVICES=sqs,stepfunctions,lambda,s3,secretsmanager,events,cognito-idp,elasticloadbalancingv2,ec2
+      - DEBUG=1
+      - PERSISTENCE=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}  # Pro 라이선스 토큰
+    volumes:
+      - "./localstack-init:/etc/localstack/init/ready.d"  # 초기화 스크립트
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "localstack-data:/var/lib/localstack"
+    networks:
+      - unisync-network
+
+  # MySQL - 각 서비스별 데이터베이스
+  mysql:
+    image: mysql:8.0
+    container_name: unisync-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_USER=unisync
+      - MYSQL_PASSWORD=unisync_password
+      - TZ=Asia/Seoul
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d  # 초기 DB 생성 스크립트
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - unisync-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql-data:
+    driver: local
+  localstack-data:
+    driver: local
+
+networks:
+  unisync-network:
+    driver: bridge
