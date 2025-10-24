@@ -52,28 +52,6 @@ public class AuthController {
         }
     }
 
-    @GetMapping("/me")
-    @Operation(summary = "내 정보 조회", description = "Access Token으로 현재 로그인한 사용자 정보 조회")
-    public ResponseEntity<?> getMe(@RequestHeader("Authorization") String authorization) {
-        try {
-            String accessToken = extractToken(authorization);
-            var user = authService.getUserByAccessToken(accessToken);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("userId", user.getId());
-            response.put("email", user.getEmail());
-            response.put("name", user.getName());
-            response.put("isActive", user.getIsActive());
-            response.put("createdAt", user.getCreatedAt());
-
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            log.error("사용자 정보 조회 실패: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(createErrorResponse(e.getMessage()));
-        }
-    }
-
     @GetMapping("/health")
     @Operation(summary = "헬스체크", description = "User Service 상태 확인")
     public ResponseEntity<?> healthCheck() {
@@ -85,13 +63,6 @@ public class AuthController {
     }
 
     // Utility methods
-
-    private String extractToken(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new RuntimeException("Authorization 헤더가 없거나 형식이 올바르지 않습니다");
-        }
-        return authorization.substring(7);
-    }
 
     private Map<String, String> createErrorResponse(String message) {
         Map<String, String> error = new HashMap<>();

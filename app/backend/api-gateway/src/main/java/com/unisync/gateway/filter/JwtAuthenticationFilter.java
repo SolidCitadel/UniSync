@@ -63,18 +63,17 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
                 Map<String, Object> claims = jwtVerifier.verify(token);
 
                 // Claims에서 사용자 정보 추출
-                String userId = jwtVerifier.extractUserId(claims);
+                String cognitoSub = jwtVerifier.extractUserId(claims);  // 실제로는 Cognito Sub
                 String email = jwtVerifier.extractEmail(claims);
                 String name = jwtVerifier.extractName(claims);
 
-                log.debug("JWT 검증 성공: userId={}, email={}", userId, email);
+                log.debug("JWT 검증 성공: cognitoSub={}, email={}", cognitoSub, email);
 
                 // 헤더에 사용자 정보 추가 (백엔드 서비스에서 사용)
                 ServerHttpRequest modifiedRequest = request.mutate()
-                        .header("X-User-Id", userId)
+                        .header("X-Cognito-Sub", cognitoSub)  // Cognito User Pool의 sub (UUID)
                         .header("X-User-Email", email)
                         .header("X-User-Name", name)
-                        .header("X-Cognito-Sub", userId)
                         .build();
 
                 ServerWebExchange modifiedExchange = exchange.mutate()
