@@ -1,0 +1,24 @@
+package com.unisync.user.auth.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthResponse {
+
+    private String accessToken;
+    private String refreshToken;
+    private String idToken;
+    private Integer expiresIn;
+    private String tokenType;
+
+    // 사용자 정보
+    private Long userId;
+    private String email;
+    private String name;
+}

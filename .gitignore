@@ -41,6 +41,13 @@ target/
 mvnw
 mvnw.cmd
 
+### Gradle ###
+.gradle/
+build/
+!**/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
 ### Environment Variables ###
 .env
 .env.local
@@ -59,3 +66,15 @@ application-local.properties
 ### Windows ###
 Thumbs.db
 ehthumbs.db
+
+### Docker ###
+docker-compose.override.yml
+.docker/
+
+### LocalStack ###
+localstack-data/
+.localstack/
+
+### Database ###
+mysql-data/
+*.sql.backup
