@@ -10,9 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * UserController - API Gateway를 거쳐서 들어오는 요청 처리
  *
@@ -43,7 +40,7 @@ public class UserController {
             summary = "내 정보 조회 (API Gateway 헤더 사용)",
             description = "API Gateway가 JWT를 검증하고 전달한 X-Cognito-Sub 헤더로 사용자 정보 조회"
     )
-    public ResponseEntity<?> getMyInfo(
+    public ResponseEntity<UserResponse> getMyInfo(
             @Parameter(description = "API Gateway가 추가한 Cognito Sub (UUID)", required = true)
             @RequestHeader("X-Cognito-Sub") String cognitoSub,
 
@@ -53,22 +50,11 @@ public class UserController {
             @Parameter(description = "API Gateway가 추가한 사용자 이름")
             @RequestHeader(value = "X-User-Name", required = false) String name
     ) {
-        try {
-            log.info("사용자 정보 조회 요청: cognitoSub={}, email={}, name={}", cognitoSub, email, name);
+        log.info("사용자 정보 조회 요청: cognitoSub={}, email={}, name={}", cognitoSub, email, name);
 
-            // API Gateway가 이미 JWT를 검증했으므로, cognitoSub를 신뢰하고 사용
-            UserResponse user = userService.getUserByCognitoSub(cognitoSub);
+        // API Gateway가 이미 JWT를 검증했으므로, cognitoSub를 신뢰하고 사용
+        UserResponse user = userService.getUserByCognitoSub(cognitoSub);
 
-            return ResponseEntity.ok(user);
-        } catch (RuntimeException e) {
-            log.error("사용자 정보 조회 실패: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
-        }
-    }
-
-    private Map<String, String> createErrorResponse(String message) {
-        Map<String, String> error = new HashMap<>();
-        error.put("error", message);
-        return error;
+        return ResponseEntity.ok(user);
     }
 }

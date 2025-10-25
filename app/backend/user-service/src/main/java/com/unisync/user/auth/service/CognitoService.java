@@ -1,5 +1,8 @@
 package com.unisync.user.auth.service;
 
+import com.unisync.user.auth.exception.AuthenticationException;
+import com.unisync.user.auth.exception.DuplicateUserException;
+import com.unisync.user.auth.exception.InvalidCredentialsException;
 import com.unisync.user.common.config.AwsCognitoConfig;
 import com.unisync.user.auth.dto.AuthResponse;
 import com.unisync.user.auth.dto.SignInRequest;
@@ -55,13 +58,13 @@ public class CognitoService {
 
         } catch (UsernameExistsException e) {
             log.error("이미 존재하는 이메일: {}", request.getEmail());
-            throw new RuntimeException("이미 존재하는 이메일입니다: " + request.getEmail());
+            throw new DuplicateUserException("이미 존재하는 이메일입니다: " + request.getEmail());
         } catch (InvalidPasswordException e) {
             log.error("비밀번호 정책 위반: {}", e.getMessage());
-            throw new RuntimeException("비밀번호는 최소 8자 이상이며, 대문자, 소문자, 숫자를 포함해야 합니다");
+            throw new AuthenticationException("비밀번호는 최소 8자 이상이며, 대문자, 소문자, 숫자를 포함해야 합니다");
         } catch (CognitoIdentityProviderException e) {
             log.error("Cognito 회원가입 실패: {}", e.getMessage());
-            throw new RuntimeException("회원가입에 실패했습니다: " + e.getMessage());
+            throw new AuthenticationException("회원가입에 실패했습니다: " + e.getMessage());
         }
     }
 
@@ -85,7 +88,7 @@ public class CognitoService {
             AuthenticationResultType result = authResponse.authenticationResult();
 
             if (result == null) {
-                throw new RuntimeException("인증 결과를 받지 못했습니다");
+                throw new AuthenticationException("인증 결과를 받지 못했습니다");
             }
 
             log.info("Cognito 로그인 성공: {}", request.getEmail());
@@ -101,13 +104,13 @@ public class CognitoService {
 
         } catch (NotAuthorizedException e) {
             log.error("인증 실패: {}", e.getMessage());
-            throw new RuntimeException("이메일 또는 비밀번호가 일치하지 않습니다");
+            throw new InvalidCredentialsException("이메일 또는 비밀번호가 일치하지 않습니다");
         } catch (UserNotConfirmedException e) {
             log.error("이메일 미인증 사용자: {}", request.getEmail());
-            throw new RuntimeException("이메일 인증이 필요합니다");
+            throw new AuthenticationException("이메일 인증이 필요합니다");
         } catch (CognitoIdentityProviderException e) {
             log.error("Cognito 로그인 실패: {}", e.getMessage());
-            throw new RuntimeException("로그인에 실패했습니다: " + e.getMessage());
+            throw new AuthenticationException("로그인에 실패했습니다: " + e.getMessage());
         }
     }
 
@@ -123,7 +126,7 @@ public class CognitoService {
             return cognitoClient.getUser(request);
         } catch (CognitoIdentityProviderException e) {
             log.error("사용자 정보 조회 실패: {}", e.getMessage());
-            throw new RuntimeException("사용자 정보 조회에 실패했습니다");
+            throw new AuthenticationException("사용자 정보 조회에 실패했습니다");
         }
     }
 

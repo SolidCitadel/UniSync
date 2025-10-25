@@ -1,5 +1,6 @@
 package com.unisync.user.user.service;
 
+import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.common.entity.User;
 import com.unisync.user.common.repository.UserRepository;
 import com.unisync.user.user.dto.UserResponse;
@@ -29,7 +30,7 @@ public class UserService {
         log.info("사용자 정보 조회 요청: cognitoSub={}", cognitoSub);
 
         User user = userRepository.findByCognitoSub(cognitoSub)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + cognitoSub));
+                .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다: " + cognitoSub));
 
         return UserResponse.builder()
                 .userId(user.getId())

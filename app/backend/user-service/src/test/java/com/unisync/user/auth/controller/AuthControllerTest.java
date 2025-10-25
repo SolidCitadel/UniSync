@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unisync.user.auth.dto.AuthResponse;
 import com.unisync.user.auth.dto.SignInRequest;
 import com.unisync.user.auth.dto.SignUpRequest;
+import com.unisync.user.auth.exception.DuplicateUserException;
+import com.unisync.user.auth.exception.InvalidCredentialsException;
 import com.unisync.user.auth.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,14 +81,15 @@ class AuthControllerTest {
                 .build();
 
         when(authService.signUp(any(SignUpRequest.class)))
-                .thenThrow(new RuntimeException("이미 존재하는 이메일입니다"));
+                .thenThrow(new DuplicateUserException("이미 존재하는 이메일입니다"));
 
         // When & Then
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("이미 존재하는 이메일입니다"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("DUPLICATE_USER"))
+                .andExpect(jsonPath("$.message").value("이미 존재하는 이메일입니다"));
     }
 
     @Test
@@ -132,14 +135,15 @@ class AuthControllerTest {
                 .build();
 
         when(authService.signIn(any(SignInRequest.class)))
-                .thenThrow(new RuntimeException("비밀번호가 일치하지 않습니다"));
+                .thenThrow(new InvalidCredentialsException("이메일 또는 비밀번호가 일치하지 않습니다"));
 
         // When & Then
         mockMvc.perform(post("/api/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("비밀번호가 일치하지 않습니다"));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 일치하지 않습니다"));
     }
 
     @Test

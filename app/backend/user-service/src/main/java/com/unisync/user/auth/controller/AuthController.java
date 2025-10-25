@@ -27,46 +27,27 @@ public class AuthController {
 
     @PostMapping("/signup")
     @Operation(summary = "회원가입", description = "Cognito를 사용한 회원가입. 이메일, 비밀번호, 이름 필수")
-    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest request) {
-        try {
-            log.info("회원가입 요청: email={}", request.getEmail());
-            AuthResponse response = authService.signUp(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
-            log.error("회원가입 실패: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
-        }
+    public ResponseEntity<AuthResponse> signUp(@Valid @RequestBody SignUpRequest request) {
+        log.info("회원가입 요청: email={}", request.getEmail());
+        AuthResponse response = authService.signUp(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/signin")
     @Operation(summary = "로그인", description = "Cognito를 사용한 로그인. JWT 토큰 반환")
-    public ResponseEntity<?> signIn(@Valid @RequestBody SignInRequest request) {
-        try {
-            log.info("로그인 요청: email={}", request.getEmail());
-            AuthResponse response = authService.signIn(request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            log.error("로그인 실패: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(createErrorResponse(e.getMessage()));
-        }
+    public ResponseEntity<AuthResponse> signIn(@Valid @RequestBody SignInRequest request) {
+        log.info("로그인 요청: email={}", request.getEmail());
+        AuthResponse response = authService.signIn(request);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/health")
     @Operation(summary = "헬스체크", description = "User Service 상태 확인")
-    public ResponseEntity<?> healthCheck() {
+    public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "UP");
         response.put("service", "user-service");
         response.put("timestamp", System.currentTimeMillis());
         return ResponseEntity.ok(response);
-    }
-
-    // Utility methods
-
-    private Map<String, String> createErrorResponse(String message) {
-        Map<String, String> error = new HashMap<>();
-        error.put("error", message);
-        return error;
     }
 }

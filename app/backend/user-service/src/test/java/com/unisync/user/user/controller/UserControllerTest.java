@@ -88,15 +88,17 @@ class UserControllerTest {
         String cognitoSub = "nonexistent-sub";
 
         when(userService.getUserByCognitoSub(anyString()))
-                .thenThrow(new RuntimeException("사용자를 찾을 수 없습니다: " + cognitoSub));
+                .thenThrow(new UserNotFoundException("사용자를 찾을 수 없습니다: " + cognitoSub));
 
         // When & Then
         mockMvc.perform(get("/api/users/me")
                         .header("X-Cognito-Sub", cognitoSub)
                         .header("X-User-Email", "test@example.com")
                         .header("X-User-Name", "테스트 유저"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("사용자를 찾을 수 없습니다: " + cognitoSub));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("USER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("사용자를 찾을 수 없습니다: " + cognitoSub))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     /**

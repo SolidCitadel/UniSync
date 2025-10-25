@@ -1,5 +1,9 @@
 package com.unisync.user.common.exception;
 
+import com.unisync.user.auth.exception.AuthenticationException;
+import com.unisync.user.auth.exception.DuplicateUserException;
+import com.unisync.user.auth.exception.InvalidCredentialsException;
+import com.unisync.user.auth.exception.UserNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +18,46 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    /**
+     * 중복 사용자 예외 처리
+     */
+    @ExceptionHandler(DuplicateUserException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateUser(DuplicateUserException e) {
+        log.error("중복 사용자 에러: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("DUPLICATE_USER", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    /**
+     * 잘못된 인증 정보 예외 처리
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException e) {
+        log.error("잘못된 인증 정보: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("INVALID_CREDENTIALS", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    /**
+     * 사용자를 찾을 수 없음 예외 처리
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException e) {
+        log.error("사용자를 찾을 수 없음: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("USER_NOT_FOUND", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    /**
+     * 인증 예외 처리
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException e) {
+        log.error("인증 에러: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("AUTHENTICATION_ERROR", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
 
     /**
      * @Valid 검증 실패 시 처리
@@ -41,30 +85,12 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 일반 RuntimeException 처리
-     */
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "error");
-        response.put("message", ex.getMessage());
-
-        log.error("RuntimeException 발생: {}", ex.getMessage(), ex);
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-    }
-
-    /**
      * 모든 예외 처리 (최종 catch-all)
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleAllExceptions(Exception ex) {
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "error");
-        response.put("message", "서버 오류가 발생했습니다");
-
+    public ResponseEntity<ErrorResponse> handleAllExceptions(Exception ex) {
         log.error("예상치 못한 예외 발생: {}", ex.getMessage(), ex);
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        ErrorResponse errorResponse = new ErrorResponse("INTERNAL_SERVER_ERROR", "서버 내부 오류가 발생했습니다.");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
 }

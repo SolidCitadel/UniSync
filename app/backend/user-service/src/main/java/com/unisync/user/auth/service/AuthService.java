@@ -3,6 +3,9 @@ package com.unisync.user.auth.service;
 import com.unisync.user.auth.dto.AuthResponse;
 import com.unisync.user.auth.dto.SignInRequest;
 import com.unisync.user.auth.dto.SignUpRequest;
+import com.unisync.user.auth.exception.AuthenticationException;
+import com.unisync.user.auth.exception.DuplicateUserException;
+import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.common.entity.User;
 import com.unisync.user.common.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +29,7 @@ public class AuthService {
     public AuthResponse signUp(SignUpRequest request) {
         // 이메일 중복 확인
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("이미 존재하는 이메일입니다: " + request.getEmail());
+            throw new DuplicateUserException("이미 존재하는 이메일입니다: " + request.getEmail());
         }
 
         // 1. Cognito에 사용자 등록
@@ -75,10 +78,10 @@ public class AuthService {
 
         // 3. DB에서 사용자 조회
         User user = userRepository.findByCognitoSub(cognitoSub)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+                .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다"));
 
         if (!user.getIsActive()) {
-            throw new RuntimeException("비활성화된 사용자입니다");
+            throw new AuthenticationException("비활성화된 사용자입니다");
         }
 
         // 4. 사용자 정보 추가
@@ -100,6 +103,6 @@ public class AuthService {
         String cognitoSub = cognitoUser.username();
 
         return userRepository.findByCognitoSub(cognitoSub)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+                .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다"));
     }
 }
