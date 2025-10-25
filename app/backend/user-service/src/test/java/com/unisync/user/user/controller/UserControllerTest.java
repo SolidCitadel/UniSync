@@ -1,5 +1,6 @@
 package com.unisync.user.user.controller;
 
+import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.user.dto.UserResponse;
 import com.unisync.user.user.service.UserService;
 import org.junit.jupiter.api.DisplayName;
@@ -65,7 +66,7 @@ class UserControllerTest {
         when(userService.getUserByCognitoSub(anyString())).thenReturn(response);
 
         // When & Then - API Gateway가 추가하는 헤더를 MockMvc로 시뮬레이션
-        mockMvc.perform(get("/api/users/me")
+        mockMvc.perform(get("/users/me")
                         // API Gateway가 JWT를 파싱해서 추가하는 헤더들
                         .header("X-Cognito-Sub", cognitoSub)
                         .header("X-User-Email", userEmail)
@@ -90,8 +91,8 @@ class UserControllerTest {
         when(userService.getUserByCognitoSub(anyString()))
                 .thenThrow(new UserNotFoundException("사용자를 찾을 수 없습니다: " + cognitoSub));
 
-        // When & Then
-        mockMvc.perform(get("/api/users/me")
+        // When & Then - GlobalExceptionHandler가 처리
+        mockMvc.perform(get("/users/me")
                         .header("X-Cognito-Sub", cognitoSub)
                         .header("X-User-Email", "test@example.com")
                         .header("X-User-Name", "테스트 유저"))
@@ -126,7 +127,7 @@ class UserControllerTest {
         when(userService.getUserByCognitoSub(anyString())).thenReturn(response);
 
         // When & Then - API Gateway가 전달하는 모든 헤더 포함
-        mockMvc.perform(get("/api/users/me")
+        mockMvc.perform(get("/users/me")
                         .header("X-Cognito-Sub", cognitoSub)
                         .header("X-User-Email", userEmail)
                         .header("X-User-Name", userName)

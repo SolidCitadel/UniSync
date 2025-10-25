@@ -60,7 +60,7 @@ class AuthControllerTest {
         when(authService.signUp(any(SignUpRequest.class))).thenReturn(response);
 
         // When & Then
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -84,7 +84,7 @@ class AuthControllerTest {
                 .thenThrow(new DuplicateUserException("이미 존재하는 이메일입니다"));
 
         // When & Then
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
@@ -114,7 +114,7 @@ class AuthControllerTest {
         when(authService.signIn(any(SignInRequest.class))).thenReturn(response);
 
         // When & Then
-        mockMvc.perform(post("/api/auth/signin")
+        mockMvc.perform(post("/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -138,7 +138,7 @@ class AuthControllerTest {
                 .thenThrow(new InvalidCredentialsException("이메일 또는 비밀번호가 일치하지 않습니다"));
 
         // When & Then
-        mockMvc.perform(post("/api/auth/signin")
+        mockMvc.perform(post("/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
@@ -150,7 +150,7 @@ class AuthControllerTest {
     @DisplayName("헬스체크 성공")
     void healthCheck_Success() throws Exception {
         // When & Then
-        mockMvc.perform(get("/api/auth/health"))
+        mockMvc.perform(get("/auth/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
                 .andExpect(jsonPath("$.service").value("user-service"))
