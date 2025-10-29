@@ -1,0 +1,151 @@
+{
+  "Comment": "Canvas 동기화 워크플로우 - 5분마다 Leader 과목의 과제/공지/제출물 조회",
+  "StartAt": "GetLeaderCourses",
+  "States": {
+    "GetLeaderCourses": {
+      "Type": "Task",
+      "Comment": "Leader로 등록된 과목 목록 조회 (Course-Service API 호출)",
+      "Resource": "arn:aws:states:::http:invoke",
+      "Parameters": {
+        "ApiEndpoint": "http://course-service:8082/api/courses/leaders",
+        "Method": "GET",
+        "Headers": {
+          "X-Service-Token": "local-dev-token"
+        }
+      },
+      "ResultPath": "$.courses",
+      "Next": "ProcessCourses",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+
+    "ProcessCourses": {
+      "Type": "Map",
+      "Comment": "각 과목별로 Canvas API 호출",
+      "ItemsPath": "$.courses.data",
+      "MaxConcurrency": 5,
+      "Iterator": {
+        "StartAt": "FetchCanvasData",
+        "States": {
+          "FetchCanvasData": {
+            "Type": "Task",
+            "Comment": "Canvas Sync Lambda 호출",
+            "Resource": "arn:aws:lambda:ap-northeast-2:000000000000:function:canvas-sync-lambda",
+            "Parameters": {
+              "courseId.$": "$.courseId",
+              "canvasCourseId.$": "$.canvasCourseId",
+              "leaderUserId.$": "$.leaderUserId",
+              "lastSyncedAt.$": "$.lastSyncedAt"
+            },
+            "ResultPath": "$.syncResult",
+            "Next": "CheckNewAssignments",
+            "Retry": [
+              {
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "ResultPath": "$.error",
+                "Next": "LogSyncError"
+              }
+            ]
+          },
+
+          "CheckNewAssignments": {
+            "Type": "Choice",
+            "Comment": "새 과제가 있는지 확인",
+            "Choices": [
+              {
+                "Variable": "$.syncResult.body.assignmentsCount",
+                "NumericGreaterThan": 0,
+                "Next": "TriggerLLMAnalysis"
+              }
+            ],
+            "Default": "UpdateSyncStatus"
+          },
+
+          "TriggerLLMAnalysis": {
+            "Type": "Pass",
+            "Comment": "LLM 분석은 SQS 트리거로 자동 실행됨",
+            "Next": "UpdateSyncStatus"
+          },
+
+          "UpdateSyncStatus": {
+            "Type": "Task",
+            "Comment": "Sync-Service에 동기화 완료 상태 업데이트",
+            "Resource": "arn:aws:states:::http:invoke",
+            "Parameters": {
+              "ApiEndpoint": "http://sync-service:8083/api/sync/status",
+              "Method": "PUT",
+              "Headers": {
+                "Content-Type": "application/json",
+                "X-Service-Token": "local-dev-token"
+              },
+              "RequestBody": {
+                "userId.$": "$.leaderUserId",
+                "provider": "CANVAS",
+                "syncState": "IDLE",
+                "lastSyncedAt.$": "$.syncResult.body.syncedAt"
+              }
+            },
+            "End": true
+          },
+
+          "LogSyncError": {
+            "Type": "Pass",
+            "Comment": "에러 로깅 (실제로는 CloudWatch Logs로 전송)",
+            "Parameters": {
+              "error.$": "$.error",
+              "courseId.$": "$.courseId"
+            },
+            "Next": "UpdateSyncStatusFailed"
+          },
+
+          "UpdateSyncStatusFailed": {
+            "Type": "Task",
+            "Comment": "동기화 실패 상태 업데이트",
+            "Resource": "arn:aws:states:::http:invoke",
+            "Parameters": {
+              "ApiEndpoint": "http://sync-service:8083/api/sync/status",
+              "Method": "PUT",
+              "Headers": {
+                "Content-Type": "application/json",
+                "X-Service-Token": "local-dev-token"
+              },
+              "RequestBody": {
+                "userId.$": "$.leaderUserId",
+                "provider": "CANVAS",
+                "syncState": "FAILED",
+                "errorMessage.$": "$.error.Cause"
+              }
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.processResults",
+      "Next": "CompleteSyncWorkflow"
+    },
+
+    "CompleteSyncWorkflow": {
+      "Type": "Succeed",
+      "Comment": "워크플로우 완료"
+    },
+
+    "HandleError": {
+      "Type": "Fail",
+      "Comment": "전체 워크플로우 실패",
+      "Error": "SyncWorkflowFailed",
+      "Cause": "Canvas 동기화 워크플로우 실행 중 오류 발생"
+    }
+  }
+}
