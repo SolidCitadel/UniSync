@@ -26,7 +26,7 @@ services:
     image: mysql:8.0
     container_name: unisync-mysql
     ports:
-      - "3306:3306"
+      - "3307:3306"  # 호스트 포트 변경 (호스트 3306 충돌 방지)
     environment:
       - MYSQL_ROOT_PASSWORD=root_password
       - MYSQL_USER=unisync
