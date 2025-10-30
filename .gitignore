@@ -30,6 +30,12 @@ replay_pid*
 *.ipr
 out/
 
+### Eclipse ###
+bin/
+.classpath
+.project
+.settings/
+
 ### Spring Boot ###
 target/
 !.mvn/wrapper/maven-wrapper.jar
