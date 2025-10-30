@@ -8,8 +8,11 @@ Canvas LMS 연동 학업 일정관리 서비스. **자동 동기화 + AI 분석*
 **현재 상태**: 기획/설계 완료, 구현 시작 전
 
 ## 아키텍처
-- **마이크로서비스**: User/Course/Sync/Schedule/Social (Spring Boot, 서비스별 DB 분리)
-- **서버리스**: Sync-Workflow (Step Functions), LLM (Lambda)
+- **마이크로서비스** (3개): Spring Boot 기반, 서비스별 DB 분리
+  - **User-Service**: 사용자/인증/소셜 기능
+  - **Course-Service**: Canvas 학업 데이터 (과목/과제/Task)
+  - **Schedule-Service**: 시간 기반 일정 통합
+- **서버리스**: Canvas-Sync-Workflow, Google-Calendar-Sync-Workflow (Step Functions + Lambda), LLM-Lambda
 - **이벤트 기반**: SQS로 비동기 통신
 
 ## 기술 스택 (프로젝트 공통)
@@ -60,19 +63,31 @@ Canvas LMS 연동 학업 일정관리 서비스. **자동 동기화 + AI 분석*
 
 ## 핵심 워크플로우
 
+### Canvas 동기화
 ```
 EventBridge (5분마다)
-  → Step Functions
+  → Canvas-Sync-Workflow (Step Functions)
   → Canvas API 폴링 (Leader 토큰)
   → 새 과제 감지
      → SQS: assignment-events-queue
-     → LLM Lambda: 분석
+     → LLM-Lambda: 과제 분석
      → SQS: task-creation-queue
-     → Sync-Service: task 저장
+     → Course-Service: Assignment & Task 저장
+     → Course-Service → Schedule-Service: 일정 생성
   → 제출 감지
      → SQS: submission-events-queue
-     → LLM Lambda: 검증
-     → Sync-Service: task 상태 업데이트
+     → LLM-Lambda: 제출물 검증
+     → Course-Service: Task 상태 업데이트
+```
+
+### 외부 캘린더 동기화
+```
+EventBridge
+  → Google-Calendar-Sync-Workflow (Step Functions)
+  → Google Calendar API 폴링
+  → 변경 감지
+     → SQS: calendar-events-queue
+     → Schedule-Service: User_Schedules 저장
 ```
 
 ## 데이터 모델 핵심
@@ -190,9 +205,7 @@ docker-compose up -d localstack mysql
 # 2. 각 서비스 실행 (Gradle Kotlin DSL)
 cd app/backend/user-service && ./gradlew bootRun
 cd app/backend/course-service && ./gradlew bootRun
-cd app/backend/sync-service && ./gradlew bootRun
 cd app/backend/schedule-service && ./gradlew bootRun
-cd app/backend/social-service && ./gradlew bootRun
 
 # 3. 프론트엔드 실행
 cd frontend && npm run dev
@@ -207,18 +220,16 @@ cd frontend && npm run dev
 ./gradlew build
 
 # 특정 테스트 실행
-./gradlew test --tests AssignmentServiceTest
+./gradlew test --tests CourseServiceTest
 ```
 
 ### API 문서
-- Swagger UI: http://localhost:808{1-5}/swagger-ui.html (각 서비스별)
+- Swagger UI: http://localhost:808{1-3}/swagger-ui.html (각 서비스별)
 
 ## 서비스 포트
 - User-Service: 8081
 - Course-Service: 8082
-- Sync-Service: 8083
-- Schedule-Service: 8084
-- Social-Service: 8085
+- Schedule-Service: 8083
 - Frontend: 3000
 
 ## 참고 문서

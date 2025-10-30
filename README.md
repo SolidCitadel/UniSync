@@ -8,11 +8,13 @@ Canvas LMS와 연동하여 자동으로 학업 일정을 동기화하고 AI로 �
 UniSync/
 ├── app/
 │   └── backend/
-│       ├── user-service/       # 사용자 관리 (8081)
-│       ├── course-service/     # 과목 관리 (8082)
-│       ├── sync-service/       # Canvas 동기화 (8083)
-│       ├── schedule-service/   # 일정 관리 (8084)
-│       └── social-service/     # 소셜 기능 (8085)
+│       ├── user-service/       # 사용자/인증/소셜 (8081)
+│       ├── course-service/     # Canvas 학업 데이터 (8082)
+│       └── schedule-service/   # 시간 기반 일정 통합 (8083)
+├── serverless/
+│   ├── canvas-sync-workflow/  # Canvas 동기화 (Step Functions + Lambda)
+│   ├── google-calendar-sync-workflow/ # Google Calendar 동기화
+│   └── llm-lambda/            # LLM Task 생성/검증
 ├── docker-compose.yml
 ├── .env.example
 ├── localstack-init/           # LocalStack 초기화 스크립트
@@ -92,16 +94,8 @@ cd app/backend/user-service
 cd app/backend/course-service
 ./gradlew bootRun
 
-# Sync Service
-cd app/backend/sync-service
-./gradlew bootRun
-
 # Schedule Service
 cd app/backend/schedule-service
-./gradlew bootRun
-
-# Social Service
-cd app/backend/social-service
 ./gradlew bootRun
 ```
 
@@ -111,9 +105,7 @@ cd app/backend/social-service
 |--------|------|------------|
 | User Service | 8081 | http://localhost:8081/swagger-ui.html |
 | Course Service | 8082 | http://localhost:8082/swagger-ui.html |
-| Sync Service | 8083 | http://localhost:8083/swagger-ui.html |
-| Schedule Service | 8084 | http://localhost:8084/swagger-ui.html |
-| Social Service | 8085 | http://localhost:8085/swagger-ui.html |
+| Schedule Service | 8083 | http://localhost:8083/swagger-ui.html |
 | MySQL | 3306 | - |
 | LocalStack | 4566 | - |
 
@@ -146,11 +138,9 @@ aws --endpoint-url=http://localhost:4566 s3 ls
 
 각 마이크로서비스는 독립적인 데이터베이스를 사용합니다:
 
-- `user_db`: 사용자 정보
-- `course_db`: 과목/수강 정보
-- `sync_db`: 동기화 데이터
-- `schedule_db`: 일정 데이터
-- `social_db`: 소셜 데이터
+- `user_db`: 사용자/인증/소셜 (User, Credentials, Friendships)
+- `course_db`: Canvas 학업 데이터 (Courses, Enrollments, Assignments, Notices, Tasks, Sync_Status)
+- `schedule_db`: 시간 기반 일정 (User_Schedules)
 
 ```bash
 # MySQL 접속
