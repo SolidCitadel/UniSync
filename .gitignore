@@ -53,6 +53,9 @@ build/
 .env.local
 .env.*.local
 
+# Test results
+test-results/
+
 ### Application Config ###
 application-local.yml
 application-local.properties
@@ -78,3 +81,41 @@ localstack-data/
 ### Database ###
 mysql-data/
 *.sql.backup
+
+### Python ###
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# pytest
+.pytest_cache/
+.cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Lambda deployment packages
+*.zip
+function.zip
+package/
+
+# Python eggs
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

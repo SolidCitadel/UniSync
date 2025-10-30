@@ -1,33 +1,33 @@
 #!/bin/bash
-# Lambda 함수 배포 스크립트 (LocalStack / AWS)
+# Lambda function deployment script (LocalStack / AWS)
 
 set -e
 
-# 환경 변수 설정 (기본값: local)
+# Set environment variable (default: local)
 ENVIRONMENT=${1:-local}
 
 if [ "$ENVIRONMENT" = "local" ]; then
-  echo "🔧 LocalStack에 배포합니다..."
+  echo "Deploying to LocalStack..."
   export AWS_ENDPOINT_URL=http://localhost:4566
   alias awslocal="aws --endpoint-url=http://localhost:4566"
   AWS_CMD="awslocal"
 else
-  echo "☁️  AWS에 배포합니다..."
+  echo "Deploying to AWS..."
   AWS_CMD="aws"
 fi
 
-# 1. Canvas Sync Lambda 배포
+# 1. Deploy Canvas Sync Lambda
 echo ""
-echo "📦 Canvas Sync Lambda 패키징 중..."
+echo "Packaging Canvas Sync Lambda..."
 cd app/serverless/canvas-sync-lambda
 
-# 의존성 설치 및 패키징
+# Install dependencies and package
 pip install -r requirements.txt -t package/
 cp src/handler.py package/
 cd package && zip -r ../function.zip . && cd ..
 rm -rf package
 
-echo "🚀 Canvas Sync Lambda 배포 중..."
+echo "Deploying Canvas Sync Lambda..."
 $AWS_CMD lambda create-function \
   --function-name canvas-sync-lambda \
   --runtime python3.11 \
@@ -41,16 +41,16 @@ $AWS_CMD lambda create-function \
     CANVAS_API_BASE_URL=https://canvas.instructure.com/api/v1
   }" || echo "Canvas Sync Lambda already exists, updating..."
 
-# 함수가 이미 존재하면 업데이트
+# Update if function already exists
 $AWS_CMD lambda update-function-code \
   --function-name canvas-sync-lambda \
   --zip-file fileb://function.zip || true
 
 cd ../../..
 
-# 2. LLM Lambda 배포
+# 2. Deploy LLM Lambda
 echo ""
-echo "📦 LLM Lambda 패키징 중..."
+echo "Packaging LLM Lambda..."
 cd app/serverless/llm-lambda
 
 pip install -r requirements.txt -t package/
@@ -58,7 +58,7 @@ cp src/handler.py package/
 cd package && zip -r ../function.zip . && cd ..
 rm -rf package
 
-echo "🚀 LLM Lambda 배포 중..."
+echo "Deploying LLM Lambda..."
 $AWS_CMD lambda create-function \
   --function-name llm-lambda \
   --runtime python3.11 \
@@ -75,7 +75,7 @@ $AWS_CMD lambda update-function-code \
 cd ../../..
 
 echo ""
-echo "✅ Lambda 배포 완료!"
+echo "Lambda deployment completed!"
 echo ""
-echo "배포된 Lambda 함수:"
+echo "Deployed Lambda functions:"
 $AWS_CMD lambda list-functions --query 'Functions[?starts_with(FunctionName, `canvas`) || starts_with(FunctionName, `llm`)].FunctionName'
