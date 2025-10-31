@@ -24,8 +24,8 @@ spring:
 # AWS Cognito Configuration
 aws:
   cognito:
-    user-pool-id: ${COGNITO_USER_POOL_ID:ap-northeast-2_8e935c3c0cc947b89a5250a9280f3eac}
-    client-id: ${COGNITO_CLIENT_ID:rcesdcyyo8cocl3x5mxryj1pup}
+    user-pool-id: ${COGNITO_USER_POOL_ID}
+    client-id: ${COGNITO_CLIENT_ID}
     region: ${COGNITO_REGION:ap-northeast-2}
     endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
 

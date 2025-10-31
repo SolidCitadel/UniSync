@@ -1,22 +1,22 @@
-package com.unisync.gateway.config;
+package com.unisync.user.common.config;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * AWS Cognito 설정 프로퍼티 (API Gateway용)
+ * AWS Cognito 설정 프로퍼티
  *
- * JWT 검증을 위한 Cognito 설정을 바인딩하고 필수 값을 검증합니다.
+ * application.yml의 aws.cognito 설정을 바인딩하고 필수 값을 검증합니다.
  * 환경 변수가 설정되지 않았거나 유효하지 않은 값일 경우 애플리케이션 시작 시 에러가 발생합니다.
  */
-@Configuration
-@ConfigurationProperties(prefix = "aws.cognito")
+@Getter
+@Setter
 @Validated
-@Data
-public class CognitoConfig {
+@ConfigurationProperties(prefix = "aws.cognito")
+public class CognitoProperties {
 
     /**
      * Cognito User Pool ID (필수)
@@ -26,6 +26,15 @@ public class CognitoConfig {
      */
     @NotBlank(message = "COGNITO_USER_POOL_ID must be configured. Please check your .env file.")
     private String userPoolId;
+
+    /**
+     * Cognito App Client ID (필수)
+     * 환경 변수: COGNITO_CLIENT_ID
+     *
+     * LocalStack 사용 시: localstack-init/02-create-cognito.sh 실행 후 생성된 값 사용
+     */
+    @NotBlank(message = "COGNITO_CLIENT_ID must be configured. Please check your .env file.")
+    private String clientId;
 
     /**
      * AWS Region (필수)
@@ -43,17 +52,4 @@ public class CognitoConfig {
      * 실제 AWS 사용 시: 빈 문자열 또는 설정하지 않음
      */
     private String endpoint;
-
-    /**
-     * JWT Issuer 생성
-     * JWT 토큰의 iss 클레임 검증에 사용
-     */
-    public String getIssuer() {
-        // LocalStack 환경
-        if (endpoint != null && endpoint.contains("localhost")) {
-            return endpoint + "/" + userPoolId;
-        }
-        // 실제 AWS Cognito
-        return "https://cognito-idp." + region + ".amazonaws.com/" + userPoolId;
-    }
 }

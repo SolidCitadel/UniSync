@@ -1,6 +1,7 @@
 package com.unisync.user.common.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -11,29 +12,22 @@ import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityPr
 import java.net.URI;
 
 @Configuration
+@EnableConfigurationProperties(CognitoProperties.class)
+@RequiredArgsConstructor
 public class AwsCognitoConfig {
 
-    @Value("${aws.cognito.region}")
-    private String region;
-
-    @Value("${aws.cognito.endpoint:}")
-    private String endpoint;
-
-    @Value("${aws.cognito.user-pool-id}")
-    private String userPoolId;
-
-    @Value("${aws.cognito.client-id}")
-    private String clientId;
+    private final CognitoProperties cognitoProperties;
 
     @Bean
     public CognitoIdentityProviderClient cognitoClient() {
         var builder = CognitoIdentityProviderClient.builder()
-                .region(Region.of(region))
+                .region(Region.of(cognitoProperties.getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create("test", "test")
                 ));
 
         // LocalStack을 사용하는 경우 endpoint 설정
+        String endpoint = cognitoProperties.getEndpoint();
         if (endpoint != null && !endpoint.isEmpty()) {
             builder.endpointOverride(URI.create(endpoint));
         }
@@ -42,10 +36,10 @@ public class AwsCognitoConfig {
     }
 
     public String getUserPoolId() {
-        return userPoolId;
+        return cognitoProperties.getUserPoolId();
     }
 
     public String getClientId() {
-        return clientId;
+        return cognitoProperties.getClientId();
     }
 }

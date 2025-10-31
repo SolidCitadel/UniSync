@@ -33,6 +33,9 @@ dependencies {
     // Spring Boot Actuator (헬스체크)
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
+    // Spring Boot Validation (ConfigurationProperties 검증)
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+
     // AWS SDK for Cognito (Public Key 가져오기)
     implementation("software.amazon.awssdk:cognitoidentityprovider:${property("awsSdkVersion")}")
 
