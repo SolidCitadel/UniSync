@@ -1,0 +1,27 @@
+# Local Development Profile
+# Usage: Run with SPRING_PROFILES_ACTIVE=local (or set in IDE)
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+
+        - id: course-service
+          uri: ${COURSE_SERVICE_URL:http://localhost:8082}
+
+        - id: schedule-service
+          uri: ${SCHEDULE_SERVICE_URL:http://localhost:8083}
+
+# AWS Cognito Configuration (LocalStack)
+aws:
+  cognito:
+    region: ${COGNITO_REGION:ap-northeast-2}
+    endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
+
+# Logging
+logging:
+  level:
+    com.unisync: DEBUG
+    org.springframework.cloud.gateway: DEBUG

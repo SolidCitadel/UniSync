@@ -63,8 +63,10 @@ build/
 test-results/
 
 ### Application Config ###
-application-local.yml
-application-local.properties
+# Note: application-*.yml profile files should be committed
+# Only ignore truly sensitive local overrides
+# application-local.yml
+# application-local.properties
 
 ### VS Code ###
 .vscode/

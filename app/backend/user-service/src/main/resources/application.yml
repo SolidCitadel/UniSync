@@ -6,15 +6,12 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${USER_SERVICE_DB_NAME:user_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${USER_SERVICE_DB_USER:unisync}
-    password: ${USER_SERVICE_DB_PASSWORD:unisync_password}
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${USER_SERVICE_DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${USER_SERVICE_DB_USER}
+    password: ${USER_SERVICE_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
@@ -26,8 +23,8 @@ aws:
   cognito:
     user-pool-id: ${COGNITO_USER_POOL_ID}
     client-id: ${COGNITO_CLIENT_ID}
-    region: ${COGNITO_REGION:ap-northeast-2}
-    endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
+    region: ${COGNITO_REGION}
+    endpoint: ${COGNITO_ENDPOINT}
 
 # Swagger/OpenAPI
 springdoc:
@@ -38,9 +35,12 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
 
-# Logging
-logging:
-  level:
-    com.unisync: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
+# Actuator 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
