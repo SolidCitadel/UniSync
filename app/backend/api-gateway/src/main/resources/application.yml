@@ -74,16 +74,14 @@ spring:
 # AWS Cognito Configuration
 aws:
   cognito:
-    user-pool-id: ${COGNITO_USER_POOL_ID:ap-northeast-2_8e935c3c0cc947b89a5250a9280f3eac}
+    user-pool-id: ${COGNITO_USER_POOL_ID}
     region: ${COGNITO_REGION:ap-northeast-2}
     endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
 
 # JWT 검증 제외 경로
 jwt:
   exclude-paths:
-    - /api/v1/auth/signup
-    - /api/v1/auth/signin
-    - /api/v1/auth/health
+    - /auth/**
     - /actuator/**
 
 # Actuator 설정
