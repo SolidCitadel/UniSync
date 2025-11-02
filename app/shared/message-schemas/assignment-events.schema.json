@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://unisync.com/schemas/assignment-events.json",
+  "title": "AssignmentEventMessage",
+  "description": "Canvas-Sync-Lambda가 발행하는 Assignment 이벤트 메시지",
+  "type": "object",
+  "required": ["eventType", "canvasAssignmentId", "canvasCourseId", "title"],
+  "properties": {
+    "eventType": {
+      "type": "string",
+      "enum": ["ASSIGNMENT_CREATED", "ASSIGNMENT_UPDATED"],
+      "description": "이벤트 타입"
+    },
+    "canvasAssignmentId": {
+      "type": "integer",
+      "description": "Canvas Assignment ID (Canvas API에서 제공)"
+    },
+    "canvasCourseId": {
+      "type": "integer",
+      "description": "Canvas Course ID (Canvas API에서 제공)"
+    },
+    "title": {
+      "type": "string",
+      "description": "과제 제목"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "과제 설명"
+    },
+    "dueAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "마감일 (ISO 8601 형식: yyyy-MM-dd'T'HH:mm:ss)"
+    },
+    "pointsPossible": {
+      "type": ["integer", "null"],
+      "description": "배점"
+    },
+    "submissionTypes": {
+      "type": ["string", "null"],
+      "description": "제출 유형 (예: online_upload,online_text_entry)"
+    },
+    "createdAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Canvas에서 생성된 시간"
+    },
+    "updatedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Canvas에서 마지막 수정된 시간"
+    }
+  },
+  "examples": [
+    {
+      "eventType": "ASSIGNMENT_CREATED",
+      "canvasAssignmentId": 123456,
+      "canvasCourseId": 789,
+      "title": "중간고사 프로젝트",
+      "description": "Spring Boot로 REST API 구현",
+      "dueAt": "2025-11-15T23:59:59",
+      "pointsPossible": 100,
+      "submissionTypes": "online_upload",
+      "createdAt": "2025-11-02T10:00:00",
+      "updatedAt": "2025-11-02T10:00:00"
+    }
+  ]
+}

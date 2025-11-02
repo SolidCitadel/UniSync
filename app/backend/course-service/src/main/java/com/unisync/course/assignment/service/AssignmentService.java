@@ -1,6 +1,6 @@
 package com.unisync.course.assignment.service;
 
-import com.unisync.course.common.dto.sqs.AssignmentEventMessage;
+import com.unisync.shared.dto.sqs.AssignmentEventMessage;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.repository.AssignmentRepository;

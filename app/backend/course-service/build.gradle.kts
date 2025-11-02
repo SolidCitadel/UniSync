@@ -27,6 +27,9 @@ extra["awsSdkVersion"] = "2.29.45"
 extra["springCloudAwsVersion"] = "3.2.1"
 
 dependencies {
+    // Shared Common Module
+    implementation("com.unisync:java-common:1.0.0")
+
     // Spring Boot Starters
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -66,3 +69,5 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+fun org.gradle.kotlin.dsl.KotlinBuildScript.implementation(string: String) {}

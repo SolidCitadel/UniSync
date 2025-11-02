@@ -2,7 +2,7 @@ package com.unisync.course.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.unisync.course.common.dto.sqs.AssignmentEventMessage;
+import com.unisync.shared.dto.sqs.AssignmentEventMessage;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.repository.AssignmentRepository;

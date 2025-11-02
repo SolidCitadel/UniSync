@@ -1,7 +1,7 @@
 package com.unisync.course.assignment.listener;
 
 import com.unisync.course.assignment.service.AssignmentService;
-import com.unisync.course.common.dto.sqs.AssignmentEventMessage;
+import com.unisync.shared.dto.sqs.AssignmentEventMessage;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

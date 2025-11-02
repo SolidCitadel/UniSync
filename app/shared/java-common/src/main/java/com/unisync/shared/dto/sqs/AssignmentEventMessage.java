@@ -1,4 +1,4 @@
-package com.unisync.course.common.dto.sqs;
+package com.unisync.shared.dto.sqs;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 /**
  * Canvas-Sync-Lambda가 발행하는 Assignment 이벤트 메시지
  * SQS Queue: assignment-events-queue
+ *
+ * 공유 DTO: course-service, schedule-service, Canvas-Sync-Lambda가 사용
  */
 @Data
 @NoArgsConstructor
