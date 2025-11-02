@@ -1,0 +1,84 @@
+services:
+  # LocalStack - AWS 서비스 로컬 에뮬레이션 (테스트용)
+  localstack:
+    image: localstack/localstack-pro
+    container_name: unisync-test-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,lambda
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+      - CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL}
+      - CANVAS_API_TOKEN=${CANVAS_API_TOKEN}
+    volumes:
+      - "./localstack-init:/etc/localstack/init/ready.d"
+      - "./app:/etc/localstack/app"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MySQL - 테스트용 DB
+  mysql:
+    image: mysql:8.0
+    container_name: unisync-test-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=test_password
+      - MYSQL_USER=unisync
+      - MYSQL_PASSWORD=unisync_password
+      - TZ=Asia/Seoul
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ptest_password"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Course Service - 테스트 대상
+  course-service:
+    build:
+      context: ./app
+      dockerfile: backend/course-service/Dockerfile
+    container_name: unisync-test-course-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - COURSE_SERVICE_DB_NAME=course_db
+      - COURSE_SERVICE_DB_USER=unisync
+      - COURSE_SERVICE_DB_PASSWORD=unisync_password
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+    depends_on:
+      mysql:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  test-network:
+    driver: bridge

@@ -43,7 +43,8 @@ GRANT ALL PRIVILEGES ON sync_db.* TO 'sync_service'@'%';
 GRANT ALL PRIVILEGES ON schedule_db.* TO 'schedule_service'@'%';
 GRANT ALL PRIVILEGES ON social_db.* TO 'social_service'@'%';
 
--- 공통 사용자에게 모든 데이터베이스 접근 권한 부여 (개발 환경용)
+-- 공통 사용자 (개발 환경용)
+CREATE USER IF NOT EXISTS 'unisync'@'%' IDENTIFIED BY 'unisync_password';
 GRANT ALL PRIVILEGES ON *.* TO 'unisync'@'%';
 
 FLUSH PRIVILEGES;

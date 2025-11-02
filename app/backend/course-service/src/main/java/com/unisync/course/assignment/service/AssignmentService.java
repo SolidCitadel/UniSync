@@ -1,6 +1,7 @@
 package com.unisync.course.assignment.service;
 
 import com.unisync.shared.dto.sqs.AssignmentEventMessage;
+import com.unisync.course.assignment.dto.AssignmentResponse;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.repository.AssignmentRepository;
@@ -9,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 /**
  * Assignment Service
@@ -80,5 +83,34 @@ public class AssignmentService {
 
         log.info("✅ Updated assignment: id={}, canvasAssignmentId={}",
                  saved.getId(), saved.getCanvasAssignmentId());
+    }
+
+    /**
+     * Canvas Assignment ID로 Assignment 조회
+     * @param canvasAssignmentId Canvas Assignment ID
+     * @return AssignmentResponse (Optional)
+     */
+    @Transactional(readOnly = true)
+    public Optional<AssignmentResponse> findByCanvasAssignmentId(Long canvasAssignmentId) {
+        return assignmentRepository.findByCanvasAssignmentId(canvasAssignmentId)
+                .map(this::toResponse);
+    }
+
+    /**
+     * Entity를 Response DTO로 변환
+     */
+    private AssignmentResponse toResponse(Assignment assignment) {
+        return AssignmentResponse.builder()
+                .id(assignment.getId())
+                .canvasAssignmentId(assignment.getCanvasAssignmentId())
+                .courseId(assignment.getCourse().getId())
+                .title(assignment.getTitle())
+                .description(assignment.getDescription())
+                .dueAt(assignment.getDueAt())
+                .pointsPossible(assignment.getPointsPossible())
+                .submissionTypes(assignment.getSubmissionTypes())
+                .createdAt(assignment.getCreatedAt())
+                .updatedAt(assignment.getUpdatedAt())
+                .build();
     }
 }
