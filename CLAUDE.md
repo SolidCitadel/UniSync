@@ -5,7 +5,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 프로젝트 개요
 Canvas LMS 연동 학업 일정관리 서비스. **자동 동기화 + AI 분석**으로 수동 입력 제거.
 
-**현재 상태**: 기획/설계 완료, 구현 시작 전
+**현재 상태**: Phase 2 진행 중 (Canvas 동기화 및 SQS 이벤트 처리)
+
+**구현 완료 항목**:
+- ✅ 기본 인프라 구조 (Docker, LocalStack, MySQL)
+- ✅ Spring Boot 마이크로서비스 기본 구조 (User, Course, Schedule)
+- ✅ **API Gateway (Spring Cloud Gateway + JWT 인증 + Cognito 연동)**
+- ✅ Canvas Sync Lambda 구현
+- ✅ LLM Lambda 구현
+- ✅ SQS 이벤트 기반 통신
+- ✅ 공유 모듈(java-common, python-common) 기반 DTO 표준화
+- ✅ E2E 통합 테스트 환경
+- ✅ course-service의 SQS 구독 및 Assignment 처리
+
+**진행 중**:
+- 🚧 User-Service의 인증 및 Canvas 토큰 관리
+- 🚧 Schedule-Service의 일정 통합 기능
+- 🚧 Step Functions 워크플로우 구성
+- 🚧 LLM Task 생성 자동화
 
 ## 아키텍처
 - **마이크로서비스** (3개): Spring Boot 기반, 서비스별 DB 분리
@@ -96,22 +113,61 @@ EventBridge
 - **Enrollments**: `is_sync_leader` (Leader 플래그)
 - **Credentials**: `provider` ENUM, `access_token` (암호화)
 
-## SQS 메시지
+## 공유 모듈 (Shared Modules)
 
-### assignment-events-queue
-```json
-{ "eventType": "ASSIGNMENT_CREATED", "assignmentId": "canvas_123", ... }
+서비스 간 DTO를 표준화하기 위한 공유 모듈을 사용합니다.
+
+### 구조
+```
+app/shared/
+├── java-common/         # Spring Boot 서비스용
+│   └── src/main/java/com/unisync/shared/dto/sqs/
+│       └── AssignmentEventMessage.java
+├── python-common/       # Lambda 함수용
+│   └── unisync_shared/dto/
+│       └── assignment_event.py
+└── message-schemas/     # JSON Schema 정의
 ```
 
-### submission-events-queue
-```json
-{ "eventType": "SUBMISSION_DETECTED", "userId": 1, "submissionMetadata": {...} }
+### 사용법
+
+#### Java (Spring Boot)
+```kotlin
+// settings.gradle.kts
+includeBuild("../../shared/java-common")
+
+// build.gradle.kts
+dependencies {
+    implementation("com.unisync:java-common:1.0.0")
+}
 ```
 
-### task-creation-queue (LLM → Sync-Service)
-```json
-{ "assignmentId": 10, "tasks": [{"title": "...", "subtasks": []}] }
+#### Python (Lambda)
+```python
+# requirements.txt
+-e ../../shared/python-common
+
+# 코드에서 사용
+from unisync_shared.dto import AssignmentEventMessage
 ```
+
+### 주요 메시지 스키마
+
+#### assignment-events-queue
+```json
+{
+  "eventType": "ASSIGNMENT_CREATED | ASSIGNMENT_UPDATED",
+  "canvasAssignmentId": 123456,
+  "canvasCourseId": 789,
+  "title": "중간고사 프로젝트",
+  "description": "Spring Boot로 REST API 구현",
+  "dueAt": "2025-11-15T23:59:59",
+  "pointsPossible": 100,
+  "submissionTypes": "online_upload"
+}
+```
+
+자세한 내용은 [app/shared/README.md](app/shared/README.md) 참고
 
 ## 주의사항
 
@@ -212,25 +268,58 @@ cd frontend && npm run dev
 ```
 
 ### 테스트
+
+#### 단위 테스트
 ```bash
-# 단위 테스트
+# Java 단위 테스트
 ./gradlew test
 
-# 통합 테스트
-./gradlew build
+# Python Lambda 함수 테스트
+cd app/serverless
+python -m pytest canvas-sync-lambda/tests/ -v
+python -m pytest llm-lambda/tests/ -v
 
 # 특정 테스트 실행
 ./gradlew test --tests CourseServiceTest
 ```
 
+#### E2E 통합 테스트
+
+전체 워크플로우를 검증하는 통합 테스트 환경이 구축되어 있습니다:
+
+```bash
+# 자동화된 통합 테스트 (권장)
+./scripts/run-integration-tests.sh
+
+# 수동 실행
+docker-compose -f docker-compose.test.yml up -d
+python -m pytest tests/integration/ -v
+docker-compose -f docker-compose.test.yml down -v
+```
+
+**테스트 시나리오**:
+- Canvas API → Lambda → SQS → Course-Service → DB
+- Assignment 생성/수정/중복 처리 검증
+- SQS 메시지 처리 검증
+
+자세한 내용은 다음 문서를 참고하세요:
+- [tests/README.md](tests/README.md) - 통합 테스트 가이드
+- [app/serverless/TESTING.md](app/serverless/TESTING.md) - Lambda 테스트 가이드
+
 ### API 문서
 - Swagger UI: http://localhost:808{1-3}/swagger-ui.html (각 서비스별)
 
 ## 서비스 포트
+- **API Gateway: 8080** (모든 요청의 진입점)
 - User-Service: 8081
 - Course-Service: 8082
 - Schedule-Service: 8083
-- Frontend: 3000
+- Frontend: 3000 (예정)
+
+**라우팅 규칙**:
+- `/api/v1/auth/**, /api/v1/users/**, /api/v1/friends/**` → User-Service
+- `/api/v1/courses/**, /api/v1/assignments/**, /api/v1/tasks/**` → Course-Service
+- `/api/v1/schedules/**` → Schedule-Service
 
 ## 참고 문서
 - [기획서](./기획.md) - 문제 정의, 핵심 기능, 사용자 시나리오
