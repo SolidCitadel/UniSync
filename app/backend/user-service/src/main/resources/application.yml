@@ -26,6 +26,18 @@ aws:
     region: ${COGNITO_REGION}
     endpoint: ${COGNITO_ENDPOINT}
 
+# UniSync Configuration
+unisync:
+  encryption:
+    key: ${ENCRYPTION_KEY}
+  api-keys:
+    canvas-sync-lambda: ${CANVAS_SYNC_API_KEY}
+    llm-lambda: ${LLM_LAMBDA_API_KEY}
+
+# Canvas Configuration
+canvas:
+  base-url: ${CANVAS_BASE_URL}
+
 # Swagger/OpenAPI
 springdoc:
   api-docs:

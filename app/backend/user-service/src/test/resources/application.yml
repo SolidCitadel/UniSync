@@ -1,0 +1,37 @@
+spring:
+  dotenv:
+    location: file:../../../.env  # user-service 기준으로 프로젝트 루트의 .env
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    show-sql: true
+
+# Test Configuration
+unisync:
+  encryption:
+    key: IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=
+  api-keys:
+    canvas-sync-lambda: test-canvas-sync-key
+    llm-lambda: test-llm-key
+
+canvas:
+  base-url: https://khcanvas.khu.ac.kr  # 실제 Canvas API 테스트용
+
+# AWS Cognito (테스트용 더미 값)
+aws:
+  cognito:
+    user-pool-id: test-pool-id
+    client-id: test-client-id
+    region: ap-northeast-2
+    endpoint: http://localhost:4566

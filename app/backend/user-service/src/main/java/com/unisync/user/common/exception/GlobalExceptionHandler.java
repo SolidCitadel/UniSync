@@ -1,9 +1,12 @@
 package com.unisync.user.common.exception;
 
+import com.unisync.shared.security.exception.UnauthorizedException;
 import com.unisync.user.auth.exception.AuthenticationException;
 import com.unisync.user.auth.exception.DuplicateUserException;
 import com.unisync.user.auth.exception.InvalidCredentialsException;
 import com.unisync.user.auth.exception.UserNotFoundException;
+import com.unisync.user.credentials.exception.CanvasTokenNotFoundException;
+import com.unisync.user.credentials.exception.InvalidCanvasTokenException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,6 +60,36 @@ public class GlobalExceptionHandler {
         log.error("인증 에러: {}", e.getMessage());
         ErrorResponse errorResponse = new ErrorResponse("AUTHENTICATION_ERROR", e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    /**
+     * 권한 없음 예외 처리 (서비스 간 API Key 검증 실패)
+     */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException e) {
+        log.error("권한 없음: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("UNAUTHORIZED", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    /**
+     * 잘못된 Canvas 토큰 예외 처리
+     */
+    @ExceptionHandler(InvalidCanvasTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCanvasToken(InvalidCanvasTokenException e) {
+        log.error("잘못된 Canvas 토큰: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("INVALID_CANVAS_TOKEN", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    /**
+     * Canvas 토큰을 찾을 수 없음 예외 처리
+     */
+    @ExceptionHandler(CanvasTokenNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCanvasTokenNotFound(CanvasTokenNotFoundException e) {
+        log.error("Canvas 토큰을 찾을 수 없음: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("CANVAS_TOKEN_NOT_FOUND", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
     /**

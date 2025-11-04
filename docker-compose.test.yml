@@ -47,6 +47,35 @@ services:
       timeout: 3s
       retries: 10
 
+  # User Service - 인증 및 Canvas 토큰 관리
+  user-service:
+    build:
+      context: ./app
+      dockerfile: backend/user-service/Dockerfile
+    container_name: unisync-test-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - USER_SERVICE_DB_NAME=user_db
+      - USER_SERVICE_DB_USER=unisync
+      - USER_SERVICE_DB_PASSWORD=unisync_password
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # Course Service - 테스트 대상
   course-service:
     build:
@@ -66,10 +95,13 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_SQS_ENDPOINT=http://localstack:4566
+      - USER_SERVICE_URL=http://user-service:8081
     depends_on:
       mysql:
         condition: service_healthy
       localstack:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     networks:
       - test-network

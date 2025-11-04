@@ -169,6 +169,82 @@ from unisync_shared.dto import AssignmentEventMessage
 
 자세한 내용은 [app/shared/README.md](app/shared/README.md) 참고
 
+## 환경변수 및 프로파일 관리 규칙
+
+### 프로파일 구분
+모든 Spring Boot 서비스는 `local`과 `docker` 프로파일을 구분합니다:
+
+- **`local`**: 로컬 개발 환경 (IDE에서 직접 실행)
+  - `.env` 파일에서 환경변수 자동 로드 (spring-dotenv 사용)
+  - 의미 있는 기본값 제공 (예: `localhost:8081`)
+
+- **`docker`**: Docker Compose 환경
+  - `docker-compose.yml`에서 환경변수 주입
+  - 기본값 없음 (모든 환경변수는 compose에서 제공)
+
+### 파일 구조
+```
+application.yml          # 공통 설정, 기본값 없음 (환경변수만 참조)
+application-local.yml    # 로컬 개발용 기본값 + dotenv 설정
+application-docker.yml   # Docker용 (환경변수만, 기본값 없음)
+application-test.yml     # 테스트용 (H2 DB, 고정 테스트 값)
+```
+
+### 환경변수 사용 규칙
+
+#### ❌ 금지사항
+```yaml
+# application.yml에 의미 없는 기본값 제공
+canvas:
+  base-url: ${CANVAS_BASE_URL:https://canvas.instructure.com}  # ❌ 의미 없는 기본값
+```
+
+#### ✅ 올바른 방식
+
+**application.yml** (공통):
+```yaml
+# 기본값 없음 - 환경변수 필수
+canvas:
+  base-url: ${CANVAS_BASE_URL}
+```
+
+**application-local.yml** (로컬 개발):
+```yaml
+spring:
+  dotenv:
+    location: file:../../.env  # 프로젝트 루트의 .env 읽기
+
+# 의미 있는 기본값 제공
+canvas:
+  base-url: ${CANVAS_BASE_URL:https://khcanvas.khu.ac.kr}
+```
+
+**application-docker.yml** (Docker):
+```yaml
+# 기본값 없음 - docker-compose가 모두 주입
+# (이 파일에는 환경변수 설정 불필요)
+```
+
+### 기본값 제공 기준
+
+**기본값을 제공해야 하는 경우** (`application-local.yml`):
+- ✅ 로컬 개발 시 고정된 값 (예: `localhost:8081`)
+- ✅ 프로젝트 특화 값 (예: `https://khcanvas.khu.ac.kr`)
+- ✅ 로컬 개발 환경 설정 (예: `LocalStack endpoint`)
+
+**기본값을 제공하지 말아야 하는 경우** (`application.yml`):
+- ❌ 환경에 따라 달라지는 값
+- ❌ 의미 없는 placeholder 값
+- ❌ 보안 관련 값 (토큰, 키 등)
+
+**원칙**: 기본값이 없으면 오류를 띄워서 필수 환경변수 누락을 명확히 알림
+
+### .env 파일 관리
+- 프로젝트 루트에 `.env` 파일 위치
+- `spring-dotenv` 라이브러리로 자동 로드 (local 프로파일)
+- `.env.example`로 필요한 환경변수 문서화
+- `.env`는 `.gitignore`에 포함 (보안)
+
 ## 주의사항
 
 ### 절대 금지

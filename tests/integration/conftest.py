@@ -214,8 +214,23 @@ def wait_for_services(lambda_client, sqs_client, assignment_queue_url):
                 raise TimeoutError("[ERROR] MySQL failed to start")
             time.sleep(1)
 
-    # 5. Course Service Validation
-    print("[5/5] Checking course-service...")
+    # 5. User Service Validation
+    print("[5/6] Checking user-service...")
+    max_retries = 60
+    for i in range(max_retries):
+        try:
+            response = requests.get("http://localhost:8081/actuator/health", timeout=2)
+            if response.status_code == 200:
+                print("   [OK] user-service is healthy")
+                break
+        except requests.exceptions.RequestException:
+            pass
+        if i == max_retries - 1:
+            raise TimeoutError("[ERROR] user-service failed to start")
+        time.sleep(1)
+
+    # 6. Course Service Validation
+    print("[6/6] Checking course-service...")
     max_retries = 60
     for i in range(max_retries):
         try:

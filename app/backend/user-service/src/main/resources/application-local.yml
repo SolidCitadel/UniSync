@@ -1,7 +1,11 @@
 # Local Development Profile
 # Usage: Run with SPRING_PROFILES_ACTIVE=local (or set in IDE)
+# Reads environment variables from .env file in project root
 
 spring:
+  dotenv:
+    location: file:../../../.env
+
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${USER_SERVICE_DB_NAME:user_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${USER_SERVICE_DB_USER:unisync}
@@ -17,6 +21,10 @@ aws:
   cognito:
     region: ${COGNITO_REGION:ap-northeast-2}
     endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
+
+# Canvas Configuration
+canvas:
+  base-url: ${CANVAS_BASE_URL:https://khcanvas.khu.ac.kr}
 
 # Logging
 logging:
