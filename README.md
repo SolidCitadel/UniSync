@@ -58,9 +58,6 @@ UniSync/
 - **Docker** + LocalStack (로컬 AWS 환경)
 - **SQS** (메시징), **Step Functions** (워크플로우), **Lambda** (서버리스)
 
-### Frontend (예정)
-- React 18 + TypeScript + Vite
-
 ## 개발 환경 설정
 
 ### 1. 사전 요구사항
@@ -68,7 +65,6 @@ UniSync/
 - **Docker & Docker Compose**
 - **Java 21** (LTS)
 - **Gradle 8.5 이상** (또는 Gradle Wrapper 사용)
-- **Node.js 18 이상** (프론트엔드)
 
 ### 2. 환경 변수 설정
 
@@ -154,9 +150,7 @@ docker-compose -f docker-compose-app.yml down
 | MySQL | 3306 | - |
 | LocalStack | 4566 | - |
 
-**참고**:
-- 프론트엔드는 API Gateway(8080)를 통해 모든 서비스에 접근합니다
-- 직접 서비스 포트로도 테스트 가능하지만 JWT 인증이 필요합니다
+**참고**: 직접 서비스 포트로 테스트 가능하지만 JWT 인증이 필요합니다
 
 ## 인프라 서비스
 

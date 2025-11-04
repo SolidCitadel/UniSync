@@ -244,38 +244,12 @@ awslocal stepfunctions create-state-machine \
 
 ## 테스트
 
-### 테스트 유형
-
-| 테스트 | 실행 시간 | 외부 의존성 | 사용 시점 |
-|--------|----------|------------|----------|
-| **단위 테스트** | ~2초 | ❌ 없음 | 개발 중 (매번) |
-| **Canvas API 테스트** | ~5초 | ✅ Canvas 토큰 | PR 전 |
-| **LocalStack 통합** | ~30초 | ✅ Docker | 배포 전 |
-| **E2E 테스트** | ~1분 | ✅ 모든 서비스 | 프로덕션 배포 전 |
-
-### 테스트 실행
-
 ```bash
 # 통합 테스트 런처 사용
 python ../../scripts/test/test-all.py
 ```
 
-대화형 메뉴에서 원하는 테스트를 선택하세요:
-- `[1]` 단위 테스트
-- `[2]` Canvas API 테스트
-- `[3]` LocalStack 통합 테스트
-- `[4]` 모두 실행
-
-### 상세 가이드
-
-모든 테스트 방법은 **[TESTING.md](./TESTING.md)**를 참고하세요:
-
-- [빠른 시작](./TESTING.md#빠른-시작) - 1분 만에 테스트 실행
-- [단위 테스트](./TESTING.md#단위-테스트) - Mock 기반 함수 테스트
-- [Canvas API 테스트](./TESTING.md#canvas-api-테스트) - 실제 Canvas 연동
-- [LocalStack 통합](./TESTING.md#localstack-통합-테스트) - Lambda 배포/호출
-- [E2E 테스트](./TESTING.md#e2e-테스트) - 전체 워크플로우
-- [문제 해결](./TESTING.md#문제-해결) - 자주 발생하는 문제
+자세한 테스트 방법은 **[TESTING.md](./TESTING.md)**를 참고하세요.
 
 ---
 
