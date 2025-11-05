@@ -1,6 +1,12 @@
 package com.unisync.user.credentials.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.unisync.user.credentials.exception.InvalidCanvasTokenException;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -66,5 +72,73 @@ public class CanvasApiClient {
             log.error("Unexpected error during Canvas token validation: {}", e.getMessage(), e);
             throw new InvalidCanvasTokenException("Failed to validate Canvas token: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Canvas API 토큰 검증 및 사용자 프로필 조회
+     * GET /api/v1/users/self/profile 호출
+     *
+     * @param canvasToken Canvas API 토큰
+     * @return Canvas 사용자 프로필 정보
+     * @throws InvalidCanvasTokenException 토큰이 유효하지 않거나 프로필 조회 실패 시
+     */
+    public CanvasProfile validateTokenAndGetProfile(String canvasToken) {
+        String url = canvasBaseUrl + "/api/v1/users/self/profile";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + canvasToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<CanvasProfile> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    CanvasProfile.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                CanvasProfile profile = response.getBody();
+                log.info("Canvas profile retrieved successfully: userId={}, loginId={}",
+                        profile.getId(), profile.getLoginId());
+                return profile;
+            } else {
+                throw new InvalidCanvasTokenException("Canvas API returned empty profile");
+            }
+
+        } catch (HttpClientErrorException.Unauthorized e) {
+            log.error("Canvas token is unauthorized: {}", e.getMessage());
+            throw new InvalidCanvasTokenException("Invalid Canvas token: Unauthorized");
+        } catch (HttpClientErrorException e) {
+            log.error("Canvas profile retrieval failed: {}", e.getMessage());
+            throw new InvalidCanvasTokenException("Failed to retrieve Canvas profile: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during Canvas profile retrieval: {}", e.getMessage(), e);
+            throw new InvalidCanvasTokenException("Failed to retrieve Canvas profile: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Canvas 사용자 프로필 정보
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class CanvasProfile {
+        private Long id;
+        private String name;
+
+        @JsonProperty("login_id")
+        private String loginId;
+
+        @JsonProperty("primary_email")
+        private String primaryEmail;
+
+        @JsonProperty("avatar_url")
+        private String avatarUrl;
     }
 }

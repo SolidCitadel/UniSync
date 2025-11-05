@@ -56,13 +56,20 @@ class CredentialsServiceIntegrationTest {
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
-        // Canvas API 호출 모킹 (성공)
+        // Canvas API 호출 모킹 (성공 - Profile 반환)
+        CanvasApiClient.CanvasProfile mockProfile = CanvasApiClient.CanvasProfile.builder()
+                .id(12345L)
+                .name("Test User")
+                .loginId("2021101234")
+                .primaryEmail("test@example.com")
+                .build();
+
         when(restTemplate.exchange(
                 anyString(),
                 eq(HttpMethod.GET),
                 any(),
-                eq(String.class)
-        )).thenReturn(ResponseEntity.ok("{}"));
+                eq(CanvasApiClient.CanvasProfile.class)
+        )).thenReturn(ResponseEntity.ok(mockProfile));
 
         // When
         RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(TEST_USER_ID, request);
@@ -79,6 +86,9 @@ class CredentialsServiceIntegrationTest {
         assertThat(saved.getProvider()).isEqualTo(CredentialProvider.CANVAS);
         assertThat(saved.getEncryptedToken()).isNotEqualTo(TEST_CANVAS_TOKEN); // 암호화되어야 함
         assertThat(saved.getLastValidatedAt()).isNotNull();
+        assertThat(saved.getIsConnected()).isTrue(); // 연동 상태 확인
+        assertThat(saved.getExternalUserId()).isEqualTo("12345");
+        assertThat(saved.getExternalUsername()).isEqualTo("2021101234");
     }
 
     @Test
@@ -94,8 +104,10 @@ class CredentialsServiceIntegrationTest {
                 anyString(),
                 eq(HttpMethod.GET),
                 any(),
-                eq(String.class)
-        )).thenThrow(new HttpClientErrorException(HttpStatus.UNAUTHORIZED));
+                eq(CanvasApiClient.CanvasProfile.class)
+        )).thenThrow(HttpClientErrorException.Unauthorized.create(
+                HttpStatus.UNAUTHORIZED, "Unauthorized", null, null, null
+        ));
 
         // When & Then
         assertThatThrownBy(() -> credentialsService.registerCanvasToken(TEST_USER_ID, request))
@@ -115,12 +127,19 @@ class CredentialsServiceIntegrationTest {
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
+        CanvasApiClient.CanvasProfile mockProfile = CanvasApiClient.CanvasProfile.builder()
+                .id(12345L)
+                .name("Test User")
+                .loginId("2021101234")
+                .primaryEmail("test@example.com")
+                .build();
+
         when(restTemplate.exchange(
                 anyString(),
                 eq(HttpMethod.GET),
                 any(),
-                eq(String.class)
-        )).thenReturn(ResponseEntity.ok("{}"));
+                eq(CanvasApiClient.CanvasProfile.class)
+        )).thenReturn(ResponseEntity.ok(mockProfile));
 
         credentialsService.registerCanvasToken(TEST_USER_ID, request);
 
@@ -149,12 +168,19 @@ class CredentialsServiceIntegrationTest {
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
+        CanvasApiClient.CanvasProfile mockProfile = CanvasApiClient.CanvasProfile.builder()
+                .id(12345L)
+                .name("Test User")
+                .loginId("2021101234")
+                .primaryEmail("test@example.com")
+                .build();
+
         when(restTemplate.exchange(
                 anyString(),
                 eq(HttpMethod.GET),
                 any(),
-                eq(String.class)
-        )).thenReturn(ResponseEntity.ok("{}"));
+                eq(CanvasApiClient.CanvasProfile.class)
+        )).thenReturn(ResponseEntity.ok(mockProfile));
 
         credentialsService.registerCanvasToken(TEST_USER_ID, request);
 
@@ -183,12 +209,19 @@ class CredentialsServiceIntegrationTest {
                 .canvasToken("old-token")
                 .build();
 
+        CanvasApiClient.CanvasProfile mockProfile = CanvasApiClient.CanvasProfile.builder()
+                .id(12345L)
+                .name("Test User")
+                .loginId("2021101234")
+                .primaryEmail("test@example.com")
+                .build();
+
         when(restTemplate.exchange(
                 anyString(),
                 eq(HttpMethod.GET),
                 any(),
-                eq(String.class)
-        )).thenReturn(ResponseEntity.ok("{}"));
+                eq(CanvasApiClient.CanvasProfile.class)
+        )).thenReturn(ResponseEntity.ok(mockProfile));
 
         credentialsService.registerCanvasToken(TEST_USER_ID, request1);
 

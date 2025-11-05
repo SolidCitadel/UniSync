@@ -22,9 +22,14 @@ sequenceDiagram
     UserService-->>User: 200 OK (userId=1)
 
     User->>UserService: 2. POST /credentials/canvas (토큰 등록)
-    UserService->>UserService: 토큰 암호화 저장
+    UserService->>Canvas: GET /users/self/profile (토큰 검증)
+    Canvas-->>UserService: profile 정보
+    UserService->>UserService: 토큰 암호화 저장 + is_connected=true
     UserService->>SQS_Token: user-token-registered 이벤트
     UserService-->>User: 200 OK (즉시 응답)
+
+    User->>UserService: 2.5. GET /integrations/status (연동 상태 확인)
+    UserService-->>User: {canvas: connected, lastSyncedAt: ...}
 
     Note over SQS_Token,Lambda: 비동기 처리 시작
 
@@ -72,13 +77,19 @@ sequenceDiagram
 ```sql
 -- users: 이미 구현됨 (Cognito 연동)
 
--- credentials: 이미 구현됨
+-- credentials: 연동 상태 필드 추가 필요
 CREATE TABLE credentials (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
-    provider ENUM('CANVAS', 'GOOGLE', 'OUTLOOK') NOT NULL,
+    provider ENUM('CANVAS', 'GOOGLE_CALENDAR', 'OUTLOOK') NOT NULL,
     encrypted_token TEXT NOT NULL,
+    is_connected BOOLEAN DEFAULT FALSE,  -- ✅ 추가: 연동 상태
+    external_user_id VARCHAR(255),       -- ✅ 추가: Canvas/Google의 사용자 ID
+    external_username VARCHAR(255),      -- ✅ 추가: Canvas/Google의 사용자명
     last_validated_at DATETIME,
+    last_synced_at DATETIME,             -- ✅ 추가: 마지막 동기화 시간
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE(user_id, provider)
 );
 ```
@@ -693,7 +704,7 @@ class TestUserCanvasSyncE2E:
         print("  ✅ userId=1 (테스트용)")
 
         # Step 2: Canvas 토큰 등록
-        print("\n[2/5] Canvas 토큰 등록...")
+        print("\n[2/6] Canvas 토큰 등록...")
         response = requests.post(
             "http://localhost:8081/api/v1/credentials/canvas",
             headers={"X-User-Id": str(test_user_id)},
@@ -703,6 +714,20 @@ class TestUserCanvasSyncE2E:
 
         assert response.status_code == 200, f"토큰 등록 실패: {response.text}"
         print(f"  ✅ Canvas 토큰 등록 완료 (즉시 응답)")
+
+        # Step 2.5: 연동 상태 확인
+        print("\n[2.5/6] 연동 상태 확인...")
+        status_response = requests.get(
+            "http://localhost:8081/api/v1/integrations/status",
+            headers={"X-User-Id": str(test_user_id)},
+            timeout=5
+        )
+
+        assert status_response.status_code == 200, f"연동 상태 조회 실패: {status_response.text}"
+        status = status_response.json()
+        assert status.get('canvas') is not None, "Canvas 연동 정보가 없음"
+        assert status['canvas']['isConnected'] == True, "Canvas 연동 상태가 false"
+        print(f"  ✅ Canvas 연동 확인: {status['canvas']['externalUsername']}")
 
         # Step 3: 백그라운드 동기화 대기
         print("\n[3/5] 자동 동기화 대기 중...")
@@ -853,18 +878,309 @@ def clean_database(mysql_connection):
 
 ---
 
+### 9️⃣ User-Service: 연동 상태 확인 API ✨
+
+**목적**: 사용자가 Canvas/Google Calendar 연동 상태를 확인할 수 있는 API
+
+#### Credentials 엔티티 수정
+
+**파일**: `app/backend/user-service/src/main/java/com/unisync/user/common/entity/Credentials.java`
+
+```java
+@Entity
+@Table(name = "credentials")
+@Getter
+@Setter  // is_connected 업데이트를 위해 Setter 필요
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Credentials {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false)
+    private CredentialProvider provider;
+
+    @Column(name = "encrypted_token", nullable = false, columnDefinition = "TEXT")
+    private String encryptedToken;
+
+    // ✅ 추가 필드
+    @Column(name = "is_connected", nullable = false)
+    private Boolean isConnected = false;
+
+    @Column(name = "external_user_id")
+    private String externalUserId;  // Canvas user ID
+
+    @Column(name = "external_username")
+    private String externalUsername;  // Canvas username
+
+    @Column(name = "last_validated_at")
+    private LocalDateTime lastValidatedAt;
+
+    @Column(name = "last_synced_at")
+    private LocalDateTime lastSyncedAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+}
+```
+
+#### CanvasApiClient 수정 (Profile 조회 추가)
+
+**파일**: `app/backend/user-service/src/main/java/com/unisync/user/credentials/service/CanvasApiClient.java`
+
+```java
+@Component
+@RequiredArgsConstructor
+public class CanvasApiClient {
+
+    private final RestTemplate restTemplate;
+
+    @Value("${canvas.api.base-url}")
+    private String canvasApiBaseUrl;
+
+    /**
+     * Canvas 토큰 유효성 검증 + 사용자 정보 조회
+     */
+    public CanvasProfile validateTokenAndGetProfile(String token) {
+        String url = canvasApiBaseUrl + "/users/self/profile";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<CanvasProfile> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                CanvasProfile.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+
+            throw new InvalidCanvasTokenException("Canvas API returned empty profile");
+
+        } catch (HttpClientErrorException e) {
+            throw new InvalidCanvasTokenException("Invalid Canvas token: " + e.getMessage());
+        }
+    }
+
+    @Data
+    public static class CanvasProfile {
+        private Long id;
+        private String name;
+        private String login_id;  // Canvas username
+        private String primary_email;
+    }
+}
+```
+
+#### CredentialsService 수정
+
+```java
+@Transactional
+public RegisterCanvasTokenResponse registerCanvasToken(Long userId, RegisterCanvasTokenRequest request) {
+    log.info("Registering Canvas token for user: {}", userId);
+
+    // 1. Canvas API로 토큰 유효성 검증 + 프로필 조회
+    CanvasApiClient.CanvasProfile profile = canvasApiClient
+        .validateTokenAndGetProfile(request.getCanvasToken());
+
+    // 2. 암호화
+    String encryptedToken = encryptionService.encrypt(request.getCanvasToken());
+
+    // 3. DB 저장 (이미 있으면 업데이트)
+    Credentials credentials = credentialsRepository
+        .findByUserIdAndProvider(userId, CredentialProvider.CANVAS)
+        .orElse(Credentials.builder()
+            .userId(userId)
+            .provider(CredentialProvider.CANVAS)
+            .build());
+
+    credentials.setEncryptedToken(encryptedToken);
+    credentials.setIsConnected(true);  // ✅ 연동 상태 true
+    credentials.setExternalUserId(String.valueOf(profile.getId()));
+    credentials.setExternalUsername(profile.getLogin_id());
+    credentials.setLastValidatedAt(LocalDateTime.now());
+
+    credentialsRepository.save(credentials);
+
+    // 4. SQS 이벤트 발행
+    sqsTemplate.send("user-token-registered-queue", UserTokenRegisteredEvent.builder()
+        .userId(userId)
+        .provider("CANVAS")
+        .registeredAt(LocalDateTime.now())
+        .build());
+
+    log.info("Canvas token registered for userId={}, externalUserId={}",
+        userId, profile.getId());
+
+    return RegisterCanvasTokenResponse.builder()
+        .success(true)
+        .message("Canvas token registered successfully")
+        .build();
+}
+```
+
+#### 연동 상태 API 추가
+
+**새 파일**: `app/backend/user-service/src/main/java/com/unisync/user/integration/controller/IntegrationStatusController.java`
+
+```java
+@RestController
+@RequestMapping("/api/v1/integrations")
+@RequiredArgsConstructor
+@Tag(name = "Integration Status", description = "외부 연동 상태 조회 API")
+public class IntegrationStatusController {
+
+    private final IntegrationStatusService integrationStatusService;
+
+    @GetMapping("/status")
+    @Operation(summary = "연동 상태 조회", description = "Canvas, Google Calendar 등의 연동 상태를 조회합니다.")
+    public ResponseEntity<IntegrationStatusResponse> getIntegrationStatus(
+        @RequestHeader(value = "X-User-Id") Long userId
+    ) {
+        IntegrationStatusResponse status = integrationStatusService.getIntegrationStatus(userId);
+        return ResponseEntity.ok(status);
+    }
+}
+```
+
+**Service**:
+```java
+@Service
+@RequiredArgsConstructor
+public class IntegrationStatusService {
+
+    private final CredentialsRepository credentialsRepository;
+
+    public IntegrationStatusResponse getIntegrationStatus(Long userId) {
+        List<Credentials> allCredentials = credentialsRepository.findAllByUserId(userId);
+
+        IntegrationStatusResponse response = new IntegrationStatusResponse();
+
+        for (Credentials cred : allCredentials) {
+            IntegrationInfo info = IntegrationInfo.builder()
+                .isConnected(cred.getIsConnected())
+                .externalUsername(cred.getExternalUsername())
+                .lastValidatedAt(cred.getLastValidatedAt())
+                .lastSyncedAt(cred.getLastSyncedAt())
+                .build();
+
+            switch (cred.getProvider()) {
+                case CANVAS:
+                    response.setCanvas(info);
+                    break;
+                case GOOGLE_CALENDAR:
+                    response.setGoogleCalendar(info);
+                    break;
+                case OUTLOOK:
+                    response.setOutlook(info);
+                    break;
+            }
+        }
+
+        return response;
+    }
+}
+```
+
+**DTO**:
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class IntegrationStatusResponse {
+    private IntegrationInfo canvas;
+    private IntegrationInfo googleCalendar;
+    private IntegrationInfo outlook;
+}
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class IntegrationInfo {
+    private Boolean isConnected;
+    private String externalUsername;
+    private LocalDateTime lastValidatedAt;
+    private LocalDateTime lastSyncedAt;
+}
+```
+
+**Repository 메서드 추가**:
+```java
+public interface CredentialsRepository extends JpaRepository<Credentials, Long> {
+    Optional<Credentials> findByUserIdAndProvider(Long userId, CredentialProvider provider);
+    List<Credentials> findAllByUserId(Long userId);  // ✅ 추가
+    boolean existsByUserIdAndProvider(Long userId, CredentialProvider provider);
+    void deleteByUserIdAndProvider(Long userId, CredentialProvider provider);
+}
+```
+
+---
+
 ## 📋 구현 체크리스트
 
-- [ ] 1️⃣ User-Service: SQS 이벤트 발행
-- [ ] 2️⃣ SQS 큐 생성 (3개 추가)
-- [ ] 3️⃣ Lambda: `initial_sync_handler()` 구현
+- [x] 0️⃣ Credentials 테이블 스키마 업데이트
+  - ✅ `is_connected`, `external_user_id`, `external_username`, `last_synced_at` 필드 추가됨
+  - 📁 `Credentials.java` 완료
+
+- [x] 1️⃣ User-Service: SQS 이벤트 발행
+  - ✅ `SqsPublisher` 서비스 구현됨
+  - ✅ `CredentialsService.publishUserTokenRegisteredEvent()` 구현됨
+  - ✅ Canvas 프로필 조회 기능 추가 (`CanvasApiClient.validateTokenAndGetProfile()`)
+  - 📁 `CredentialsService.java`, `SqsPublisher.java`, `CanvasApiClient.java` 완료
+
+- [x] 2️⃣ SQS 큐 생성 (3개 추가)
+  - ✅ `user-token-registered-queue`
+  - ✅ `course-enrollment-queue`
+  - ✅ `assignment-sync-needed-queue`
+  - 📁 `01-create-queues.sh` 완료
+
+- [x] 3️⃣ Lambda: `initial_sync_handler()` 구현
+  - ✅ `initial_sync_handler()` 함수 구현됨
+  - ✅ `fetch_user_courses()` 함수 구현됨
+  - 📁 `handler.py` 일부 완료
+
 - [ ] 4️⃣ Course-Service: Enrollment 엔티티 추가
 - [ ] 5️⃣ Course-Service: Course SQS 리스너
 - [ ] 6️⃣ Lambda: `assignment_sync_handler()` 구현
 - [ ] 7️⃣ Course-Service: Course 조회 API
 - [ ] 8️⃣ E2E 테스트 작성 및 검증
-- [ ] 9️⃣ pytest-html 추가 (테스트 리포트)
-- [ ] 🔟 전체 시나리오 통과 확인
+- [ ] 9️⃣ User-Service: 연동 상태 확인 API
+- [ ] 🔟 pytest-html 추가 (테스트 리포트)
+- [ ] 1️⃣1️⃣ 전체 시나리오 통과 확인
+
+---
+
+### 📊 진행률: 35% (4/11 완료)
+
+**다음 단계**: 4️⃣ Course-Service Enrollment 엔티티 및 Repository 구현
 
 ---
 

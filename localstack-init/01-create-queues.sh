@@ -11,19 +11,37 @@ REGION="ap-northeast-2"
 # SQS 큐 생성
 echo "SQS 큐 생성 중..."
 
-# assignment-events-queue: 새 과제 감지 이벤트
+# user-token-registered-queue: 사용자 Canvas 토큰 등록 이벤트 (UserService → Lambda)
+awslocal sqs create-queue \
+  --queue-name user-token-registered-queue \
+  --region $REGION \
+  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
+
+# course-enrollment-queue: Course 등록 이벤트 (Lambda → CourseService)
+awslocal sqs create-queue \
+  --queue-name course-enrollment-queue \
+  --region $REGION \
+  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
+
+# assignment-sync-needed-queue: Assignment 동기화 요청 이벤트 (CourseService → Lambda)
+awslocal sqs create-queue \
+  --queue-name assignment-sync-needed-queue \
+  --region $REGION \
+  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
+
+# assignment-events-queue: 새 과제 감지 이벤트 (기존)
 awslocal sqs create-queue \
   --queue-name assignment-events-queue \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-# submission-events-queue: 제출물 감지 이벤트
+# submission-events-queue: 제출물 감지 이벤트 (기존)
 awslocal sqs create-queue \
   --queue-name submission-events-queue \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-# task-creation-queue: LLM 분석 후 Task 생성 이벤트
+# task-creation-queue: LLM 분석 후 Task 생성 이벤트 (기존)
 awslocal sqs create-queue \
   --queue-name task-creation-queue \
   --region $REGION \

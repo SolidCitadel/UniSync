@@ -14,8 +14,13 @@ services:
       - LAMBDA_EXECUTOR=docker-reuse
       - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}  # Pro 라이선스 토큰
+      - AWS_REGION=${AWS_REGION}
+      - LOCALSTACK_ENDPOINT=http://localhost:4566
+      - CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL}
+      - USER_SERVICE_URL=http://user-service:8081
     volumes:
       - "./localstack-init:/etc/localstack/init/ready.d"  # 초기화 스크립트
+      - "./app/serverless:/var/lib/localstack/serverless"  # Lambda 소스
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "localstack-data:/var/lib/localstack"
     networks:

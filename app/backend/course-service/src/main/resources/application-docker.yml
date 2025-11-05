@@ -1,6 +1,6 @@
 # Docker Integration Test Profile
-# Usage: Set SPRING_PROFILES_ACTIVE=docker in docker-compose-app.yml
-# All required environment variables are injected from docker-compose-app.yml
+# Usage: Set SPRING_PROFILES_ACTIVE=docker in docker-compose.test.yml
+# All required environment variables are injected from docker-compose.test.yml
 
 spring:
   jpa:
@@ -12,14 +12,10 @@ spring:
 aws:
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
-    queues:
-      user-token-registered: ${SQS_USER_TOKEN_REGISTERED_QUEUE}
   region: ${AWS_REGION}
   credentials:
     access-key: ${AWS_ACCESS_KEY_ID}
     secret-key: ${AWS_SECRET_ACCESS_KEY}
-  cognito:
-    region: ${AWS_REGION}
 
 # Logging
 logging:

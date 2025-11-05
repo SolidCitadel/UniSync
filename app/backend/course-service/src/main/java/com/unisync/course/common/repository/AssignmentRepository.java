@@ -4,6 +4,7 @@ import com.unisync.course.common.entity.Assignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,4 +26,11 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
      * @return 존재 여부
      */
     boolean existsByCanvasAssignmentId(Long canvasAssignmentId);
+
+    /**
+     * 특정 Course의 모든 Assignment 조회
+     * @param courseId Course ID
+     * @return Assignment 목록
+     */
+    List<Assignment> findAllByCourseId(Long courseId);
 }

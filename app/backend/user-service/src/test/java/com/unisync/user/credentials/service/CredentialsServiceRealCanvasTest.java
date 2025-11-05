@@ -89,12 +89,20 @@ class CredentialsServiceRealCanvasTest {
         System.out.println("   Original: " + realCanvasToken.substring(0, Math.min(15, realCanvasToken.length())) + "...");
         System.out.println("   Encrypted: " + saved.getEncryptedToken().substring(0, Math.min(30, saved.getEncryptedToken().length())) + "...");
         System.out.println("   Last validated: " + saved.getLastValidatedAt());
+        System.out.println("   Is connected: " + saved.getIsConnected());
+        System.out.println("   External user ID: " + saved.getExternalUserId());
+        System.out.println("   External username: " + saved.getExternalUsername());
 
         assertThat(saved.getUserId()).isEqualTo(TEST_USER_ID);
         assertThat(saved.getProvider()).isEqualTo(CredentialProvider.CANVAS);
         assertThat(saved.getEncryptedToken()).isNotEqualTo(realCanvasToken); // 암호화되어야 함
         assertThat(saved.getEncryptedToken()).hasSizeGreaterThan(50); // 암호화되면 더 길어짐
         assertThat(saved.getLastValidatedAt()).isNotNull();
+
+        // 새로 추가된 Canvas Profile 필드 검증
+        assertThat(saved.getIsConnected()).isTrue(); // 연동 상태 활성화
+        assertThat(saved.getExternalUserId()).isNotBlank(); // Canvas 사용자 ID
+        assertThat(saved.getExternalUsername()).isNotBlank(); // Canvas 학번/로그인 ID
     }
 
     @Test

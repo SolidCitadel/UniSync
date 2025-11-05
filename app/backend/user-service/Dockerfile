@@ -1,39 +1,31 @@
 # Multi-stage build for User Service
+
 # Stage 1: Build
-FROM gradle:8.5-jdk21-alpine AS builder
+FROM gradle:8.5-jdk21-alpine AS build
+WORKDIR /workspace
 
-WORKDIR /app
+# Copy shared module first
+COPY shared/java-common ./shared/java-common
 
-# Copy Gradle files
-COPY build.gradle.kts settings.gradle.kts ./
-COPY gradle ./gradle
-
-# Download dependencies (cached layer)
-RUN gradle dependencies --no-daemon || true
-
-# Copy source code
-COPY src ./src
+# Copy Gradle files and source
+COPY backend/user-service ./backend/user-service
 
 # Build application
-RUN gradle bootJar --no-daemon
+WORKDIR /workspace/backend/user-service
+RUN gradle clean build -x test --no-daemon
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
-
-# Copy JAR from builder
-COPY --from=builder /app/build/libs/*.jar app.jar
+# Copy JAR from build stage
+COPY --from=build /workspace/backend/user-service/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8081
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1
 
 # Run application

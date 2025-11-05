@@ -16,9 +16,9 @@ else
   AWS_CMD="aws"
 fi
 
-# 1. Deploy Canvas Sync Lambda
+# 1. Deploy Canvas Initial Sync Lambda (토큰 등록 시 최초 동기화)
 echo ""
-echo "Packaging Canvas Sync Lambda..."
+echo "Packaging Canvas Initial Sync Lambda..."
 cd app/serverless/canvas-sync-lambda
 
 # Install dependencies and package
@@ -27,6 +27,29 @@ cp src/handler.py package/
 cd package && zip -r ../function.zip . && cd ..
 rm -rf package
 
+echo "Deploying Canvas Initial Sync Lambda..."
+$AWS_CMD lambda create-function \
+  --function-name canvas-initial-sync-lambda \
+  --runtime python3.11 \
+  --role arn:aws:iam::000000000000:role/lambda-execution-role \
+  --handler handler.initial_sync_handler \
+  --zip-file fileb://function.zip \
+  --timeout 30 \
+  --memory-size 512 \
+  --environment "Variables={
+    USER_SERVICE_URL=http://host.docker.internal:8081,
+    CANVAS_API_BASE_URL=https://canvas.instructure.com/api/v1,
+    SQS_ENDPOINT=http://host.docker.internal:4566,
+    AWS_REGION=ap-northeast-2
+  }" || echo "Canvas Initial Sync Lambda already exists, updating..."
+
+# Update if function already exists
+$AWS_CMD lambda update-function-code \
+  --function-name canvas-initial-sync-lambda \
+  --zip-file fileb://function.zip || true
+
+# 2. Deploy Canvas Sync Lambda (기존 Assignment sync용)
+echo ""
 echo "Deploying Canvas Sync Lambda..."
 $AWS_CMD lambda create-function \
   --function-name canvas-sync-lambda \
@@ -38,7 +61,9 @@ $AWS_CMD lambda create-function \
   --memory-size 512 \
   --environment "Variables={
     USER_SERVICE_URL=http://host.docker.internal:8081,
-    CANVAS_API_BASE_URL=https://canvas.instructure.com/api/v1
+    CANVAS_API_BASE_URL=https://canvas.instructure.com/api/v1,
+    SQS_ENDPOINT=http://host.docker.internal:4566,
+    AWS_REGION=ap-northeast-2
   }" || echo "Canvas Sync Lambda already exists, updating..."
 
 # Update if function already exists

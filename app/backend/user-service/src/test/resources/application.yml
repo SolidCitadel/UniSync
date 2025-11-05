@@ -28,10 +28,22 @@ unisync:
 canvas:
   base-url: https://khcanvas.khu.ac.kr  # 실제 Canvas API 테스트용
 
-# AWS Cognito (테스트용 더미 값)
+# AWS Configuration (테스트용)
 aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  endpoint: ${LOCALSTACK_ENDPOINT:http://localhost:4566}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:test}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+
   cognito:
     user-pool-id: test-pool-id
     client-id: test-client-id
     region: ap-northeast-2
     endpoint: http://localhost:4566
+
+  sqs:
+    endpoint: ${LOCALSTACK_ENDPOINT:http://localhost:4566}
+    region: ${AWS_REGION:ap-northeast-2}
+    queues:
+      user-token-registered: ${SQS_USER_TOKEN_REGISTERED_QUEUE:user-token-registered-queue}

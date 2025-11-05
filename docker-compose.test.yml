@@ -6,16 +6,20 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=sqs,lambda
+      - SERVICES=sqs,lambda,cognito-idp,iam
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+      - AWS_REGION=${AWS_REGION}
       - CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL}
       - CANVAS_API_TOKEN=${CANVAS_API_TOKEN}
+      - LOCALSTACK_ENDPOINT=http://localhost:4566
+      - USER_SERVICE_URL=http://user-service:8081
+      - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
     volumes:
       - "./localstack-init:/etc/localstack/init/ready.d"
-      - "./app:/etc/localstack/app"
+      - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       - test-network
@@ -56,25 +60,38 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - SPRING_PROFILES_ACTIVE=test
+      - SPRING_PROFILES_ACTIVE=docker
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
-      - USER_SERVICE_DB_NAME=user_db
-      - USER_SERVICE_DB_USER=unisync
-      - USER_SERVICE_DB_PASSWORD=unisync_password
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+      - USER_SERVICE_DB_NAME=${USER_SERVICE_DB_NAME}
+      - USER_SERVICE_DB_USER=${USER_SERVICE_DB_USER}
+      - USER_SERVICE_DB_PASSWORD=${USER_SERVICE_DB_PASSWORD}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - CANVAS_BASE_URL=${CANVAS_BASE_URL}
+      - COGNITO_ENDPOINT=http://localstack:4566
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - COGNITO_REGION=${COGNITO_REGION}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
+      - LLM_LAMBDA_API_KEY=${LLM_LAMBDA_API_KEY}
+      - SQS_USER_TOKEN_REGISTERED_QUEUE=${SQS_USER_TOKEN_REGISTERED_QUEUE}
     depends_on:
       mysql:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
     networks:
       - test-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
+      start_period: 30s
 
   # Course Service - 테스트 대상
   course-service:
@@ -85,15 +102,15 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - SPRING_PROFILES_ACTIVE=test
+      - SPRING_PROFILES_ACTIVE=docker
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
-      - COURSE_SERVICE_DB_NAME=course_db
-      - COURSE_SERVICE_DB_USER=unisync
-      - COURSE_SERVICE_DB_PASSWORD=unisync_password
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+      - COURSE_SERVICE_DB_NAME=${COURSE_SERVICE_DB_NAME}
+      - COURSE_SERVICE_DB_USER=${COURSE_SERVICE_DB_USER}
+      - COURSE_SERVICE_DB_PASSWORD=${COURSE_SERVICE_DB_PASSWORD}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SQS_ENDPOINT=http://localstack:4566
       - USER_SERVICE_URL=http://user-service:8081
     depends_on:
@@ -106,10 +123,11 @@ services:
     networks:
       - test-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
+      start_period: 30s
 
 networks:
   test-network:

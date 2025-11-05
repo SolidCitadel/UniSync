@@ -44,6 +44,9 @@ dependencies {
     // AWS SDK for Cognito
     implementation("software.amazon.awssdk:cognitoidentityprovider:${property("awsSdkVersion")}")
 
+    // AWS SDK for SQS
+    implementation("software.amazon.awssdk:sqs:${property("awsSdkVersion")}")
+
     // Lombok
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")

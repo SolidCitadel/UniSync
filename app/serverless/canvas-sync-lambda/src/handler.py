@@ -20,9 +20,134 @@ SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT', None)  # For LocalStack
 sqs = boto3.client('sqs', region_name=AWS_REGION, endpoint_url=SQS_ENDPOINT)
 
 
+def initial_sync_handler(event, context):
+    """
+    사용자의 Canvas 토큰 등록 시 최초 동기화
+
+    Input (from user-token-registered-queue):
+        {
+            "userId": 1,
+            "provider": "CANVAS",
+            "registeredAt": "2025-11-05T12:00:00Z",
+            "externalUserId": "99040",
+            "externalUsername": "2021105636"
+        }
+
+    Output:
+        - course-enrollment-queue에 사용자의 전체 Course 발행
+    """
+    try:
+        # SQS event에서 메시지 파싱
+        records = event.get('Records', [])
+        if not records:
+            print("No SQS records found in event")
+            return {'statusCode': 200, 'body': 'No records'}
+
+        for record in records:
+            message_body = json.loads(record['body'])
+            user_id = message_body['userId']
+
+            print(f"🚀 Initial sync started for userId={user_id}")
+
+            # 1. User-Service에서 Canvas 토큰 조회
+            canvas_token = get_canvas_token(user_id)
+
+            # 2. Canvas API: 사용자의 전체 Course 조회
+            courses = fetch_user_courses(canvas_token)
+            print(f"  - Fetched {len(courses)} courses")
+
+            # 3. 각 Course마다 SQS 이벤트 발행
+            for course in courses:
+                send_to_sqs('course-enrollment-queue', {
+                    'eventType': 'COURSE_ENROLLMENT',
+                    'userId': user_id,
+                    'canvasCourseId': course['id'],
+                    'courseName': course['name'],
+                    'courseCode': course.get('course_code', ''),
+                    'workflowState': course.get('workflow_state', 'available'),
+                    'startAt': course.get('start_at'),
+                    'endAt': course.get('end_at'),
+                    'publishedAt': datetime.utcnow().isoformat()
+                })
+
+            print(f"✅ Initial sync completed: {len(courses)} courses published")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Initial sync completed'})
+        }
+
+    except Exception as e:
+        print(f"Error in initial_sync_handler: {str(e)}")
+        raise
+
+
+def assignment_sync_handler(event, context):
+    """
+    새 Course가 등록되면 Assignment 동기화 수행
+
+    Input (from assignment-sync-needed-queue):
+        {
+            "courseId": 123,
+            "canvasCourseId": 789,
+            "leaderUserId": 1
+        }
+
+    Output:
+        - assignment-events-queue에 각 Assignment 발행
+    """
+    try:
+        # SQS event에서 메시지 파싱
+        records = event.get('Records', [])
+        if not records:
+            print("No SQS records found in event")
+            return {'statusCode': 200, 'body': 'No records'}
+
+        for record in records:
+            message_body = json.loads(record['body'])
+            course_id = message_body['courseId']
+            canvas_course_id = message_body['canvasCourseId']
+            leader_user_id = message_body['leaderUserId']
+
+            print(f"📥 Assignment sync started: courseId={course_id}, canvasCourseId={canvas_course_id}")
+
+            # 1. User-Service에서 Leader의 Canvas 토큰 조회
+            canvas_token = get_canvas_token(leader_user_id)
+
+            # 2. Canvas API: 해당 Course의 Assignments 조회
+            assignments = fetch_canvas_assignments(canvas_token, str(canvas_course_id))
+            print(f"  - Fetched {len(assignments)} assignments")
+
+            # 3. 각 Assignment마다 SQS 이벤트 발행
+            for assignment in assignments:
+                send_to_sqs('assignment-events-queue', {
+                    'eventType': 'ASSIGNMENT_CREATED',
+                    'courseId': course_id,
+                    'canvasAssignmentId': assignment['id'],
+                    'title': assignment['name'],
+                    'description': assignment.get('description', ''),
+                    'dueAt': assignment.get('due_at'),
+                    'pointsPossible': assignment.get('points_possible'),
+                    'submissionTypes': assignment.get('submission_types', []),
+                    'htmlUrl': assignment.get('html_url'),
+                    'publishedAt': datetime.utcnow().isoformat()
+                })
+
+            print(f"✅ Assignment sync completed: {len(assignments)} assignments published")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Assignment sync completed'})
+        }
+
+    except Exception as e:
+        print(f"Error in assignment_sync_handler: {str(e)}")
+        raise
+
+
 def lambda_handler(event, context):
     """
-    Main handler called from Step Functions
+    Main handler called from Step Functions (기존 Assignment sync용)
 
     Input:
         {
@@ -107,16 +232,16 @@ def lambda_handler(event, context):
 
 def get_canvas_token(user_id: int) -> str:
     """Call User-Service API to retrieve Canvas token (decrypted)"""
-    url = f"{USER_SERVICE_URL}/credentials/{user_id}/canvas"
+    url = f"{USER_SERVICE_URL}/api/v1/credentials/{user_id}/canvas"
     headers = {
-        'X-Service-Token': os.environ.get('SERVICE_AUTH_TOKEN', 'local-dev-token')
+        'X-Api-Key': os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
     }
 
     response = requests.get(url, headers=headers, timeout=5)
     response.raise_for_status()
 
     data = response.json()
-    return data['accessToken']
+    return data['canvasToken']
 
 
 def fetch_canvas_assignments(token: str, canvas_course_id: str, since: str = None) -> List[Dict[str, Any]]:
@@ -162,6 +287,22 @@ def fetch_canvas_submissions(token: str, canvas_course_id: str, user_id: int) ->
     # Filter only recently submitted items (TODO: actual comparison with DB needed)
     all_submissions = response.json()
     return [s for s in all_submissions if s.get('workflow_state') == 'submitted']
+
+
+def fetch_user_courses(token: str) -> List[Dict[str, Any]]:
+    """사용자가 수강 중인 Course 목록 가져오기"""
+    url = f"{CANVAS_API_BASE_URL}/courses"
+    headers = {'Authorization': f'Bearer {token}'}
+    params = {
+        'enrollment_type': 'student',
+        'enrollment_state': 'active',
+        'include[]': ['term', 'course_progress']
+    }
+
+    response = requests.get(url, headers=headers, params=params, timeout=10)
+    response.raise_for_status()
+
+    return response.json()
 
 
 def send_to_sqs(queue_name: str, message: Dict[str, Any]):

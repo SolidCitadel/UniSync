@@ -16,11 +16,23 @@ spring:
       ddl-auto: update
     show-sql: true
 
-# AWS Cognito Configuration (LocalStack)
+# AWS Configuration (LocalStack)
 aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  endpoint: ${LOCALSTACK_ENDPOINT:http://localhost:4566}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:test}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+
   cognito:
     region: ${COGNITO_REGION:ap-northeast-2}
     endpoint: ${COGNITO_ENDPOINT:http://localhost:4566}
+
+  sqs:
+    endpoint: ${LOCALSTACK_ENDPOINT:http://localhost:4566}
+    region: ${AWS_REGION:ap-northeast-2}
+    queues:
+      user-token-registered: ${SQS_USER_TOKEN_REGISTERED_QUEUE:user-token-registered-queue}
 
 # Canvas Configuration
 canvas:
