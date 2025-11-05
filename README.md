@@ -125,16 +125,16 @@ cd app/backend/schedule-service
 
 ```bash
 # 전체 빌드 및 실행 (인프라 + 백엔드 서비스)
-docker-compose -f docker-compose-app.yml up -d --build
+docker-compose -f docker-compose.app.yml up -d --build
 
 # 로그 확인
-docker-compose -f docker-compose-app.yml logs -f
+docker-compose -f docker-compose.app.yml logs -f
 
 # 특정 서비스 로그만 확인
-docker-compose -f docker-compose-app.yml logs -f course-service
+docker-compose -f docker-compose.app.yml logs -f course-service
 
 # 중지
-docker-compose -f docker-compose-app.yml down
+docker-compose -f docker-compose.app.yml down
 ```
 
 **참고**: `docker-compose-app.yml`은 각 서비스의 Dockerfile을 사용하여 컨테이너 이미지를 빌드하고 실행합니다.

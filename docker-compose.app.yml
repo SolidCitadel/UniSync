@@ -1,5 +1,5 @@
 # Docker Compose for Full Application Stack (Integration Testing)
-# Usage: docker-compose -f docker-compose-app.yml up
+# Usage: docker-compose -f docker-compose.app.yml up
 
 services:
   # ==========================================
