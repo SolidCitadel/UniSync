@@ -2,6 +2,7 @@
 Canvas Sync Lambda Unit Tests
 """
 
+import os
 import json
 import pytest
 from unittest.mock import patch, MagicMock, call
@@ -156,6 +157,7 @@ class TestLambdaHandler:
 class TestGetCanvasToken:
     """Test get_canvas_token function"""
 
+    @patch.dict(os.environ, {'CANVAS_SYNC_API_KEY': 'local-dev-token'}, clear=False)
     @patch('src.handler.requests.get')
     def test_get_canvas_token_success(self, mock_requests_get):
         """Test successful token retrieval"""
