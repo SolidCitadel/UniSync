@@ -160,7 +160,7 @@ def run_canvas_api_test():
             return False
 
     try:
-        script_path = TEST_SCRIPTS_DIR / 'test-canvas-api.py'
+        script_path = ROOT_DIR / 'tests' / 'api' / 'test_canvas_api.py'
 
         cmd = [sys.executable, str(script_path)]
 
@@ -198,7 +198,7 @@ def run_localstack_integration_test():
         return False
 
     try:
-        script_path = TEST_SCRIPTS_DIR / 'test-lambda-integration.py'
+        script_path = ROOT_DIR / 'tests' / 'integration' / 'test_lambda_integration.py'
 
         cmd = [sys.executable, str(script_path)]
 

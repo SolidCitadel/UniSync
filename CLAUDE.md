@@ -202,6 +202,61 @@ com.unisync.user/
 - `/api/v1/courses/**, /api/v1/assignments/**, /api/v1/tasks/**` → Course-Service
 - `/api/v1/schedules/**` → Schedule-Service
 
+## 테스트 구조
+
+### 디렉토리 구조
+```
+tests/                                # 통합/E2E 테스트 (Python)
+├── api/                              # 외부 API 직접 호출 테스트
+│   └── test_canvas_api.py
+├── integration/                      # 서비스 간 통합 테스트
+│   ├── test_assignment_flow.py       # SQS → Service → DB
+│   ├── test_assignment_flow_with_lambda.py
+│   └── test_lambda_integration.py    # LocalStack Lambda 배포/호출
+├── e2e/                              # End-to-End 테스트
+│   ├── test_canvas_sync_e2e.py
+│   └── test_canvas_sync_with_jwt_e2e.py
+└── README.md
+
+app/backend/{service}/src/test/       # Java 서비스별 단위/통합 테스트
+├── user-service/src/test/
+├── course-service/src/test/
+└── schedule-service/src/test/
+
+app/serverless/{lambda}/tests/        # Lambda별 단위 테스트 (Python)
+├── canvas-sync-lambda/tests/
+└── llm-lambda/tests/
+
+scripts/test/                         # 테스트 실행 스크립트
+├── test-all.py                       # 대화형 메뉴
+├── test-unit.sh/bat                  # Lambda 단위 테스트 실행
+└── test-e2e.sh/bat                   # E2E 테스트 실행
+```
+
+### 테스트 레벨
+- **단위 테스트**: Lambda/서비스별 로직 검증 (`app/{type}/{name}/tests/`)
+- **통합 테스트**: 서비스 간 협업 검증 (`tests/integration/`)
+- **E2E 테스트**: Canvas API부터 DB까지 전체 플로우 (`tests/e2e/`)
+- **API 테스트**: 외부 API 직접 호출 검증 (`tests/api/`)
+
+### 테스트 실행
+```bash
+# 대화형 메뉴 (권장)
+python scripts/test/test-all.py
+
+# Lambda 단위 테스트
+bash scripts/test/test-unit.sh
+
+# E2E 테스트
+bash scripts/test/test-e2e.sh
+
+# 특정 서비스 테스트 (Java)
+cd app/backend/course-service
+./gradlew test
+```
+
+자세한 내용: [tests/README.md](tests/README.md)
+
 ## 참고 문서
 - [기획서](./기획.md) - 문제 정의, 핵심 기능, 사용자 시나리오
 - [설계서](./설계서.md) - 상세 아키텍처, API 설계, DB 스키마, 배포 전략

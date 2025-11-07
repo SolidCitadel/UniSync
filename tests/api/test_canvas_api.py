@@ -15,8 +15,8 @@ from pathlib import Path
 # .env 파일 자동 로드
 try:
     from dotenv import load_dotenv
-    # 프로젝트 루트의 .env 파일 로드
-    root_dir = Path(__file__).parent.parent
+    # 프로젝트 루트의 .env 파일 로드 (tests/api/ 기준)
+    root_dir = Path(__file__).parent.parent.parent
     env_path = root_dir / '.env'
     if env_path.exists():
         load_dotenv(env_path)
@@ -220,7 +220,7 @@ def get_submissions(base_url, token, course_id):
 def save_result(data, filename):
     """결과를 JSON 파일로 저장"""
     try:
-        # 프로젝트 루트의 test-results 디렉토리에 저장
+        # 프로젝트 루트의 test-results 디렉토리에 저장 (tests/api/ 기준)
         root_dir = Path(__file__).parent.parent.parent
         results_dir = root_dir / 'test-results'
         results_dir.mkdir(exist_ok=True)

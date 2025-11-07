@@ -1,17 +1,43 @@
-# Integration Tests
+# Tests
 
-서비스 간 E2E 통합 테스트
+UniSync 프로젝트의 통합 테스트 모음입니다.
 
-## 구조
+## 테스트 구조
 
 ```
 tests/
-├── integration/              # E2E 통합 테스트
-│   ├── conftest.py           # pytest fixtures
-│   └── test_assignment_flow.py
+├── api/                      # 외부 API 테스트
+│   └── test_canvas_api.py    # Canvas API 직접 호출 테스트
+├── integration/              # 서비스 간 통합 테스트
+│   ├── test_assignment_flow.py              # SQS → Service → DB 흐름
+│   ├── test_assignment_flow_with_lambda.py  # Lambda → SQS → Service
+│   └── test_lambda_integration.py           # LocalStack Lambda 배포/호출
+├── e2e/                      # End-to-End 테스트
+│   ├── test_canvas_sync_e2e.py             # Canvas 전체 동기화 플로우
+│   └── test_canvas_sync_with_jwt_e2e.py    # JWT 인증 포함 플로우
 ├── fixtures/                 # 테스트 데이터
 ├── requirements.txt          # 테스트 의존성
 └── README.md                 # 이 파일
+```
+
+## 테스트 실행
+
+### 실행 스크립트 (scripts/test/)
+
+모든 테스트는 `scripts/test/` 디렉토리의 실행 스크립트를 통해 실행합니다:
+
+- `test-all.py` - 대화형 메뉴로 모든 테스트 실행
+- `test-unit.sh/bat` - Lambda 단위 테스트 실행
+- `test-e2e.sh/bat` - E2E 테스트 실행
+
+**예시:**
+```bash
+# 대화형 메뉴
+python scripts/test/test-all.py
+
+# 또는 직접 실행
+bash scripts/test/test-unit.sh          # Lambda 단위 테스트
+bash scripts/test/test-e2e.sh           # E2E 테스트
 ```
 
 ## 실행 방법
