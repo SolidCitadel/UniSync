@@ -161,22 +161,22 @@ class TestGetCanvasToken:
         """Test successful token retrieval"""
         # Given: User-Service API responds normally
         mock_response = MagicMock()
-        mock_response.json.return_value = {'accessToken': 'canvas-token-abc123'}
+        mock_response.json.return_value = {'canvasToken': 'canvas-token-abc123'}
         mock_response.raise_for_status = MagicMock()
         mock_requests_get.return_value = mock_response
 
         from src.handler import get_canvas_token
 
         # When: Retrieve token
-        token = get_canvas_token(user_id=10)
+        token = get_canvas_token(cognito_sub="test-cognito-sub-10")
 
         # Then: Return correct token
         assert token == 'canvas-token-abc123'
 
         # Then: Verify API call
         mock_requests_get.assert_called_once_with(
-            'http://localhost:8081/credentials/10/canvas',
-            headers={'X-Service-Token': 'test-token'},
+            'http://localhost:8081/api/v1/credentials/canvas/by-cognito-sub/test-cognito-sub-10',
+            headers={'X-Api-Key': 'local-dev-token'},
             timeout=5
         )
 
@@ -192,7 +192,7 @@ class TestGetCanvasToken:
 
         # When/Then: Exception is raised
         with pytest.raises(Exception) as exc_info:
-            get_canvas_token(user_id=999)
+            get_canvas_token(cognito_sub="test-cognito-sub-999")
 
         assert '404 Not Found' in str(exc_info.value)
 

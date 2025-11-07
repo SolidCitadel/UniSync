@@ -18,7 +18,7 @@ public class AuthResponse {
     private String tokenType;
 
     // 사용자 정보
-    private Long userId;
+    private String cognitoSub;
     private String email;
     private String name;
 

@@ -57,7 +57,7 @@ public class AuthService {
         AuthResponse authResponse = cognitoService.signIn(signInRequest);
 
         // 사용자 정보 추가
-        authResponse.setUserId(user.getId());
+        authResponse.setCognitoSub(user.getCognitoSub());
         authResponse.setEmail(user.getEmail());
         authResponse.setName(user.getName());
 
@@ -85,11 +85,11 @@ public class AuthService {
         }
 
         // 4. 사용자 정보 추가
-        authResponse.setUserId(user.getId());
+        authResponse.setCognitoSub(user.getCognitoSub());
         authResponse.setEmail(user.getEmail());
         authResponse.setName(user.getName());
 
-        log.info("로그인 성공: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("로그인 성공: cognitoSub={}, email={}", user.getCognitoSub(), user.getEmail());
 
         return authResponse;
     }

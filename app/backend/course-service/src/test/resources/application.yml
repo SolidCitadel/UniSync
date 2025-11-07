@@ -19,8 +19,7 @@ spring:
       credentials:
         access-key: test
         secret-key: test
-      sqs:
-        endpoint: http://localhost:4566
+      # SQS endpoint는 DynamicPropertySource로 주입됨 (Testcontainers)
 
 logging:
   level:

@@ -1231,15 +1231,72 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
 
 ---
 
-### 📊 진행률: 75% (9/12 완료)
+### 🔄 cognitoSub 마이그레이션 (2025-11-07)
 
-**현재 상태**: Canvas 동기화 플로우 구현 완료, JWT 인증 미구현
+#### 목적
+DB 자동 증가 ID(`userId`) 대신 Cognito UUID(`cognitoSub`)를 시스템 전체에서 사용자 식별자로 사용
+
+#### 완료된 작업
+- [x] **User-Service**
+  - ✅ `Credentials` 엔티티: `user_id` → `cognito_sub` 변경
+  - ✅ `CredentialsRepository`: `findByCognitoSubAndProvider()` 메서드 추가
+  - ✅ `CredentialsService`: 모든 API가 `cognitoSub` 파라미터 사용
+  - ✅ `CredentialsController`: `X-Cognito-Sub` 헤더 사용
+  - ✅ API 엔드포인트 변경:
+    - `GET /api/v1/credentials/canvas/by-cognito-sub/{cognitoSub}` (서비스 간 호출용)
+    - `GET /api/v1/credentials/canvas` (사용자 본인 조회, `X-Cognito-Sub` 헤더)
+  - ✅ **28개 테스트 모두 통과**
+
+- [x] **Course-Service**
+  - ✅ `Enrollment` 엔티티: `user_id` → `cognito_sub` 변경
+  - ✅ `EnrollmentRepository`: `findByCognitoSubAndCourseId()` 메서드 추가
+  - ✅ `CourseEnrollmentListener`: cognitoSub 기반 처리
+  - ✅ `CourseController`: `X-Cognito-Sub` 헤더 사용
+  - ✅ **19개 테스트 모두 통과**
+    - CourseEnrollmentIntegrationTest: 4개 SQS 통합 테스트 수정 완료
+
+- [x] **canvas-sync-lambda**
+  - ✅ `get_canvas_token(cognito_sub)`: 파라미터 변경
+  - ✅ User-Service API 호출: `/api/v1/credentials/canvas/by-cognito-sub/{cognitoSub}`
+  - ✅ `X-Api-Key` 헤더 사용 (서비스 간 인증)
+  - ✅ **8개 테스트 모두 통과**
+
+- [x] **llm-lambda**
+  - ✅ 수정 불필요 (cognitoSub와 무관한 로직)
+  - ✅ **11개 테스트 모두 통과**
+
+- [x] **공유 DTO (java-common)**
+  - ✅ `CourseEnrollmentEvent`: `userId` → `cognitoSub` 변경
+  - ✅ `AssignmentSyncNeededEvent`: `leaderUserId` → `leaderCognitoSub` 변경
+
+#### 테스트 결과 요약 (2025-11-07)
+```
+✅ User-Service:         28/28 tests passed
+✅ Course-Service:       19/19 tests passed
+✅ canvas-sync-lambda:    8/8  tests passed
+✅ llm-lambda:           11/11 tests passed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Total:                66/66 tests passed (100%)
+```
+
+#### 주요 변경 사항
+1. **API 엔드포인트**: `/credentials/{userId}` → `/credentials/canvas/by-cognito-sub/{cognitoSub}`
+2. **HTTP 헤더**: `X-User-Id` → `X-Cognito-Sub`
+3. **서비스 간 인증**: `X-Service-Token` → `X-Api-Key`
+4. **데이터베이스**: `user_id BIGINT` → `cognito_sub VARCHAR(255)`
+5. **DTO 필드**: `userId` → `cognitoSub`, `leaderUserId` → `leaderCognitoSub`
+
+---
+
+### 📊 진행률: 75% (9/12 완료) + cognitoSub 마이그레이션 완료
+
+**현재 상태**: Canvas 동기화 플로우 구현 완료, cognitoSub 마이그레이션 완료, JWT 인증 미구현
 
 **다음 단계**: 🔟 Cognito 기반 JWT 인증 구현
 
 ---
 
-## 📊 현재 E2E 테스트 상태 (2025-11-06)
+## 📊 현재 E2E 테스트 상태 (2025-11-07 업데이트)
 
 ### ✅ 구현 완료 및 검증된 항목
 
@@ -1254,7 +1311,7 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
 
 #### 2. Canvas 동기화 플로우 (E2E 검증 완료)
 ```
-1. POST /api/v1/credentials/canvas (userId=999, Canvas Token)
+1. POST /api/v1/credentials/canvas (cognitoSub="test-sub-999", Canvas Token)
    ↓
 2. User-Service: SQS 이벤트 발행 (user-token-registered-queue)
    ↓
@@ -1264,7 +1321,7 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
    ↓
 5. Course-Service (CourseEnrollmentListener): 10개 Course + Enrollment 생성
    ↓
-6. GET /api/v1/courses?userId=999 → 10개 Course 응답
+6. GET /api/v1/courses?cognitoSub=test-sub-999 → 10개 Course 응답
 ```
 
 **검증 결과**:
@@ -1274,9 +1331,32 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
 - 응답 시간: ~5초 (비동기 처리 포함)
 
 #### 3. 데이터 모델 검증
-- `credentials` 테이블: `is_connected=true`, `external_user_id`, `external_username` 저장 확인
+- `credentials` 테이블:
+  - ✅ `cognito_sub` (VARCHAR) 사용 (DB 자동 증가 ID 대신)
+  - ✅ `is_connected=true`, `external_user_id`, `external_username` 저장 확인
 - `courses` 테이블: Canvas Course ID, 과목명, 코드 저장 확인
-- `enrollments` 테이블: `is_sync_leader=true` (첫 등록자) 플래그 설정 확인
+- `enrollments` 테이블:
+  - ✅ `cognito_sub` (VARCHAR) 사용
+  - ✅ `is_sync_leader=true` (첫 등록자) 플래그 설정 확인
+
+#### 4. 유닛 및 통합 테스트 (2025-11-07 전체 통과)
+```
+✅ User-Service:         28/28 tests passed
+   - CredentialsServiceRealCanvasTest: 실제 Canvas API 통합 테스트
+   - CredentialsControllerIntegrationTest: API 엔드포인트 테스트
+
+✅ Course-Service:       19/19 tests passed
+   - CourseEnrollmentIntegrationTest: SQS + Testcontainers 통합 테스트
+   - CourseApiIntegrationTest: Course 조회 API 테스트
+   - AssignmentEventIntegrationTest: Assignment 이벤트 처리 테스트
+
+✅ canvas-sync-lambda:    8/8  tests passed
+   - get_canvas_token() cognitoSub 파라미터 변경 반영
+   - Canvas API 호출 로직 테스트
+
+✅ llm-lambda:           11/11 tests passed
+   - Assignment 분석 및 Submission 검증 로직 테스트
+```
 
 ---
 
@@ -1284,18 +1364,26 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
 
 #### 1. 현재 테스트의 한계
 - **API Gateway 미사용**: E2E 테스트가 직접 User-Service (8081), Course-Service (8082) 호출
-- **JWT 토큰 없음**: 인증 없이 `X-User-Id` 헤더만 사용
+- **JWT 토큰 없음**: 인증 없이 `X-Cognito-Sub` 헤더만 사용 (cognitoSub 마이그레이션은 완료)
 - **Cognito User Pool 미설정**: LocalStack에 User Pool 미생성
 - **회원가입/로그인 API 미구현**: User-Service에 인증 엔드포인트 없음
 
 #### 2. 완전한 E2E 시나리오 (목표)
 ```
-1. POST /api/v1/auth/signup (Gateway:8080) → Cognito 회원가입
-2. POST /api/v1/auth/login (Gateway:8080) → JWT 토큰 발급
+1. POST /api/v1/auth/signup (Gateway:8080) → Cognito 회원가입 (cognitoSub 발급)
+2. POST /api/v1/auth/login (Gateway:8080) → JWT 토큰 발급 (cognitoSub 포함)
 3. POST /api/v1/credentials/canvas (Gateway:8080, Authorization: Bearer <JWT>)
+   → API Gateway: JWT에서 cognitoSub 추출 → X-Cognito-Sub 헤더 추가
 4. (자동 동기화 플로우 - 동일)
 5. GET /api/v1/courses (Gateway:8080, Authorization: Bearer <JWT>)
+   → API Gateway: JWT에서 cognitoSub 추출 → X-Cognito-Sub 헤더 추가
 ```
+
+**핵심 변경점 (cognitoSub 마이그레이션 완료)**:
+- ✅ DB 모델: `user_id (BIGINT)` → `cognito_sub (VARCHAR)` 완료
+- ✅ API: `X-User-Id` → `X-Cognito-Sub` 헤더 사용
+- ✅ DTO: `userId` → `cognitoSub` 필드 사용
+- ⚠️ JWT 인증 필터만 구현하면 완전 E2E 가능
 
 ---
 
@@ -1471,21 +1559,17 @@ public class CognitoAuthService {
             String accessToken = authResult.accessToken();
             String refreshToken = authResult.refreshToken();
 
-            // 3. JWT에서 userId 추출 (Cognito sub)
-            String cognitoUserId = extractUserIdFromToken(idToken);
+            // 3. JWT에서 cognitoSub 추출 (Cognito sub)
+            String cognitoSub = extractCognitoSubFromToken(idToken);
 
-            // 4. 로컬 DB에서 User 조회
-            User user = userRepository.findByCognitoUserId(cognitoUserId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-            log.info("User logged in: userId={}, email={}", user.getId(), user.getEmail());
+            log.info("User logged in: cognitoSub={}, email={}", cognitoSub, request.getEmail());
 
             return LoginResponse.builder()
                 .idToken(idToken)
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .userId(user.getId())
-                .email(user.getEmail())
+                .cognitoSub(cognitoSub)  // ✅ userId 대신 cognitoSub 반환
+                .email(request.getEmail())
                 .expiresIn(authResult.expiresIn())
                 .build();
 
@@ -1495,12 +1579,12 @@ public class CognitoAuthService {
         }
     }
 
-    private String extractUserIdFromToken(String idToken) {
+    private String extractCognitoSubFromToken(String idToken) {
         // JWT 파싱 (jjwt 라이브러리 사용)
         String[] parts = idToken.split("\\.");
         String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-        return json.get("sub").getAsString();
+        return json.get("sub").getAsString();  // Cognito의 고유 UUID
     }
 }
 ```
@@ -1538,7 +1622,7 @@ public class LoginResponse {
     private String idToken;
     private String accessToken;
     private String refreshToken;
-    private Long userId;
+    private String cognitoSub;  // ✅ userId 대신 cognitoSub 반환
     private String email;
     private Integer expiresIn;
 }
@@ -1580,12 +1664,12 @@ public class JwtAuthenticationFilter implements GatewayFilter {
             // JWT 검증
             CognitoJwtClaims claims = jwtVerifier.verify(token);
 
-            // JWT에서 userId 추출 (Cognito sub → User 테이블 조회 필요)
-            Long userId = getUserIdFromCognitoSub(claims.getSub());
+            // ✅ JWT에서 cognitoSub 추출 (복잡한 변환 불필요!)
+            String cognitoSub = claims.getSub();
 
-            // X-User-Id 헤더 추가 (downstream 서비스에 전달)
+            // ✅ X-Cognito-Sub 헤더 추가 (downstream 서비스에 전달)
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
-                .header("X-User-Id", String.valueOf(userId))
+                .header("X-Cognito-Sub", cognitoSub)
                 .build();
 
             ServerWebExchange modifiedExchange = exchange.mutate().request(modifiedRequest).build();
@@ -1599,10 +1683,8 @@ public class JwtAuthenticationFilter implements GatewayFilter {
         }
     }
 
-    private Long getUserIdFromCognitoSub(String cognitoSub) {
-        // User-Service API 호출하여 Cognito sub → userId 변환
-        // 또는 Redis 캐시 사용
-    }
+    // ✅ 더 이상 User 테이블 조회나 캐시 조회 불필요!
+    // cognitoSub를 바로 사용하므로 매우 간단해짐
 }
 ```
 
@@ -1707,7 +1789,7 @@ class TestCanvasSyncWithAuth:
         login_data = login_response.json()
         return {
             "id_token": login_data["idToken"],
-            "user_id": login_data["userId"]
+            "cognito_sub": login_data["cognitoSub"]  # ✅ userId 대신 cognitoSub
         }
 
     def test_full_e2e_with_jwt_auth(self, jwt_token, service_urls):
@@ -1720,7 +1802,7 @@ class TestCanvasSyncWithAuth:
         """
         gateway_url = service_urls["gateway"]
         id_token = jwt_token["id_token"]
-        user_id = jwt_token["user_id"]
+        cognito_sub = jwt_token["cognito_sub"]  # ✅ user_id 대신 cognito_sub
 
         canvas_token = os.getenv("CANVAS_API_TOKEN")
         assert canvas_token, "CANVAS_API_TOKEN not set in .env"
@@ -1746,9 +1828,10 @@ class TestCanvasSyncWithAuth:
         time.sleep(10)  # Lambda 처리 대기
 
         # Course 조회 (API Gateway 경유)
+        # ✅ userId 파라미터 불필요! JWT에서 자동으로 cognitoSub 추출됨
         print(f"\n[3/4] Course 조회 (Gateway:8080, JWT 인증)")
         courses_response = requests.get(
-            f"{gateway_url}/api/v1/courses?userId={user_id}",
+            f"{gateway_url}/api/v1/courses",  # ✅ 파라미터 없이 JWT만 전달
             headers={"Authorization": f"Bearer {id_token}"},
             timeout=5
         )
@@ -1757,7 +1840,7 @@ class TestCanvasSyncWithAuth:
         courses = courses_response.json()
 
         assert len(courses) > 0, "No courses synced"
-        print(f"  [OK] {len(courses)} courses synced")
+        print(f"  [OK] {len(courses)} courses synced (cognitoSub: {cognito_sub})")
 
         for course in courses[:3]:
             print(f"     - {course['name']} ({course['courseCode']})")
@@ -1781,19 +1864,19 @@ class TestCanvasSyncWithAuth:
 - [ ] **User-Service 인증 API**
   - [ ] `AuthController` 구현 (signup, login, refresh)
   - [ ] `CognitoAuthService` 구현
-  - [ ] User 엔티티에 `cognitoUserId` 필드 추가
-  - [ ] `UserRepository.findByCognitoUserId()` 메서드 추가
+  - [ ] ~~User 엔티티에 `cognitoUserId` 필드 추가~~ (이미 Cognito 연동 완료)
+  - [ ] ~~`UserRepository.findByCognitoUserId()` 메서드 추가~~ (필요 시 추가)
 
 - [ ] **API Gateway JWT 필터**
   - [ ] `JwtAuthenticationFilter` 구현
   - [ ] `CognitoJwtVerifier` 구현
   - [ ] JWKS 공개 키 가져오기 로직
-  - [ ] X-User-Id 헤더 전달 로직
+  - [ ] ✅ **X-Cognito-Sub 헤더 전달 로직** (cognitoSub 마이그레이션 완료로 간소화!)
 
 - [ ] **E2E 테스트 JWT 통합**
   - [ ] `test_canvas_sync_e2e_with_auth.py` 작성
-  - [ ] 회원가입 → 로그인 플로우
-  - [ ] JWT 토큰으로 API Gateway 호출
+  - [ ] 회원가입 → 로그인 플로우 (cognitoSub 발급)
+  - [ ] JWT 토큰으로 API Gateway 호출 (cognitoSub 자동 추출)
   - [ ] 전체 시나리오 검증
 
 ---

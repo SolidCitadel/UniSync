@@ -51,7 +51,7 @@ class AuthControllerTest {
                 .build();
 
         AuthResponse response = AuthResponse.builder()
-                .userId(1L)
+                .cognitoSub("test-cognito-sub-1")
                 .email("test@example.com")
                 .name("테스트 유저")
                 .message("회원가입이 완료되었습니다")
@@ -64,7 +64,7 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId").value(1L))
+                .andExpect(jsonPath("$.cognitoSub").value("test-cognito-sub-1"))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.name").value("테스트 유저"))
                 .andExpect(jsonPath("$.message").value("회원가입이 완료되었습니다"));
@@ -102,7 +102,7 @@ class AuthControllerTest {
                 .build();
 
         AuthResponse response = AuthResponse.builder()
-                .userId(1L)
+                .cognitoSub("test-cognito-sub-1")
                 .email("test@example.com")
                 .name("테스트 유저")
                 .accessToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
@@ -118,7 +118,7 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(1L))
+                .andExpect(jsonPath("$.cognitoSub").value("test-cognito-sub-1"))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.accessToken").exists())
                 .andExpect(jsonPath("$.refreshToken").exists())

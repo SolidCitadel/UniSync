@@ -15,26 +15,27 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.*;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.testcontainers.containers.localstack.LocalStackContainer.Service.SQS;
 
 /**
  * Course Enrollment SQS 통합 테스트
- * docker-compose로 실행 중인 LocalStack 사용
- * 큐는 localstack-init 스크립트로 미리 생성되어 있다고 가정
+ * Testcontainers로 LocalStack과 MySQL을 격리된 환경에서 실행
  */
 @SpringBootTest
 @Testcontainers
@@ -45,6 +46,11 @@ class CourseEnrollmentIntegrationTest {
         .withDatabaseName("course_service_test")
         .withUsername("test")
         .withPassword("test");
+
+    @Container
+    static LocalStackContainer localStack = new LocalStackContainer(
+        DockerImageName.parse("localstack/localstack:3.0"))
+        .withServices(SQS);
 
     @Autowired
     private CourseRepository courseRepository;
@@ -64,11 +70,12 @@ class CourseEnrollmentIntegrationTest {
         registry.add("spring.datasource.username", mysql::getUsername);
         registry.add("spring.datasource.password", mysql::getPassword);
 
-        // LocalStack SQS 설정 (docker-compose로 실행 중인 LocalStack 사용)
-        registry.add("spring.cloud.aws.sqs.endpoint", () -> "http://localhost:4566");
-        registry.add("spring.cloud.aws.region.static", () -> "ap-northeast-2");
-        registry.add("spring.cloud.aws.credentials.access-key", () -> "test");
-        registry.add("spring.cloud.aws.credentials.secret-key", () -> "test");
+        // LocalStack SQS 설정 (Testcontainers)
+        registry.add("spring.cloud.aws.sqs.endpoint",
+            () -> localStack.getEndpointOverride(SQS).toString());
+        registry.add("spring.cloud.aws.region.static", () -> localStack.getRegion());
+        registry.add("spring.cloud.aws.credentials.access-key", () -> localStack.getAccessKey());
+        registry.add("spring.cloud.aws.credentials.secret-key", () -> localStack.getSecretKey());
     }
 
     @BeforeEach
@@ -77,25 +84,25 @@ class CourseEnrollmentIntegrationTest {
         enrollmentRepository.deleteAll();
         courseRepository.deleteAll();
 
-        // SQS Client 생성 (docker-compose LocalStack 사용)
+        // SQS Client 생성 (Testcontainers LocalStack)
         sqsClient = SqsClient.builder()
-            .endpointOverride(URI.create("http://localhost:4566"))
-            .region(Region.AP_NORTHEAST_2)
+            .endpointOverride(localStack.getEndpointOverride(SQS))
+            .region(Region.of(localStack.getRegion()))
             .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create("test", "test")
+                AwsBasicCredentials.create(localStack.getAccessKey(), localStack.getSecretKey())
             ))
             .build();
 
-        // 큐 URL 조회 (큐는 이미 localstack-init 스크립트로 생성되어 있음)
-        GetQueueUrlResponse courseEnrollmentQueue = sqsClient.getQueueUrl(
-            GetQueueUrlRequest.builder()
+        // SQS 큐 생성
+        CreateQueueResponse courseEnrollmentQueue = sqsClient.createQueue(
+            CreateQueueRequest.builder()
                 .queueName("course-enrollment-queue")
                 .build()
         );
         courseEnrollmentQueueUrl = courseEnrollmentQueue.queueUrl();
 
-        GetQueueUrlResponse assignmentSyncQueue = sqsClient.getQueueUrl(
-            GetQueueUrlRequest.builder()
+        CreateQueueResponse assignmentSyncQueue = sqsClient.createQueue(
+            CreateQueueRequest.builder()
                 .queueName("assignment-sync-needed-queue")
                 .build()
         );
@@ -128,7 +135,7 @@ class CourseEnrollmentIntegrationTest {
             .workflowState("available")
             .startAt(LocalDateTime.of(2025, 9, 1, 0, 0))
             .endAt(LocalDateTime.of(2025, 12, 31, 23, 59))
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         // when: SQS에 메시지 발행
@@ -165,7 +172,7 @@ class CourseEnrollmentIntegrationTest {
         String receivedBody = messages.messages().get(0).body();
         assertThat(receivedBody).contains("\"courseId\"");
         assertThat(receivedBody).contains("\"canvasCourseId\":789");
-        assertThat(receivedBody).contains("\"leaderUserId\":1");
+        assertThat(receivedBody).contains("\"leaderCognitoSub\":\"test-cognito-sub-1\"");
     }
 
     @Test
@@ -199,7 +206,7 @@ class CourseEnrollmentIntegrationTest {
             .workflowState("available")
             .startAt(LocalDateTime.of(2025, 9, 1, 0, 0))
             .endAt(LocalDateTime.of(2025, 12, 31, 23, 59))
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         // when: SQS에 메시지 발행
@@ -261,7 +268,7 @@ class CourseEnrollmentIntegrationTest {
             .courseName("Spring Boot 고급")
             .courseCode("CS301")
             .workflowState("available")
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         // when: SQS에 중복 메시지 발행
@@ -288,7 +295,7 @@ class CourseEnrollmentIntegrationTest {
             .courseName("Course 1")
             .courseCode("CS100")
             .workflowState("available")
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         CourseEnrollmentEvent event2 = CourseEnrollmentEvent.builder()
@@ -297,7 +304,7 @@ class CourseEnrollmentIntegrationTest {
             .courseName("Course 2")
             .courseCode("CS200")
             .workflowState("available")
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         CourseEnrollmentEvent event3 = CourseEnrollmentEvent.builder()
@@ -306,7 +313,7 @@ class CourseEnrollmentIntegrationTest {
             .courseName("Course 3")
             .courseCode("CS300")
             .workflowState("available")
-            .publishedAt(LocalDateTime.now())
+            .publishedAt(LocalDateTime.of(2025, 11, 7, 0, 0))
             .build();
 
         // when: SQS에 3개의 메시지 발행

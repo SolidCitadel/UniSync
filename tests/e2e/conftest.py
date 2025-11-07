@@ -34,6 +34,80 @@ def service_urls():
     }
 
 
+@pytest.fixture(scope="session")
+def test_user_credentials():
+    """E2E 테스트용 사용자 자격 증명"""
+    timestamp = int(time.time())
+    return {
+        "email": f"e2e-test-{timestamp}@unisync.com",
+        "password": "TestPassword123!",
+        "name": "E2E Test User"
+    }
+
+
+@pytest.fixture(scope="function")
+def jwt_auth_tokens(test_user_credentials, service_urls):
+    """
+    회원가입 및 로그인을 통해 JWT 토큰 획득
+    각 테스트마다 새로운 사용자를 생성하여 독립성 보장
+    """
+    gateway_url = service_urls["gateway"]
+
+    print(f"\n[Setup] JWT 인증 - 회원가입 중...")
+
+    # 1. 회원가입 (API Gateway 경유)
+    signup_response = requests.post(
+        f"{gateway_url}/api/v1/auth/signup",
+        json=test_user_credentials,
+        timeout=10
+    )
+
+    if signup_response.status_code != 201:
+        pytest.fail(f"회원가입 실패: {signup_response.status_code} - {signup_response.text}")
+
+    signup_data = signup_response.json()
+    print(f"[Setup] 회원가입 완료: cognitoSub={signup_data.get('cognitoSub')}, email={signup_data.get('email')}")
+
+    # 회원가입 시 자동 로그인되어 토큰이 반환됨
+    return {
+        "id_token": signup_data.get("idToken"),
+        "access_token": signup_data.get("accessToken"),
+        "refresh_token": signup_data.get("refreshToken"),
+        "cognito_sub": signup_data.get("cognitoSub"),
+        "email": signup_data.get("email")
+    }
+
+
+def extract_cognito_sub_from_token(id_token):
+    """JWT ID Token에서 Cognito Sub 추출"""
+    import base64
+    import json
+
+    if not id_token:
+        return None
+
+    try:
+        # JWT를 . 으로 분리
+        parts = id_token.split(".")
+        if len(parts) != 3:
+            return None
+
+        # Payload(두 번째 부분) 디코딩
+        payload = parts[1]
+        # URL-safe base64 디코딩 (패딩 추가)
+        padding = len(payload) % 4
+        if padding:
+            payload += '=' * (4 - padding)
+
+        decoded = base64.urlsafe_b64decode(payload)
+        claims = json.loads(decoded)
+
+        return claims.get("sub")
+    except Exception as e:
+        print(f"[WARN] JWT 파싱 실패: {e}")
+        return None
+
+
 @pytest.fixture(scope="function")
 def wait_for_services(service_urls):
     """서비스가 준비될 때까지 대기"""
