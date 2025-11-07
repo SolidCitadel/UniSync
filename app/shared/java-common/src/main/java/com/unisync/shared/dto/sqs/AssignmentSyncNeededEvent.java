@@ -29,7 +29,7 @@ public class AssignmentSyncNeededEvent {
     private Long canvasCourseId;
 
     /**
-     * Leader 사용자 ID (이 사용자의 토큰으로 Canvas API 호출)
+     * Leader Cognito 사용자 ID (이 사용자의 토큰으로 Canvas API 호출)
      */
-    private Long leaderUserId;
+    private String leaderCognitoSub;
 }

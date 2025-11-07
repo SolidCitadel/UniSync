@@ -31,12 +31,12 @@ public class CourseService {
 
     /**
      * 사용자가 수강 중인 Course 목록 조회
-     * @param userId 사용자 ID
+     * @param cognitoSub Cognito 사용자 ID
      * @return Course 목록
      */
     @Transactional(readOnly = true)
-    public List<CourseResponse> getUserCourses(Long userId) {
-        List<Enrollment> enrollments = enrollmentRepository.findAllByUserId(userId);
+    public List<CourseResponse> getUserCourses(String cognitoSub) {
+        List<Enrollment> enrollments = enrollmentRepository.findAllByCognitoSub(cognitoSub);
 
         return enrollments.stream()
                 .map(enrollment -> CourseResponse.from(enrollment.getCourse()))

@@ -30,44 +30,75 @@ public class CredentialsController {
     @PostMapping("/canvas")
     @Operation(summary = "Canvas 토큰 등록", description = "사용자의 Canvas API 토큰을 등록합니다.")
     public ResponseEntity<RegisterCanvasTokenResponse> registerCanvasToken(
-            @RequestHeader(value = "X-User-Id") Long userId,
+            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody RegisterCanvasTokenRequest request
     ) {
-        log.info("POST /api/v1/credentials/canvas - User ID: {}", userId);
+        log.info("POST /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
 
-        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(userId, request);
+        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(cognitoSub, request);
 
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Canvas 토큰 조회 (내부 API용)
-     * Lambda/Service가 사용자의 Canvas 토큰을 조회할 때 사용합니다.
+     * Canvas 토큰 조회 (내부 API용 - Lambda 호환성)
+     * Lambda가 userId로 Canvas 토큰을 조회할 때 사용합니다.
+     * @deprecated Lambda가 cognitoSub를 사용하도록 마이그레이션 예정
      */
     @GetMapping("/{userId}/canvas")
-    @Operation(summary = "Canvas 토큰 조회 (내부 API)", description = "사용자의 Canvas 토큰을 조회합니다. 서비스 간 호출용입니다.")
-    public ResponseEntity<CanvasTokenResponse> getCanvasToken(
+    @Operation(summary = "Canvas 토큰 조회 (내부 API - Legacy)", description = "사용자의 Canvas 토큰을 조회합니다. 서비스 간 호출용입니다.")
+    @Deprecated
+    public ResponseEntity<CanvasTokenResponse> getCanvasTokenByUserId(
             @PathVariable Long userId,
-            @RequestHeader(value = "X-User-Id", required = false) Long requestUserId,
             @RequestHeader(value = "X-Api-Key", required = false) String apiKey
     ) {
-        log.info("GET /api/v1/credentials/{}/canvas", userId);
+        log.info("GET /api/v1/credentials/{}/canvas (Legacy userId API)", userId);
 
-        // 권한 검증: 본인 또는 서비스
-        if (requestUserId != null) {
-            // 외부 요청 (Gateway 경유)
-            if (!requestUserId.equals(userId)) {
-                throw new UnauthorizedException("Cannot access other user's credentials");
-            }
-        } else if (apiKey != null) {
-            // 내부 요청 (서비스 간 호출)
+        // API Key 검증
+        if (apiKey != null) {
             String caller = serviceAuthValidator.validateAndGetCaller(apiKey);
             log.info("Internal API called by service: {}", caller);
         } else {
-            throw new UnauthorizedException("Missing authentication headers");
+            throw new UnauthorizedException("Missing X-Api-Key header");
         }
 
         CanvasTokenResponse response = credentialsService.getCanvasToken(userId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Canvas 토큰 조회 (cognitoSub 기반 - 사용자용)
+     */
+    @GetMapping("/canvas")
+    @Operation(summary = "Canvas 토큰 조회", description = "본인의 Canvas 토큰 정보를 조회합니다.")
+    public ResponseEntity<CanvasTokenResponse> getCanvasToken(
+            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
+    ) {
+        log.info("GET /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
+
+        CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(cognitoSub);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Canvas 토큰 조회 (cognitoSub 기반 - 내부 API용)
+     * Lambda가 cognitoSub로 Canvas 토큰을 조회할 때 사용합니다.
+     */
+    @GetMapping("/canvas/by-cognito-sub/{cognitoSub}")
+    @Operation(summary = "Canvas 토큰 조회 (내부 API - cognitoSub)", description = "cognitoSub로 Canvas 토큰을 조회합니다. 서비스 간 호출용입니다.")
+    public ResponseEntity<CanvasTokenResponse> getCanvasTokenByCognitoSub(
+            @PathVariable String cognitoSub,
+            @RequestHeader(value = "X-Api-Key") String apiKey
+    ) {
+        log.info("GET /api/v1/credentials/canvas/by-cognito-sub/{} (Internal API)", cognitoSub);
+
+        // API Key 검증
+        String caller = serviceAuthValidator.validateAndGetCaller(apiKey);
+        log.info("Internal API called by service: {}", caller);
+
+        CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(cognitoSub);
 
         return ResponseEntity.ok(response);
     }
@@ -78,11 +109,11 @@ public class CredentialsController {
     @DeleteMapping("/canvas")
     @Operation(summary = "Canvas 토큰 삭제", description = "사용자의 Canvas API 토큰을 삭제합니다.")
     public ResponseEntity<Void> deleteCanvasToken(
-            @RequestHeader(value = "X-User-Id") Long userId
+            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
-        log.info("DELETE /api/v1/credentials/canvas - User ID: {}", userId);
+        log.info("DELETE /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
 
-        credentialsService.deleteCanvasToken(userId);
+        credentialsService.deleteCanvasToken(cognitoSub);
 
         return ResponseEntity.noContent().build();
     }

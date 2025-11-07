@@ -1156,31 +1156,645 @@ public interface CredentialsRepository extends JpaRepository<Credentials, Long> 
   - ✅ Canvas 프로필 조회 기능 추가 (`CanvasApiClient.validateTokenAndGetProfile()`)
   - 📁 `CredentialsService.java`, `SqsPublisher.java`, `CanvasApiClient.java` 완료
 
-- [x] 2️⃣ SQS 큐 생성 (3개 추가)
+- [x] 2️⃣ SQS 큐 생성 (7개)
   - ✅ `user-token-registered-queue`
   - ✅ `course-enrollment-queue`
   - ✅ `assignment-sync-needed-queue`
-  - 📁 `01-create-queues.sh` 완료
+  - ✅ `assignment-events-queue`
+  - ✅ LocalStack 자동 초기화 구성
+  - 📁 `01-create-queues.sh`, `03-deploy-lambdas.sh` 완료
 
 - [x] 3️⃣ Lambda: `initial_sync_handler()` 구현
   - ✅ `initial_sync_handler()` 함수 구현됨
   - ✅ `fetch_user_courses()` 함수 구현됨
-  - 📁 `handler.py` 일부 완료
+  - ✅ User-Service API 연동 (`/api/v1/credentials/{userId}/canvas`)
+  - ✅ ISO 8601 date format 처리
+  - 📁 `handler.py` 완료
 
-- [ ] 4️⃣ Course-Service: Enrollment 엔티티 추가
-- [ ] 5️⃣ Course-Service: Course SQS 리스너
-- [ ] 6️⃣ Lambda: `assignment_sync_handler()` 구현
-- [ ] 7️⃣ Course-Service: Course 조회 API
-- [ ] 8️⃣ E2E 테스트 작성 및 검증
-- [ ] 9️⃣ User-Service: 연동 상태 확인 API
-- [ ] 🔟 pytest-html 추가 (테스트 리포트)
-- [ ] 1️⃣1️⃣ 전체 시나리오 통과 확인
+- [x] 4️⃣ Course-Service: Enrollment 엔티티 추가
+  - ✅ `Enrollment.java` 엔티티 구현됨
+  - ✅ `EnrollmentRepository` 구현됨
+  - ✅ Leader 플래그 (`is_sync_leader`) 지원
+  - 📁 `Enrollment.java`, `EnrollmentRepository.java` 완료
+
+- [x] 5️⃣ Course-Service: Course SQS 리스너
+  - ✅ `CourseEnrollmentListener` 구현됨
+  - ✅ Course 생성/조회 로직
+  - ✅ Enrollment 생성 및 중복 체크
+  - ✅ 새 Course 감지 시 Assignment 동기화 트리거
+  - 📁 `CourseEnrollmentListener.java` 완료
+
+- [x] 6️⃣ Lambda: `assignment_sync_handler()` 구현
+  - ✅ Lambda 함수 배포됨
+  - ✅ SQS 이벤트 매핑 구성
+  - 📁 `handler.py`, `03-deploy-lambdas.sh` 완료
+
+- [x] 7️⃣ Course-Service: Course 조회 API
+  - ✅ `CourseController` 구현됨
+  - ✅ `GET /api/v1/courses?userId={userId}` 구현
+  - ✅ `GET /api/v1/courses/{courseId}` 구현
+  - 📁 `CourseController.java` 완료
+
+- [x] 8️⃣ E2E 테스트 작성 및 검증
+  - ✅ `test_canvas_sync_e2e.py` 작성 완료
+  - ✅ Docker Compose 테스트 환경 구성
+  - ✅ pytest 환경변수 자동 로딩 (.env)
+  - ✅ 10개 Course 동기화 성공
+  - ⚠️ API Gateway 미사용 (직접 서비스 호출)
+  - ⚠️ JWT 인증 미구현
+  - 📁 `test_canvas_sync_e2e.py`, `docker-compose.test.yml` 완료
+
+- [x] 9️⃣ API Gateway 추가
+  - ✅ Spring Cloud Gateway 설정
+  - ✅ Dockerfile 작성 (multi-stage build)
+  - ✅ docker-compose.test.yml에 추가
+  - ✅ Health check 구성
+  - ⚠️ JWT 인증 필터 미구현
+  - 📁 `api-gateway/Dockerfile`, `docker-compose.test.yml` 완료
+
+- [ ] 🔟 User-Service: 인증 API 구현 (Cognito)
+  - [ ] LocalStack Cognito User Pool 생성
+  - [ ] 회원가입 API (`POST /api/v1/auth/signup`)
+  - [ ] 로그인 API (`POST /api/v1/auth/login`)
+  - [ ] JWT 토큰 발급 로직
+
+- [ ] 1️⃣1️⃣ API Gateway: JWT 인증 필터 구현
+  - [ ] Cognito JWT 검증 로직
+  - [ ] Authorization 헤더 검증
+  - [ ] userId 추출 및 헤더 전달
+
+- [ ] 1️⃣2️⃣ E2E 테스트: JWT 인증 통합
+  - [ ] 회원가입 → 로그인 → JWT 획득
+  - [ ] API Gateway 경유 (port 8080)
+  - [ ] Authorization 헤더 포함
+  - [ ] 전체 플로우 검증
 
 ---
 
-### 📊 진행률: 35% (4/11 완료)
+### 📊 진행률: 75% (9/12 완료)
 
-**다음 단계**: 4️⃣ Course-Service Enrollment 엔티티 및 Repository 구현
+**현재 상태**: Canvas 동기화 플로우 구현 완료, JWT 인증 미구현
+
+**다음 단계**: 🔟 Cognito 기반 JWT 인증 구현
+
+---
+
+## 📊 현재 E2E 테스트 상태 (2025-11-06)
+
+### ✅ 구현 완료 및 검증된 항목
+
+#### 1. 전체 인프라 구성
+- **LocalStack Pro**: SQS, Lambda, Cognito, IAM 서비스 활성화
+- **MySQL 8.0**: User-Service DB, Course-Service DB 분리
+- **Spring Boot Services**: User-Service (8081), Course-Service (8082), API-Gateway (8080)
+- **Lambda Functions**:
+  - `canvas-initial-sync-lambda` (user-token-registered-queue 구독)
+  - `canvas-assignment-sync-lambda` (assignment-sync-needed-queue 구독)
+- **SQS Queues**: 7개 큐 생성 및 이벤트 매핑 완료
+
+#### 2. Canvas 동기화 플로우 (E2E 검증 완료)
+```
+1. POST /api/v1/credentials/canvas (userId=999, Canvas Token)
+   ↓
+2. User-Service: SQS 이벤트 발행 (user-token-registered-queue)
+   ↓
+3. Lambda (initial_sync_handler): Canvas API 호출 → 10개 Course 조회
+   ↓
+4. Lambda: 10개 course-enrollment 이벤트 발행 (course-enrollment-queue)
+   ↓
+5. Course-Service (CourseEnrollmentListener): 10개 Course + Enrollment 생성
+   ↓
+6. GET /api/v1/courses?userId=999 → 10개 Course 응답
+```
+
+**검증 결과**:
+- Canvas 토큰 등록: 성공 (200 OK)
+- Course 동기화: 10개 (학번: 2021105636)
+- Assignment 동기화: 0개 (첫 번째 Course 기준)
+- 응답 시간: ~5초 (비동기 처리 포함)
+
+#### 3. 데이터 모델 검증
+- `credentials` 테이블: `is_connected=true`, `external_user_id`, `external_username` 저장 확인
+- `courses` 테이블: Canvas Course ID, 과목명, 코드 저장 확인
+- `enrollments` 테이블: `is_sync_leader=true` (첫 등록자) 플래그 설정 확인
+
+---
+
+### ⚠️ 미구현 항목 (JWT 인증)
+
+#### 1. 현재 테스트의 한계
+- **API Gateway 미사용**: E2E 테스트가 직접 User-Service (8081), Course-Service (8082) 호출
+- **JWT 토큰 없음**: 인증 없이 `X-User-Id` 헤더만 사용
+- **Cognito User Pool 미설정**: LocalStack에 User Pool 미생성
+- **회원가입/로그인 API 미구현**: User-Service에 인증 엔드포인트 없음
+
+#### 2. 완전한 E2E 시나리오 (목표)
+```
+1. POST /api/v1/auth/signup (Gateway:8080) → Cognito 회원가입
+2. POST /api/v1/auth/login (Gateway:8080) → JWT 토큰 발급
+3. POST /api/v1/credentials/canvas (Gateway:8080, Authorization: Bearer <JWT>)
+4. (자동 동기화 플로우 - 동일)
+5. GET /api/v1/courses (Gateway:8080, Authorization: Bearer <JWT>)
+```
+
+---
+
+## 🔐 JWT 인증 구현 계획 (Phase 3)
+
+### Step 1: LocalStack Cognito User Pool 설정
+
+**파일**: `localstack-init/02-create-cognito.sh` (신규 생성)
+
+```bash
+#!/bin/bash
+
+set -e
+
+AWS_REGION=${AWS_REGION:-us-east-1}
+
+echo "Creating Cognito User Pool..."
+
+# 1. User Pool 생성
+USER_POOL_ID=$(awslocal cognito-idp create-user-pool \
+  --pool-name unisync-user-pool \
+  --region ${AWS_REGION} \
+  --policies "PasswordPolicy={MinimumLength=8,RequireUppercase=true,RequireLowercase=true,RequireNumbers=true,RequireSymbols=false}" \
+  --auto-verified-attributes email \
+  --username-attributes email \
+  --query 'UserPool.Id' \
+  --output text)
+
+echo "User Pool created: ${USER_POOL_ID}"
+
+# 2. App Client 생성 (JWT 발급용)
+CLIENT_ID=$(awslocal cognito-idp create-user-pool-client \
+  --user-pool-id ${USER_POOL_ID} \
+  --client-name unisync-app-client \
+  --region ${AWS_REGION} \
+  --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
+  --query 'UserPoolClient.ClientId' \
+  --output text)
+
+echo "App Client created: ${CLIENT_ID}"
+
+# 3. 환경변수 출력 (docker-compose.test.yml에 사용)
+echo ""
+echo "Add these to your .env file:"
+echo "COGNITO_USER_POOL_ID=${USER_POOL_ID}"
+echo "COGNITO_CLIENT_ID=${CLIENT_ID}"
+echo "COGNITO_REGION=${AWS_REGION}"
+```
+
+**docker-compose.test.yml 업데이트**:
+```yaml
+api-gateway:
+  environment:
+    - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+    - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+    - COGNITO_REGION=${COGNITO_REGION}
+    - COGNITO_ENDPOINT=http://localstack:4566
+```
+
+---
+
+### Step 2: User-Service 인증 API 구현
+
+#### 2.1 회원가입 API
+
+**파일**: `app/backend/user-service/src/main/java/com/unisync/user/auth/controller/AuthController.java`
+
+```java
+@RestController
+@RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
+public class AuthController {
+
+    private final CognitoAuthService cognitoAuthService;
+
+    @PostMapping("/signup")
+    public ResponseEntity<SignUpResponse> signUp(@RequestBody @Valid SignUpRequest request) {
+        SignUpResponse response = cognitoAuthService.signUp(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@RequestBody @Valid LoginRequest request) {
+        LoginResponse response = cognitoAuthService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshTokenResponse> refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
+        RefreshTokenResponse response = cognitoAuthService.refreshToken(request);
+        return ResponseEntity.ok(response);
+    }
+}
+```
+
+#### 2.2 Cognito 연동 서비스
+
+**파일**: `app/backend/user-service/src/main/java/com/unisync/user/auth/service/CognitoAuthService.java`
+
+```java
+@Service
+@RequiredArgsConstructor
+public class CognitoAuthService {
+
+    private final CognitoIdentityProviderClient cognitoClient;
+    private final UserRepository userRepository;
+
+    @Value("${aws.cognito.user-pool-id}")
+    private String userPoolId;
+
+    @Value("${aws.cognito.client-id}")
+    private String clientId;
+
+    public SignUpResponse signUp(SignUpRequest request) {
+        try {
+            // 1. Cognito에 사용자 등록
+            SignUpRequest cognitoRequest = SignUpRequest.builder()
+                .clientId(clientId)
+                .username(request.getEmail())
+                .password(request.getPassword())
+                .userAttributes(
+                    AttributeType.builder().name("email").value(request.getEmail()).build(),
+                    AttributeType.builder().name("name").value(request.getName()).build()
+                )
+                .build();
+
+            SignUpResponse cognitoResponse = cognitoClient.signUp(cognitoRequest);
+            String cognitoUserId = cognitoResponse.userSub();
+
+            // 2. 로컬 DB에 User 생성
+            User user = User.builder()
+                .cognitoUserId(cognitoUserId)
+                .email(request.getEmail())
+                .name(request.getName())
+                .build();
+
+            userRepository.save(user);
+
+            log.info("User signed up: email={}, cognitoUserId={}", request.getEmail(), cognitoUserId);
+
+            return SignUpResponse.builder()
+                .success(true)
+                .userId(user.getId())
+                .email(user.getEmail())
+                .message("User registered successfully. Please verify your email.")
+                .build();
+
+        } catch (CognitoIdentityProviderException e) {
+            log.error("Cognito signup failed", e);
+            throw new AuthenticationException("Signup failed: " + e.awsErrorDetails().errorMessage());
+        }
+    }
+
+    public LoginResponse login(LoginRequest request) {
+        try {
+            // 1. Cognito 로그인 (USER_PASSWORD_AUTH)
+            Map<String, String> authParams = Map.of(
+                "USERNAME", request.getEmail(),
+                "PASSWORD", request.getPassword()
+            );
+
+            InitiateAuthRequest authRequest = InitiateAuthRequest.builder()
+                .authFlow(AuthFlowType.USER_PASSWORD_AUTH)
+                .clientId(clientId)
+                .authParameters(authParams)
+                .build();
+
+            InitiateAuthResponse authResponse = cognitoClient.initiateAuth(authRequest);
+
+            // 2. JWT 토큰 추출
+            AuthenticationResultType authResult = authResponse.authenticationResult();
+            String idToken = authResult.idToken();
+            String accessToken = authResult.accessToken();
+            String refreshToken = authResult.refreshToken();
+
+            // 3. JWT에서 userId 추출 (Cognito sub)
+            String cognitoUserId = extractUserIdFromToken(idToken);
+
+            // 4. 로컬 DB에서 User 조회
+            User user = userRepository.findByCognitoUserId(cognitoUserId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+            log.info("User logged in: userId={}, email={}", user.getId(), user.getEmail());
+
+            return LoginResponse.builder()
+                .idToken(idToken)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .userId(user.getId())
+                .email(user.getEmail())
+                .expiresIn(authResult.expiresIn())
+                .build();
+
+        } catch (CognitoIdentityProviderException e) {
+            log.error("Cognito login failed", e);
+            throw new AuthenticationException("Login failed: " + e.awsErrorDetails().errorMessage());
+        }
+    }
+
+    private String extractUserIdFromToken(String idToken) {
+        // JWT 파싱 (jjwt 라이브러리 사용)
+        String[] parts = idToken.split("\\.");
+        String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+        JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
+        return json.get("sub").getAsString();
+    }
+}
+```
+
+#### 2.3 DTO
+
+```java
+@Data
+@Builder
+public class SignUpRequest {
+    @Email
+    private String email;
+
+    @NotBlank
+    @Size(min=8)
+    private String password;
+
+    @NotBlank
+    private String name;
+}
+
+@Data
+@Builder
+public class LoginRequest {
+    @Email
+    private String email;
+
+    @NotBlank
+    private String password;
+}
+
+@Data
+@Builder
+public class LoginResponse {
+    private String idToken;
+    private String accessToken;
+    private String refreshToken;
+    private Long userId;
+    private String email;
+    private Integer expiresIn;
+}
+```
+
+---
+
+### Step 3: API Gateway JWT 인증 필터 구현
+
+**파일**: `app/backend/api-gateway/src/main/java/com/unisync/gateway/filter/JwtAuthenticationFilter.java`
+
+```java
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter implements GatewayFilter {
+
+    private final CognitoJwtVerifier jwtVerifier;
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+
+        // 인증 제외 경로
+        if (path.startsWith("/api/v1/auth/")) {
+            return chain.filter(exchange);
+        }
+
+        // Authorization 헤더 확인
+        String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+
+        String token = authHeader.substring(7);
+
+        try {
+            // JWT 검증
+            CognitoJwtClaims claims = jwtVerifier.verify(token);
+
+            // JWT에서 userId 추출 (Cognito sub → User 테이블 조회 필요)
+            Long userId = getUserIdFromCognitoSub(claims.getSub());
+
+            // X-User-Id 헤더 추가 (downstream 서비스에 전달)
+            ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
+                .header("X-User-Id", String.valueOf(userId))
+                .build();
+
+            ServerWebExchange modifiedExchange = exchange.mutate().request(modifiedRequest).build();
+
+            return chain.filter(modifiedExchange);
+
+        } catch (JwtVerificationException e) {
+            log.error("JWT verification failed", e);
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+    }
+
+    private Long getUserIdFromCognitoSub(String cognitoSub) {
+        // User-Service API 호출하여 Cognito sub → userId 변환
+        // 또는 Redis 캐시 사용
+    }
+}
+```
+
+**Cognito JWT 검증기**:
+```java
+@Component
+public class CognitoJwtVerifier {
+
+    @Value("${aws.cognito.user-pool-id}")
+    private String userPoolId;
+
+    @Value("${aws.cognito.region}")
+    private String region;
+
+    private JWTVerifier jwtVerifier;
+
+    @PostConstruct
+    public void init() {
+        String issuer = String.format("https://cognito-idp.%s.amazonaws.com/%s", region, userPoolId);
+
+        // LocalStack 환경이면 엔드포인트 변경
+        if (isLocalStack()) {
+            issuer = String.format("http://localhost:4566/%s", userPoolId);
+        }
+
+        Algorithm algorithm = Algorithm.RSA256(getPublicKey());
+
+        jwtVerifier = JWT.require(algorithm)
+            .withIssuer(issuer)
+            .build();
+    }
+
+    public CognitoJwtClaims verify(String token) {
+        DecodedJWT jwt = jwtVerifier.verify(token);
+
+        return CognitoJwtClaims.builder()
+            .sub(jwt.getSubject())
+            .email(jwt.getClaim("email").asString())
+            .exp(jwt.getExpiresAt())
+            .build();
+    }
+
+    private RSAPublicKey getPublicKey() {
+        // Cognito JWKS 엔드포인트에서 공개 키 가져오기
+        // LocalStack의 경우 http://localhost:4566/.well-known/jwks.json
+    }
+}
+```
+
+---
+
+### Step 4: E2E 테스트 JWT 통합
+
+**파일**: `tests/e2e/test_canvas_sync_e2e_with_auth.py` (신규 생성)
+
+```python
+import pytest
+import requests
+import os
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class TestCanvasSyncWithAuth:
+    """완전 E2E: Cognito 인증 + API Gateway + Canvas 동기화"""
+
+    @pytest.fixture(scope="function")
+    def test_user_credentials(self):
+        """테스트용 사용자 이메일/비밀번호"""
+        return {
+            "email": "test-e2e@unisync.com",
+            "password": "TestPassword123!",
+            "name": "E2E Test User"
+        }
+
+    @pytest.fixture(scope="function")
+    def jwt_token(self, test_user_credentials, service_urls):
+        """회원가입 → 로그인 → JWT 토큰 획득"""
+        gateway_url = service_urls["gateway"]
+
+        # 1. 회원가입 (이미 존재하면 스킵)
+        signup_response = requests.post(
+            f"{gateway_url}/api/v1/auth/signup",
+            json=test_user_credentials,
+            timeout=5
+        )
+
+        # 2. 로그인
+        login_response = requests.post(
+            f"{gateway_url}/api/v1/auth/login",
+            json={
+                "email": test_user_credentials["email"],
+                "password": test_user_credentials["password"]
+            },
+            timeout=5
+        )
+
+        assert login_response.status_code == 200, f"Login failed: {login_response.text}"
+
+        login_data = login_response.json()
+        return {
+            "id_token": login_data["idToken"],
+            "user_id": login_data["userId"]
+        }
+
+    def test_full_e2e_with_jwt_auth(self, jwt_token, service_urls):
+        """
+        완전 E2E 시나리오:
+        1. JWT 토큰 획득 (회원가입 + 로그인)
+        2. Canvas 토큰 등록 (API Gateway 경유, JWT 인증)
+        3. 자동 동기화 (SQS + Lambda)
+        4. Course 조회 (API Gateway 경유, JWT 인증)
+        """
+        gateway_url = service_urls["gateway"]
+        id_token = jwt_token["id_token"]
+        user_id = jwt_token["user_id"]
+
+        canvas_token = os.getenv("CANVAS_API_TOKEN")
+        assert canvas_token, "CANVAS_API_TOKEN not set in .env"
+
+        headers = {
+            "Authorization": f"Bearer {id_token}",
+            "Content-Type": "application/json"
+        }
+
+        print(f"\n[1/4] Canvas 토큰 등록 (Gateway:8080, JWT 인증)")
+        register_response = requests.post(
+            f"{gateway_url}/api/v1/credentials/canvas",
+            headers=headers,
+            json={"canvasToken": canvas_token},
+            timeout=5
+        )
+
+        assert register_response.status_code == 200, f"Token registration failed: {register_response.text}"
+        print("  [OK] Canvas token registered")
+
+        # 동기화 대기
+        print(f"\n[2/4] 자동 동기화 대기 중... (최대 30초)")
+        time.sleep(10)  # Lambda 처리 대기
+
+        # Course 조회 (API Gateway 경유)
+        print(f"\n[3/4] Course 조회 (Gateway:8080, JWT 인증)")
+        courses_response = requests.get(
+            f"{gateway_url}/api/v1/courses?userId={user_id}",
+            headers={"Authorization": f"Bearer {id_token}"},
+            timeout=5
+        )
+
+        assert courses_response.status_code == 200, f"Course fetch failed: {courses_response.text}"
+        courses = courses_response.json()
+
+        assert len(courses) > 0, "No courses synced"
+        print(f"  [OK] {len(courses)} courses synced")
+
+        for course in courses[:3]:
+            print(f"     - {course['name']} ({course['courseCode']})")
+
+        print(f"\n[4/4] E2E 테스트 성공!")
+        print(f"   - JWT 인증: [OK]")
+        print(f"   - API Gateway: [OK]")
+        print(f"   - Canvas 동기화: [OK] ({len(courses)} courses)")
+```
+
+---
+
+## 📋 JWT 인증 구현 체크리스트
+
+- [ ] **LocalStack Cognito 설정**
+  - [ ] `02-create-cognito.sh` 스크립트 작성
+  - [ ] User Pool 생성
+  - [ ] App Client 생성
+  - [ ] .env에 COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID 추가
+
+- [ ] **User-Service 인증 API**
+  - [ ] `AuthController` 구현 (signup, login, refresh)
+  - [ ] `CognitoAuthService` 구현
+  - [ ] User 엔티티에 `cognitoUserId` 필드 추가
+  - [ ] `UserRepository.findByCognitoUserId()` 메서드 추가
+
+- [ ] **API Gateway JWT 필터**
+  - [ ] `JwtAuthenticationFilter` 구현
+  - [ ] `CognitoJwtVerifier` 구현
+  - [ ] JWKS 공개 키 가져오기 로직
+  - [ ] X-User-Id 헤더 전달 로직
+
+- [ ] **E2E 테스트 JWT 통합**
+  - [ ] `test_canvas_sync_e2e_with_auth.py` 작성
+  - [ ] 회원가입 → 로그인 플로우
+  - [ ] JWT 토큰으로 API Gateway 호출
+  - [ ] 전체 시나리오 검증
 
 ---
 

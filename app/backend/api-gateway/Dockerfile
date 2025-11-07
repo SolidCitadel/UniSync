@@ -2,20 +2,17 @@
 # Stage 1: Build
 FROM gradle:8.5-jdk21-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy Gradle files
-COPY build.gradle.kts settings.gradle.kts ./
-COPY gradle ./gradle
+# Copy shared modules first
+COPY shared/java-common ./shared/java-common
 
-# Download dependencies (cached layer)
-RUN gradle dependencies --no-daemon || true
+# Copy api-gateway
+COPY backend/api-gateway ./backend/api-gateway
 
-# Copy source code
-COPY src ./src
-
-# Build application
-RUN gradle bootJar --no-daemon
+# Build
+WORKDIR /workspace/backend/api-gateway
+RUN gradle clean bootJar -x test --no-daemon
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
@@ -27,7 +24,7 @@ RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
 # Copy JAR from builder
-COPY --from=builder /app/build/libs/*.jar app.jar
+COPY --from=builder /workspace/backend/api-gateway/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080

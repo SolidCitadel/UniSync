@@ -26,9 +26,9 @@ class CredentialsRepositoryTest {
     @DisplayName("새로운 필드들과 함께 Credentials 저장 및 조회")
     void saveAndRetrieveCredentialsWithNewFields() {
         // Given: 새 필드들을 포함한 Credentials 생성
-        Long userId = 1L;
+        String cognitoSub = "cognito-sub-123";
         Credentials credentials = Credentials.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .provider(CredentialProvider.CANVAS)
                 .encryptedToken("encrypted-token-12345")
                 .isConnected(true)
@@ -51,8 +51,8 @@ class CredentialsRepositoryTest {
         assertThat(saved.getUpdatedAt()).isNotNull();
 
         // When: 조회
-        Optional<Credentials> retrieved = credentialsRepository.findByUserIdAndProvider(
-                userId, CredentialProvider.CANVAS);
+        Optional<Credentials> retrieved = credentialsRepository.findByCognitoSubAndProvider(
+                cognitoSub, CredentialProvider.CANVAS);
 
         // Then: 조회 확인
         assertThat(retrieved).isPresent();
@@ -67,7 +67,7 @@ class CredentialsRepositoryTest {
     void isConnectedDefaultValue() {
         // Given: isConnected를 명시하지 않은 Credentials
         Credentials credentials = Credentials.builder()
-                .userId(2L)
+                .cognitoSub("cognito-sub-2")
                 .provider(CredentialProvider.CANVAS)
                 .encryptedToken("encrypted-token-67890")
                 .build();
@@ -80,13 +80,13 @@ class CredentialsRepositoryTest {
     }
 
     @Test
-    @DisplayName("findAllByUserId로 사용자의 모든 연동 정보 조회")
-    void findAllByUserId() {
+    @DisplayName("findAllByCognitoSub로 사용자의 모든 연동 정보 조회")
+    void findAllByCognitoSub() {
         // Given: 한 사용자에 대해 여러 provider의 credentials 저장
-        Long userId = 3L;
+        String cognitoSub = "cognito-sub-3";
 
         Credentials canvas = Credentials.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .provider(CredentialProvider.CANVAS)
                 .encryptedToken("canvas-token")
                 .isConnected(true)
@@ -94,7 +94,7 @@ class CredentialsRepositoryTest {
                 .build();
 
         Credentials google = Credentials.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .provider(CredentialProvider.GOOGLE_CALENDAR)
                 .encryptedToken("google-token")
                 .isConnected(false)
@@ -104,7 +104,7 @@ class CredentialsRepositoryTest {
         credentialsRepository.save(google);
 
         // When: 사용자의 모든 credentials 조회
-        List<Credentials> allCredentials = credentialsRepository.findAllByUserId(userId);
+        List<Credentials> allCredentials = credentialsRepository.findAllByCognitoSub(cognitoSub);
 
         // Then: 2개 조회 확인
         assertThat(allCredentials).hasSize(2);
@@ -121,7 +121,7 @@ class CredentialsRepositoryTest {
     void updateCredentialsFields() {
         // Given: Credentials 저장
         Credentials credentials = Credentials.builder()
-                .userId(4L)
+                .cognitoSub("cognito-sub-4")
                 .provider(CredentialProvider.CANVAS)
                 .encryptedToken("original-token")
                 .isConnected(false)
@@ -148,7 +148,7 @@ class CredentialsRepositoryTest {
     void disconnectIntegration() {
         // Given: 연동된 상태의 Credentials
         Credentials credentials = Credentials.builder()
-                .userId(5L)
+                .cognitoSub("cognito-sub-5")
                 .provider(CredentialProvider.CANVAS)
                 .encryptedToken("token")
                 .isConnected(true)

@@ -39,7 +39,7 @@ class CredentialsServiceRealCanvasTest {
 
     private String realCanvasToken;
 
-    private static final Long TEST_USER_ID = 999L;
+    private static final String TEST_COGNITO_SUB = "test-cognito-sub-999";
 
     @BeforeEach
     void setUp() {
@@ -73,7 +73,7 @@ class CredentialsServiceRealCanvasTest {
 
         // When
         System.out.println("📤 Calling Canvas API to validate token...");
-        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(TEST_USER_ID, request);
+        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request);
         System.out.println("✅ Canvas API validation successful!");
 
         // Then
@@ -82,7 +82,7 @@ class CredentialsServiceRealCanvasTest {
 
         // DB에 암호화되어 저장되었는지 확인
         Credentials saved = credentialsRepository
-                .findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS)
+                .findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS)
                 .orElseThrow();
 
         System.out.println("🔐 Token stored in DB:");
@@ -93,7 +93,7 @@ class CredentialsServiceRealCanvasTest {
         System.out.println("   External user ID: " + saved.getExternalUserId());
         System.out.println("   External username: " + saved.getExternalUsername());
 
-        assertThat(saved.getUserId()).isEqualTo(TEST_USER_ID);
+        assertThat(saved.getCognitoSub()).isEqualTo(TEST_COGNITO_SUB);
         assertThat(saved.getProvider()).isEqualTo(CredentialProvider.CANVAS);
         assertThat(saved.getEncryptedToken()).isNotEqualTo(realCanvasToken); // 암호화되어야 함
         assertThat(saved.getEncryptedToken()).hasSizeGreaterThan(50); // 암호화되면 더 길어짐
@@ -112,11 +112,11 @@ class CredentialsServiceRealCanvasTest {
         RegisterCanvasTokenRequest registerRequest = RegisterCanvasTokenRequest.builder()
                 .canvasToken(realCanvasToken)
                 .build();
-        credentialsService.registerCanvasToken(TEST_USER_ID, registerRequest);
+        credentialsService.registerCanvasToken(TEST_COGNITO_SUB, registerRequest);
 
         // When - 토큰 조회
         System.out.println("🔓 Retrieving and decrypting token from DB...");
-        CanvasTokenResponse response = credentialsService.getCanvasToken(TEST_USER_ID);
+        CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(TEST_COGNITO_SUB);
 
         // Then - 복호화된 토큰이 원본과 동일한지 확인
         System.out.println("✅ Token decrypted successfully!");
@@ -137,14 +137,14 @@ class CredentialsServiceRealCanvasTest {
 
         // When & Then
         System.out.println("📤 Calling Canvas API with invalid token...");
-        assertThatThrownBy(() -> credentialsService.registerCanvasToken(TEST_USER_ID, request))
+        assertThatThrownBy(() -> credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request))
                 .isInstanceOf(InvalidCanvasTokenException.class)
                 .hasMessageContaining("Invalid Canvas token");
 
         System.out.println("✅ Canvas API correctly rejected invalid token");
 
         // DB에 저장되지 않아야 함
-        assertThat(credentialsRepository.findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS))
+        assertThat(credentialsRepository.findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS))
                 .isEmpty();
     }
 
@@ -160,20 +160,20 @@ class CredentialsServiceRealCanvasTest {
         RegisterCanvasTokenRequest registerRequest = RegisterCanvasTokenRequest.builder()
                 .canvasToken(realCanvasToken)
                 .build();
-        RegisterCanvasTokenResponse registerResponse = credentialsService.registerCanvasToken(TEST_USER_ID, registerRequest);
+        RegisterCanvasTokenResponse registerResponse = credentialsService.registerCanvasToken(TEST_COGNITO_SUB, registerRequest);
         assertThat(registerResponse.isSuccess()).isTrue();
         System.out.println("✅ Token registered successfully");
 
         // 2. 토큰 조회
         System.out.println("\n[Step 2] Retrieving Canvas token...");
-        CanvasTokenResponse getResponse = credentialsService.getCanvasToken(TEST_USER_ID);
+        CanvasTokenResponse getResponse = credentialsService.getCanvasTokenByCognitoSub(TEST_COGNITO_SUB);
         assertThat(getResponse.getCanvasToken()).isEqualTo(realCanvasToken);
         System.out.println("✅ Token retrieved and decrypted successfully");
 
         // 3. 토큰 삭제
         System.out.println("\n[Step 3] Deleting Canvas token...");
-        credentialsService.deleteCanvasToken(TEST_USER_ID);
-        assertThat(credentialsRepository.findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS))
+        credentialsService.deleteCanvasToken(TEST_COGNITO_SUB);
+        assertThat(credentialsRepository.findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS))
                 .isEmpty();
         System.out.println("✅ Token deleted successfully");
 

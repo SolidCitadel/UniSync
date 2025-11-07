@@ -25,15 +25,15 @@ public class IntegrationStatusController {
     /**
      * 사용자의 외부 서비스 연동 상태 조회
      *
-     * @param userId 사용자 ID (X-User-Id 헤더)
+     * @param cognitoSub Cognito 사용자 ID (X-Cognito-Sub 헤더)
      * @return 연동 상태 정보
      */
     @GetMapping("/status")
     @Operation(summary = "연동 상태 조회", description = "Canvas, Google Calendar 등의 연동 상태를 조회합니다.")
     public ResponseEntity<IntegrationStatusResponse> getIntegrationStatus(
-            @RequestHeader(value = "X-User-Id") Long userId
+            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
-        IntegrationStatusResponse status = integrationStatusService.getIntegrationStatus(userId);
+        IntegrationStatusResponse status = integrationStatusService.getIntegrationStatus(cognitoSub);
         return ResponseEntity.ok(status);
     }
 }

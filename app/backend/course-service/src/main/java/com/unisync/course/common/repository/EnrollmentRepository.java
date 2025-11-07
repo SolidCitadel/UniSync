@@ -15,13 +15,13 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     /**
      * 특정 사용자와 과목의 수강 관계 조회
      */
-    Optional<Enrollment> findByUserIdAndCourseId(Long userId, Long courseId);
+    Optional<Enrollment> findByCognitoSubAndCourseId(String cognitoSub, Long courseId);
 
     /**
      * 특정 사용자가 수강 중인 모든 과목 조회
      */
-    @Query("SELECT e FROM Enrollment e JOIN FETCH e.course WHERE e.userId = :userId")
-    List<Enrollment> findAllByUserId(@Param("userId") Long userId);
+    @Query("SELECT e FROM Enrollment e JOIN FETCH e.course WHERE e.cognitoSub = :cognitoSub")
+    List<Enrollment> findAllByCognitoSub(@Param("cognitoSub") String cognitoSub);
 
     /**
      * 특정 과목을 수강하는 모든 사용자 조회
@@ -36,7 +36,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     /**
      * 특정 사용자와 과목의 수강 관계가 있는지 확인
      */
-    boolean existsByUserIdAndCourseId(Long userId, Long courseId);
+    boolean existsByCognitoSubAndCourseId(String cognitoSub, Long courseId);
 
     /**
      * 특정 과목의 Leader 조회

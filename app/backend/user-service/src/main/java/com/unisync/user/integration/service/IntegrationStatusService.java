@@ -24,12 +24,12 @@ public class IntegrationStatusService {
     /**
      * 사용자의 전체 연동 상태 조회
      *
-     * @param userId 사용자 ID
+     * @param cognitoSub Cognito 사용자 ID
      * @return 연동 상태 정보
      */
     @Transactional(readOnly = true)
-    public IntegrationStatusResponse getIntegrationStatus(Long userId) {
-        List<Credentials> allCredentials = credentialsRepository.findAllByUserId(userId);
+    public IntegrationStatusResponse getIntegrationStatus(String cognitoSub) {
+        List<Credentials> allCredentials = credentialsRepository.findAllByCognitoSub(cognitoSub);
 
         IntegrationStatusResponse response = new IntegrationStatusResponse();
 
@@ -51,7 +51,7 @@ public class IntegrationStatusService {
             }
         }
 
-        log.info("Integration status retrieved for userId={}", userId);
+        log.info("Integration status retrieved for cognitoSub={}", cognitoSub);
         return response;
     }
 }

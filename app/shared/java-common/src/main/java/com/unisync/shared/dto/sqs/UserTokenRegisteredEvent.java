@@ -22,9 +22,9 @@ import java.time.LocalDateTime;
 public class UserTokenRegisteredEvent {
 
     /**
-     * 사용자 ID
+     * Cognito 사용자 ID
      */
-    private Long userId;
+    private String cognitoSub;
 
     /**
      * 연동 서비스 제공자 (예: "CANVAS", "GOOGLE_CALENDAR")

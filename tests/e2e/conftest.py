@@ -28,6 +28,7 @@ def test_user_id():
 def service_urls():
     """서비스 URL 정보"""
     return {
+        "gateway": os.getenv("GATEWAY_URL", "http://localhost:8080"),
         "user_service": os.getenv("USER_SERVICE_URL", "http://localhost:8081"),
         "course_service": os.getenv("COURSE_SERVICE_URL", "http://localhost:8082"),
     }
@@ -40,6 +41,7 @@ def wait_for_services(service_urls):
     retry_interval = 2
 
     services = [
+        (service_urls["gateway"], "API-Gateway"),
         (service_urls["user_service"], "User-Service"),
         (service_urls["course_service"], "Course-Service"),
     ]

@@ -86,15 +86,15 @@ class CourseApiIntegrationTest {
         Course course2 = createCourse(200L, "Spring Boot 고급", "CS201");
         Course course3 = createCourse(300L, "Java 프로그래밍", "CS301");
 
-        Long userId = 1L;
-        createEnrollment(userId, course1, true);
-        createEnrollment(userId, course2, false);
+        String cognitoSub = "test-cognito-sub-1";
+        createEnrollment(cognitoSub, course1, true);
+        createEnrollment(cognitoSub, course2, false);
         // course3은 다른 사용자만 수강 중
-        createEnrollment(999L, course3, true);
+        createEnrollment("test-cognito-sub-999", course3, true);
 
-        // when: GET /api/v1/courses?userId=1
+        // when: GET /api/v1/courses with X-Cognito-Sub header
         String response = mockMvc.perform(get("/api/v1/courses")
-                .param("userId", String.valueOf(userId)))
+                .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -193,9 +193,9 @@ class CourseApiIntegrationTest {
         return courseRepository.save(course);
     }
 
-    private Enrollment createEnrollment(Long userId, Course course, boolean isLeader) {
+    private Enrollment createEnrollment(String cognitoSub, Course course, boolean isLeader) {
         Enrollment enrollment = Enrollment.builder()
-            .userId(userId)
+            .cognitoSub(cognitoSub)
             .course(course)
             .isSyncLeader(isLeader)
             .build();

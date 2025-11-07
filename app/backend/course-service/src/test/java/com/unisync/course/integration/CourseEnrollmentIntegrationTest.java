@@ -15,27 +15,26 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.*;
 
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.testcontainers.containers.localstack.LocalStackContainer.Service.SQS;
 
 /**
  * Course Enrollment SQS 통합 테스트
- * LocalStack과 MySQL을 Testcontainers로 띄워서 실제 SQS 메시지 송수신 테스트
+ * docker-compose로 실행 중인 LocalStack 사용
+ * 큐는 localstack-init 스크립트로 미리 생성되어 있다고 가정
  */
 @SpringBootTest
 @Testcontainers
@@ -46,11 +45,6 @@ class CourseEnrollmentIntegrationTest {
         .withDatabaseName("course_service_test")
         .withUsername("test")
         .withPassword("test");
-
-    @Container
-    static LocalStackContainer localStack = new LocalStackContainer(
-        DockerImageName.parse("localstack/localstack:3.0"))
-        .withServices(SQS);
 
     @Autowired
     private CourseRepository courseRepository;
@@ -70,12 +64,11 @@ class CourseEnrollmentIntegrationTest {
         registry.add("spring.datasource.username", mysql::getUsername);
         registry.add("spring.datasource.password", mysql::getPassword);
 
-        // LocalStack SQS 설정
-        registry.add("spring.cloud.aws.sqs.endpoint",
-            () -> localStack.getEndpointOverride(SQS).toString());
-        registry.add("spring.cloud.aws.region.static", () -> localStack.getRegion());
-        registry.add("spring.cloud.aws.credentials.access-key", () -> localStack.getAccessKey());
-        registry.add("spring.cloud.aws.credentials.secret-key", () -> localStack.getSecretKey());
+        // LocalStack SQS 설정 (docker-compose로 실행 중인 LocalStack 사용)
+        registry.add("spring.cloud.aws.sqs.endpoint", () -> "http://localhost:4566");
+        registry.add("spring.cloud.aws.region.static", () -> "ap-northeast-2");
+        registry.add("spring.cloud.aws.credentials.access-key", () -> "test");
+        registry.add("spring.cloud.aws.credentials.secret-key", () -> "test");
     }
 
     @BeforeEach
@@ -84,25 +77,25 @@ class CourseEnrollmentIntegrationTest {
         enrollmentRepository.deleteAll();
         courseRepository.deleteAll();
 
-        // SQS Client 생성
+        // SQS Client 생성 (docker-compose LocalStack 사용)
         sqsClient = SqsClient.builder()
-            .endpointOverride(localStack.getEndpointOverride(SQS))
-            .region(Region.of(localStack.getRegion()))
+            .endpointOverride(URI.create("http://localhost:4566"))
+            .region(Region.AP_NORTHEAST_2)
             .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(localStack.getAccessKey(), localStack.getSecretKey())
+                AwsBasicCredentials.create("test", "test")
             ))
             .build();
 
-        // SQS 큐 생성
-        CreateQueueResponse courseEnrollmentQueue = sqsClient.createQueue(
-            CreateQueueRequest.builder()
+        // 큐 URL 조회 (큐는 이미 localstack-init 스크립트로 생성되어 있음)
+        GetQueueUrlResponse courseEnrollmentQueue = sqsClient.getQueueUrl(
+            GetQueueUrlRequest.builder()
                 .queueName("course-enrollment-queue")
                 .build()
         );
         courseEnrollmentQueueUrl = courseEnrollmentQueue.queueUrl();
 
-        CreateQueueResponse assignmentSyncQueue = sqsClient.createQueue(
-            CreateQueueRequest.builder()
+        GetQueueUrlResponse assignmentSyncQueue = sqsClient.getQueueUrl(
+            GetQueueUrlRequest.builder()
                 .queueName("assignment-sync-needed-queue")
                 .build()
         );
@@ -119,14 +112,16 @@ class CourseEnrollmentIntegrationTest {
         // ObjectMapper 설정
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     @Test
     @DisplayName("새 Course 등록 시 Course 생성, Enrollment 생성 (Leader=true), Assignment 동기화 이벤트 발행")
     void testNewCourseEnrollment_ShouldCreateCourseAndEnrollmentAsLeader() throws Exception {
         // given: 첫 번째 사용자의 Course Enrollment 이벤트
+        String cognitoSub = "test-cognito-sub-1";
         CourseEnrollmentEvent event = CourseEnrollmentEvent.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .canvasCourseId(789L)
             .courseName("Spring Boot 고급")
             .courseCode("CS301")
@@ -156,7 +151,7 @@ class CourseEnrollmentIntegrationTest {
 
         // then: Enrollment가 생성되고 Leader 플래그가 true
         Course course = courseRepository.findByCanvasCourseId(789L).get();
-        Optional<Enrollment> enrollment = enrollmentRepository.findByUserIdAndCourseId(1L, course.getId());
+        Optional<Enrollment> enrollment = enrollmentRepository.findByCognitoSubAndCourseId(cognitoSub, course.getId());
         assertThat(enrollment).isPresent();
         assertThat(enrollment.get().getIsSyncLeader()).isTrue();
 
@@ -186,16 +181,18 @@ class CourseEnrollmentIntegrationTest {
             .build();
         courseRepository.save(existingCourse);
 
+        String firstCognitoSub = "test-cognito-sub-1";
         Enrollment firstUserEnrollment = Enrollment.builder()
-            .userId(1L)
+            .cognitoSub(firstCognitoSub)
             .course(existingCourse)
             .isSyncLeader(true)
             .build();
         enrollmentRepository.save(firstUserEnrollment);
 
         // given: 두 번째 사용자의 Course Enrollment 이벤트
+        String secondCognitoSub = "test-cognito-sub-2";
         CourseEnrollmentEvent event = CourseEnrollmentEvent.builder()
-            .userId(2L)
+            .cognitoSub(secondCognitoSub)
             .canvasCourseId(789L)
             .courseName("Spring Boot 고급")
             .courseCode("CS301")
@@ -218,7 +215,7 @@ class CourseEnrollmentIntegrationTest {
             .pollInterval(java.time.Duration.ofMillis(500))
             .untilAsserted(() -> {
                 Optional<Enrollment> enrollment = enrollmentRepository
-                    .findByUserIdAndCourseId(2L, existingCourse.getId());
+                    .findByCognitoSubAndCourseId(secondCognitoSub, existingCourse.getId());
                 assertThat(enrollment).isPresent();
                 assertThat(enrollment.get().getIsSyncLeader()).isFalse();
             });
@@ -247,8 +244,9 @@ class CourseEnrollmentIntegrationTest {
             .build();
         courseRepository.save(course);
 
+        String cognitoSub = "test-cognito-sub-1";
         Enrollment existingEnrollment = Enrollment.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .course(course)
             .isSyncLeader(true)
             .build();
@@ -256,9 +254,9 @@ class CourseEnrollmentIntegrationTest {
 
         long initialEnrollmentCount = enrollmentRepository.count();
 
-        // given: 동일한 userId + courseId로 메시지 생성
+        // given: 동일한 cognitoSub + courseId로 메시지 생성
         CourseEnrollmentEvent duplicateEvent = CourseEnrollmentEvent.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .canvasCourseId(789L)
             .courseName("Spring Boot 고급")
             .courseCode("CS301")
@@ -283,8 +281,9 @@ class CourseEnrollmentIntegrationTest {
     @DisplayName("여러 Course Enrollment 이벤트 동시 처리")
     void testMultipleCourseEnrollments_ShouldBeProcessedCorrectly() throws Exception {
         // given: 3개의 Course Enrollment 이벤트
+        String cognitoSub = "test-cognito-sub-1";
         CourseEnrollmentEvent event1 = CourseEnrollmentEvent.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .canvasCourseId(100L)
             .courseName("Course 1")
             .courseCode("CS100")
@@ -293,7 +292,7 @@ class CourseEnrollmentIntegrationTest {
             .build();
 
         CourseEnrollmentEvent event2 = CourseEnrollmentEvent.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .canvasCourseId(200L)
             .courseName("Course 2")
             .courseCode("CS200")
@@ -302,7 +301,7 @@ class CourseEnrollmentIntegrationTest {
             .build();
 
         CourseEnrollmentEvent event3 = CourseEnrollmentEvent.builder()
-            .userId(1L)
+            .cognitoSub(cognitoSub)
             .canvasCourseId(300L)
             .courseName("Course 3")
             .courseCode("CS300")
@@ -335,7 +334,7 @@ class CourseEnrollmentIntegrationTest {
             });
 
         // then: 3개의 Enrollment가 모두 Leader
-        List<Enrollment> enrollments = enrollmentRepository.findAllByUserId(1L);
+        List<Enrollment> enrollments = enrollmentRepository.findAllByCognitoSub(cognitoSub);
         assertThat(enrollments).hasSize(3);
         assertThat(enrollments).allMatch(Enrollment::getIsSyncLeader);
     }

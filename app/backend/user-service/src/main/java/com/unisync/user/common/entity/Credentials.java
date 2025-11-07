@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "credentials",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "provider"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"cognito_sub", "provider"}))
 @Data
 @Builder
 @NoArgsConstructor
@@ -23,8 +23,8 @@ public class Credentials {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "cognito_sub", nullable = false, length = 255)
+    private String cognitoSub;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

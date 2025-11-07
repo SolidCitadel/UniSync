@@ -22,9 +22,9 @@ import java.time.LocalDateTime;
 public class CourseEnrollmentEvent {
 
     /**
-     * 사용자 ID
+     * Cognito 사용자 ID
      */
-    private Long userId;
+    private String cognitoSub;
 
     /**
      * Canvas Course ID

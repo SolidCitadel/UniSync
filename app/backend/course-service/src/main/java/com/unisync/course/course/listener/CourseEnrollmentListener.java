@@ -43,8 +43,8 @@ public class CourseEnrollmentListener {
         try {
             CourseEnrollmentEvent event = objectMapper.readValue(messageBody, CourseEnrollmentEvent.class);
 
-            log.info("   - userId={}, canvasCourseId={}, courseName={}",
-                    event.getUserId(), event.getCanvasCourseId(), event.getCourseName());
+            log.info("   - cognitoSub={}, canvasCourseId={}, courseName={}",
+                    event.getCognitoSub(), event.getCanvasCourseId(), event.getCourseName());
 
             // 1. Course가 DB에 있는지 확인
             Optional<Course> existingCourse = courseRepository
@@ -75,20 +75,20 @@ public class CourseEnrollmentListener {
             }
 
             // 3. Enrollment 생성 (중복 체크)
-            if (!enrollmentRepository.existsByUserIdAndCourseId(event.getUserId(), course.getId())) {
+            if (!enrollmentRepository.existsByCognitoSubAndCourseId(event.getCognitoSub(), course.getId())) {
                 Enrollment enrollment = Enrollment.builder()
-                        .userId(event.getUserId())
+                        .cognitoSub(event.getCognitoSub())
                         .course(course)
                         .isSyncLeader(isNewCourse) // 첫 등록자가 Leader
                         .build();
 
                 enrollmentRepository.save(enrollment);
 
-                log.info("   ✅ Created enrollment: userId={}, courseId={}, leader={}",
-                        event.getUserId(), course.getId(), isNewCourse);
+                log.info("   ✅ Created enrollment: cognitoSub={}, courseId={}, leader={}",
+                        event.getCognitoSub(), course.getId(), isNewCourse);
             } else {
-                log.info("   ℹ️ Enrollment already exists: userId={}, courseId={}",
-                        event.getUserId(), course.getId());
+                log.info("   ℹ️ Enrollment already exists: cognitoSub={}, courseId={}",
+                        event.getCognitoSub(), course.getId());
             }
 
             // 4. 새 Course면 Assignment 동기화 필요
@@ -96,7 +96,7 @@ public class CourseEnrollmentListener {
                 AssignmentSyncNeededEvent syncEvent = AssignmentSyncNeededEvent.builder()
                         .courseId(course.getId())
                         .canvasCourseId(course.getCanvasCourseId())
-                        .leaderUserId(event.getUserId())
+                        .leaderCognitoSub(event.getCognitoSub())
                         .build();
 
                 sqsTemplate.send("assignment-sync-needed-queue", syncEvent);

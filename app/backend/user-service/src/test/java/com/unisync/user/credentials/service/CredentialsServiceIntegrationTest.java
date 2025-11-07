@@ -40,7 +40,7 @@ class CredentialsServiceIntegrationTest {
     @MockBean
     private RestTemplate restTemplate;
 
-    private static final Long TEST_USER_ID = 1L;
+    private static final String TEST_COGNITO_SUB = "test-cognito-sub";
     private static final String TEST_CANVAS_TOKEN = "test-canvas-token-123";
 
     @BeforeEach
@@ -72,7 +72,7 @@ class CredentialsServiceIntegrationTest {
         )).thenReturn(ResponseEntity.ok(mockProfile));
 
         // When
-        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(TEST_USER_ID, request);
+        RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request);
 
         // Then
         assertThat(response.isSuccess()).isTrue();
@@ -80,9 +80,9 @@ class CredentialsServiceIntegrationTest {
 
         // DB 확인
         Credentials saved = credentialsRepository
-                .findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS)
+                .findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS)
                 .orElseThrow();
-        assertThat(saved.getUserId()).isEqualTo(TEST_USER_ID);
+        assertThat(saved.getCognitoSub()).isEqualTo(TEST_COGNITO_SUB);
         assertThat(saved.getProvider()).isEqualTo(CredentialProvider.CANVAS);
         assertThat(saved.getEncryptedToken()).isNotEqualTo(TEST_CANVAS_TOKEN); // 암호화되어야 함
         assertThat(saved.getLastValidatedAt()).isNotNull();
@@ -110,12 +110,12 @@ class CredentialsServiceIntegrationTest {
         ));
 
         // When & Then
-        assertThatThrownBy(() -> credentialsService.registerCanvasToken(TEST_USER_ID, request))
+        assertThatThrownBy(() -> credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request))
                 .isInstanceOf(InvalidCanvasTokenException.class)
                 .hasMessageContaining("Invalid Canvas token");
 
         // DB에 저장되지 않아야 함
-        assertThat(credentialsRepository.findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS))
+        assertThat(credentialsRepository.findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS))
                 .isEmpty();
     }
 
@@ -141,10 +141,10 @@ class CredentialsServiceIntegrationTest {
                 eq(CanvasApiClient.CanvasProfile.class)
         )).thenReturn(ResponseEntity.ok(mockProfile));
 
-        credentialsService.registerCanvasToken(TEST_USER_ID, request);
+        credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request);
 
         // When - 토큰 조회
-        CanvasTokenResponse response = credentialsService.getCanvasToken(TEST_USER_ID);
+        CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(TEST_COGNITO_SUB);
 
         // Then - 복호화된 원본 토큰 반환 확인
         assertThat(response.getCanvasToken()).isEqualTo(TEST_CANVAS_TOKEN);
@@ -155,7 +155,7 @@ class CredentialsServiceIntegrationTest {
     @DisplayName("Canvas 토큰 조회 실패 - 등록되지 않은 사용자")
     void getCanvasToken_NotFound() {
         // When & Then
-        assertThatThrownBy(() -> credentialsService.getCanvasToken(999L))
+        assertThatThrownBy(() -> credentialsService.getCanvasTokenByCognitoSub("unregistered-cognito-sub"))
                 .isInstanceOf(CanvasTokenNotFoundException.class)
                 .hasMessageContaining("Canvas token not found");
     }
@@ -182,13 +182,13 @@ class CredentialsServiceIntegrationTest {
                 eq(CanvasApiClient.CanvasProfile.class)
         )).thenReturn(ResponseEntity.ok(mockProfile));
 
-        credentialsService.registerCanvasToken(TEST_USER_ID, request);
+        credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request);
 
         // When - 토큰 삭제
-        credentialsService.deleteCanvasToken(TEST_USER_ID);
+        credentialsService.deleteCanvasToken(TEST_COGNITO_SUB);
 
         // Then - DB에서 삭제 확인
-        assertThat(credentialsRepository.findByUserIdAndProvider(TEST_USER_ID, CredentialProvider.CANVAS))
+        assertThat(credentialsRepository.findByCognitoSubAndProvider(TEST_COGNITO_SUB, CredentialProvider.CANVAS))
                 .isEmpty();
     }
 
@@ -196,7 +196,7 @@ class CredentialsServiceIntegrationTest {
     @DisplayName("Canvas 토큰 삭제 실패 - 등록되지 않은 사용자")
     void deleteCanvasToken_NotFound() {
         // When & Then
-        assertThatThrownBy(() -> credentialsService.deleteCanvasToken(999L))
+        assertThatThrownBy(() -> credentialsService.deleteCanvasToken("unregistered-cognito-sub"))
                 .isInstanceOf(CanvasTokenNotFoundException.class)
                 .hasMessageContaining("Canvas token not found");
     }
@@ -223,17 +223,17 @@ class CredentialsServiceIntegrationTest {
                 eq(CanvasApiClient.CanvasProfile.class)
         )).thenReturn(ResponseEntity.ok(mockProfile));
 
-        credentialsService.registerCanvasToken(TEST_USER_ID, request1);
+        credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request1);
 
         // When - 두 번째 토큰 등록 (업데이트)
         RegisterCanvasTokenRequest request2 = RegisterCanvasTokenRequest.builder()
                 .canvasToken("new-token")
                 .build();
 
-        credentialsService.registerCanvasToken(TEST_USER_ID, request2);
+        credentialsService.registerCanvasToken(TEST_COGNITO_SUB, request2);
 
         // Then - 새 토큰으로 업데이트 확인
-        CanvasTokenResponse response = credentialsService.getCanvasToken(TEST_USER_ID);
+        CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(TEST_COGNITO_SUB);
         assertThat(response.getCanvasToken()).isEqualTo("new-token");
 
         // 레코드가 1개만 존재해야 함 (중복 생성 아님)

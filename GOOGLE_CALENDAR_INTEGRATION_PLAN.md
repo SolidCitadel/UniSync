@@ -5,7 +5,8 @@
 
 **방식**: Cognito 로그인 + 별도 Google OAuth2 (하이브리드)
 - Cognito: 회원가입/로그인 인증 (이미 구현됨)
-- Google OAuth2: Calendar API 접근 권한 획득 (신규 구현)
+- Google OAuth2: Calendar API 접근 권한 획득 (API Gateway에서 Spring Security OAuth2 Client로 구현)
+- **토큰 저장소**: Gateway는 토큰을 저장하지 않고 즉시 User-Service로 전달
 
 ---
 
@@ -287,221 +288,368 @@ google:
 
 ---
 
-### 2️⃣ User-Service: Google OAuth2 연동
+### 2️⃣ API Gateway: Spring Security OAuth2 Client
 
-**Note**: Spring Security 사용하지 않음. RestTemplate으로 직접 구현.
+**접근 방식**: Spring Security OAuth2 Client를 사용하여 OAuth2 플로우를 자동화합니다.
+- Gateway가 OAuth2 Authorization/Callback 처리
+- 토큰 획득 후 즉시 User-Service로 전달 (Redis 불필요)
+- 기존 JWT 필터와 통합
 
-#### Google OAuth2 Client 구현
+#### 의존성 추가
 
-**파일**: `app/backend/user-service/src/main/java/com/unisync/user/integration/service/GoogleOAuthClient.java`
+**파일**: `app/backend/api-gateway/build.gradle.kts`
+
+```kotlin
+dependencies {
+    // 기존 의존성들...
+
+    // Spring Security OAuth2 Client (추가)
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+}
+```
+
+---
+
+#### OAuth2 설정
+
+**파일**: `app/backend/api-gateway/src/main/resources/application-local.yml`
+
+```yaml
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: https://www.googleapis.com/auth/calendar.readonly
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+```
+
+---
+
+#### Security 설정
+
+**파일**: `app/backend/api-gateway/src/main/java/com/unisync/gateway/config/SecurityConfig.java`
 
 ```java
-package com.unisync.user.integration.service;
+package com.unisync.gateway.config;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
- * Google OAuth2 클라이언트 (Spring Security 사용하지 않음)
+ * Spring Security 설정 (Reactive)
+ * - 기존 JWT 인증 필터와 통합
+ * - OAuth2 로그인 추가
  */
-@Slf4j
-@Component
-public class GoogleOAuthClient {
+@Configuration
+@EnableWebFluxSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
 
-    private final RestTemplate restTemplate;
-    private final String clientId;
-    private final String clientSecret;
-    private final String redirectUri;
+    private final OAuth2SuccessHandler oauth2SuccessHandler;
 
-    private static final String AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-    private static final String TOKEN_URL = "https://oauth2.googleapis.com/token";
-    private static final String USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
-    private static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+    @Bean
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        http
+            .authorizeExchange(exchange -> exchange
+                // OAuth2 관련 경로는 인증 불필요
+                .pathMatchers("/oauth2/**", "/login/**").permitAll()
+                // 나머지는 JWT로 인증 (기존 JwtAuthenticationFilter 사용)
+                .anyExchange().permitAll()  // TODO: 실제로는 .authenticated() 사용
+            )
+            .oauth2Login(oauth2 -> oauth2
+                .authenticationSuccessHandler(oauth2SuccessHandler)
+            )
+            // CSRF 비활성화 (API Gateway)
+            .csrf(ServerHttpSecurity.CsrfSpec::disable);
 
-    public GoogleOAuthClient(
-            RestTemplate restTemplate,
-            @Value("${google.oauth.client-id}") String clientId,
-            @Value("${google.oauth.client-secret}") String clientSecret,
-            @Value("${google.oauth.redirect-uri}") String redirectUri
-    ) {
-        this.restTemplate = restTemplate;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        this.redirectUri = redirectUri;
-    }
-
-    /**
-     * Google OAuth2 인증 URL 생성
-     */
-    public String getAuthorizationUrl(String state) {
-        return UriComponentsBuilder.fromHttpUrl(AUTH_URL)
-                .queryParam("client_id", clientId)
-                .queryParam("redirect_uri", redirectUri)
-                .queryParam("response_type", "code")
-                .queryParam("scope", CALENDAR_SCOPE)
-                .queryParam("access_type", "offline")  // Refresh Token 받기 위해 필수
-                .queryParam("prompt", "consent")       // 매번 동의 화면 표시 (Refresh Token 보장)
-                .queryParam("state", state)            // CSRF 방지
-                .build()
-                .toUriString();
-    }
-
-    /**
-     * Authorization Code로 Access Token 발급
-     */
-    public GoogleTokenResponse exchangeCodeForToken(String code) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("client_id", clientId);
-        body.add("client_secret", clientSecret);
-        body.add("code", code);
-        body.add("grant_type", "authorization_code");
-        body.add("redirect_uri", redirectUri);
-
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-        try {
-            ResponseEntity<GoogleTokenResponse> response = restTemplate.exchange(
-                    TOKEN_URL,
-                    HttpMethod.POST,
-                    request,
-                    GoogleTokenResponse.class
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                log.info("Google token exchanged successfully");
-                return response.getBody();
-            }
-
-            throw new RuntimeException("Failed to exchange Google authorization code");
-
-        } catch (Exception e) {
-            log.error("Error exchanging Google authorization code: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to exchange Google authorization code", e);
-        }
-    }
-
-    /**
-     * Refresh Token으로 새 Access Token 발급
-     */
-    public GoogleTokenResponse refreshAccessToken(String refreshToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("client_id", clientId);
-        body.add("client_secret", clientSecret);
-        body.add("refresh_token", refreshToken);
-        body.add("grant_type", "refresh_token");
-
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-        try {
-            ResponseEntity<GoogleTokenResponse> response = restTemplate.exchange(
-                    TOKEN_URL,
-                    HttpMethod.POST,
-                    request,
-                    GoogleTokenResponse.class
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                log.info("Google access token refreshed successfully");
-                return response.getBody();
-            }
-
-            throw new RuntimeException("Failed to refresh Google access token");
-
-        } catch (Exception e) {
-            log.error("Error refreshing Google access token: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to refresh Google access token", e);
-        }
-    }
-
-    /**
-     * Access Token으로 사용자 정보 조회
-     */
-    public GoogleUserInfo getUserInfo(String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
-
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-
-        try {
-            ResponseEntity<GoogleUserInfo> response = restTemplate.exchange(
-                    USERINFO_URL,
-                    HttpMethod.GET,
-                    request,
-                    GoogleUserInfo.class
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return response.getBody();
-            }
-
-            throw new RuntimeException("Failed to get Google user info");
-
-        } catch (Exception e) {
-            log.error("Error getting Google user info: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to get Google user info", e);
-        }
-    }
-
-    /**
-     * Google OAuth2 Token Response
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class GoogleTokenResponse {
-        @JsonProperty("access_token")
-        private String accessToken;
-
-        @JsonProperty("refresh_token")
-        private String refreshToken;
-
-        @JsonProperty("expires_in")
-        private Integer expiresIn;
-
-        @JsonProperty("scope")
-        private String scope;
-
-        @JsonProperty("token_type")
-        private String tokenType;
-    }
-
-    /**
-     * Google User Info Response
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class GoogleUserInfo {
-        private String sub;          // Google account ID
-        private String email;
-        private String name;
-        private String picture;
-
-        @JsonProperty("email_verified")
-        private Boolean emailVerified;
+        return http.build();
     }
 }
 ```
 
 ---
 
-#### Google Integration Controller
+#### OAuth2 Success Handler
+
+**파일**: `app/backend/api-gateway/src/main/java/com/unisync/gateway/config/OAuth2SuccessHandler.java`
+
+```java
+package com.unisync.gateway.config;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.server.WebFilterExchange;
+import org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+/**
+ * OAuth2 로그인 성공 시 처리
+ * - Google Access Token을 User-Service로 전달
+ * - 사용자에게 HTML 응답 반환
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class OAuth2SuccessHandler implements ServerAuthenticationSuccessHandler {
+
+    private final ServerOAuth2AuthorizedClientRepository authorizedClientRepository;
+    private final WebClient.Builder webClientBuilder;
+
+    @Override
+    public Mono<Void> onAuthenticationSuccess(
+        WebFilterExchange webFilterExchange,
+        Authentication authentication) {
+
+        OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+        OAuth2User oauth2User = oauthToken.getPrincipal();
+
+        log.info("OAuth2 login success: {}", oauth2User.getAttribute("email"));
+
+        // 1. OAuth2AuthorizedClient에서 토큰 추출
+        return authorizedClientRepository
+            .loadAuthorizedClient(
+                oauthToken.getAuthorizedClientRegistrationId(),
+                authentication,
+                webFilterExchange.getExchange()
+            )
+            .flatMap(authorizedClient -> {
+                String accessToken = authorizedClient.getAccessToken().getTokenValue();
+                String refreshToken = authorizedClient.getRefreshToken() != null
+                    ? authorizedClient.getRefreshToken().getTokenValue()
+                    : null;
+
+                // 2. User-Service로 토큰 전달
+                return sendTokensToUserService(oauth2User, accessToken, refreshToken);
+            })
+            .then(Mono.defer(() -> {
+                // 3. 사용자에게 HTML 응답
+                return writeSuccessHtmlResponse(webFilterExchange);
+            }))
+            .onErrorResume(error -> {
+                log.error("OAuth2 success handler error", error);
+                return writeErrorHtmlResponse(webFilterExchange, error.getMessage());
+            });
+    }
+
+    /**
+     * User-Service로 토큰 전달 (HTTP POST)
+     */
+    private Mono<Void> sendTokensToUserService(
+        OAuth2User oauth2User,
+        String accessToken,
+        String refreshToken) {
+
+        WebClient webClient = webClientBuilder.baseUrl("http://user-service:8081").build();
+
+        Map<String, Object> requestBody = Map.of(
+            "googleAccountId", oauth2User.getAttribute("sub"),
+            "email", oauth2User.getAttribute("email"),
+            "accessToken", accessToken,
+            "refreshToken", refreshToken != null ? refreshToken : ""
+        );
+
+        return webClient.post()
+            .uri("/credentials/google/save")
+            .header("X-Service-Token", "local-dev-token")  // 내부 API 인증
+            .bodyValue(requestBody)
+            .retrieve()
+            .toBodilessEntity()
+            .then()
+            .doOnSuccess(v -> log.info("Tokens sent to User-Service successfully"))
+            .doOnError(e -> log.error("Failed to send tokens to User-Service", e));
+    }
+
+    /**
+     * 성공 HTML 응답
+     */
+    private Mono<Void> writeSuccessHtmlResponse(WebFilterExchange webFilterExchange) {
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Google Calendar 연동 성공</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    h1 { color: #4CAF50; }
+                </style>
+            </head>
+            <body>
+                <h1>✅ Google Calendar 연동 성공!</h1>
+                <p>이제 일정 동기화가 자동으로 진행됩니다.</p>
+                <p>이 창을 닫으셔도 됩니다.</p>
+            </body>
+            </html>
+            """;
+
+        var response = webFilterExchange.getExchange().getResponse();
+        response.setStatusCode(HttpStatus.OK);
+        response.getHeaders().setContentType(MediaType.TEXT_HTML);
+
+        return response.writeWith(Mono.just(
+            response.bufferFactory().wrap(html.getBytes(StandardCharsets.UTF_8))
+        ));
+    }
+
+    /**
+     * 실패 HTML 응답
+     */
+    private Mono<Void> writeErrorHtmlResponse(WebFilterExchange webFilterExchange, String errorMessage) {
+        String html = String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>연동 실패</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    h1 { color: #f44336; }
+                </style>
+            </head>
+            <body>
+                <h1>❌ Google Calendar 연동 실패</h1>
+                <p>오류: %s</p>
+                <p>다시 시도해주세요.</p>
+            </body>
+            </html>
+            """, errorMessage);
+
+        var response = webFilterExchange.getExchange().getResponse();
+        response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
+        response.getHeaders().setContentType(MediaType.TEXT_HTML);
+
+        return response.writeWith(Mono.just(
+            response.bufferFactory().wrap(html.getBytes(StandardCharsets.UTF_8))
+        ));
+    }
+}
+```
+
+---
+
+### 3️⃣ User-Service: 토큰 저장 API
+
+**Note**: Gateway에서 전달받은 토큰을 DB에 저장하는 역할만 수행합니다.
+
+#### 토큰 저장 API
+
+**파일**: `app/backend/user-service/src/main/java/com/unisync/user/credentials/controller/CredentialsController.java`
+
+```java
+/**
+ * Google 토큰 저장 (내부 API, Gateway 전용)
+ *
+ * 내부: POST /credentials/google/save
+ */
+@PostMapping("/google/save")
+@Operation(summary = "Google 토큰 저장 (내부 API)")
+public ResponseEntity<Void> saveGoogleToken(
+        @RequestBody GoogleTokenSaveRequest request,
+        @RequestHeader(value = "X-Service-Token") String serviceToken
+) {
+    // Service Token 검증 (Gateway만 호출 가능)
+    if (!"local-dev-token".equals(serviceToken)) {
+        return ResponseEntity.status(403).build();
+    }
+
+    credentialsService.saveGoogleToken(request);
+    return ResponseEntity.ok().build();
+}
+```
+
+**DTO**:
+
+```java
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class GoogleTokenSaveRequest {
+    private String googleAccountId;
+    private String email;
+    private String accessToken;
+    private String refreshToken;
+}
+```
+
+**Service**:
+
+```java
+@Transactional
+public void saveGoogleToken(GoogleTokenSaveRequest request) {
+    // User를 email로 조회 (OAuth2User의 email과 Cognito email이 같다고 가정)
+    User user = userRepository.findByEmail(request.getEmail())
+        .orElseThrow(() -> new RuntimeException("User not found: " + request.getEmail()));
+
+    // Token JSON 생성
+    Map<String, Object> tokenData = Map.of(
+        "access_token", request.getAccessToken(),
+        "refresh_token", request.getRefreshToken(),
+        "issued_at", LocalDateTime.now().toString()
+    );
+
+    String tokenJson = objectMapper.writeValueAsString(tokenData);
+    String encryptedToken = encryptionService.encrypt(tokenJson);
+
+    // DB 저장
+    Credentials credentials = credentialsRepository
+        .findByUserIdAndProvider(user.getId(), CredentialProvider.GOOGLE_CALENDAR)
+        .orElse(Credentials.builder()
+            .userId(user.getId())
+            .provider(CredentialProvider.GOOGLE_CALENDAR)
+            .build());
+
+    credentials.setEncryptedToken(encryptedToken);
+    credentials.setIsConnected(true);
+    credentials.setExternalUserId(request.getGoogleAccountId());
+    credentials.setExternalUsername(request.getEmail());
+    credentials.setLastValidatedAt(LocalDateTime.now());
+
+    credentialsRepository.save(credentials);
+
+    // SQS 이벤트 발행
+    GoogleAccountConnectedEvent event = GoogleAccountConnectedEvent.builder()
+        .userId(user.getId())
+        .googleAccountId(request.getGoogleAccountId())
+        .email(request.getEmail())
+        .connectedAt(LocalDateTime.now())
+        .build();
+
+    sqsPublisher.publish(googleAccountConnectedQueue, event);
+
+    log.info("Google token saved: userId={}, email={}", user.getId(), request.getEmail());
+}
+```
+
+---
+
+#### 내부 API: Google Token 조회 (Lambda용)
 
 **파일**: `app/backend/user-service/src/main/java/com/unisync/user/integration/controller/GoogleIntegrationController.java`
 
@@ -875,7 +1023,7 @@ public GoogleTokenResponse getGoogleToken(Long userId) {
 
 ---
 
-### 3️⃣ SQS 큐 추가
+### 4️⃣ SQS 큐 추가
 
 **파일**: `localstack-init/01-create-queues.sh`
 
@@ -907,7 +1055,7 @@ aws:
 
 ---
 
-### 4️⃣ Lambda: Google Calendar Sync
+### 5️⃣ Lambda: Google Calendar Sync
 
 #### 디렉토리 구조
 
@@ -1135,7 +1283,7 @@ echo "✅ google-calendar-lambda deployed"
 
 ---
 
-### 5️⃣ Schedule-Service 구현
+### 6️⃣ Schedule-Service 구현
 
 #### UserSchedule 엔티티
 
@@ -1787,24 +1935,30 @@ def clean_schedule_database(mysql_connection):
   - [ ] `/api/v1/integrations/**` → User-Service (이미 있을 수 있음)
   - [ ] `/api/v1/schedules/**` → Schedule-Service
 
-- [ ] 2️⃣ User-Service: Google OAuth2 연동
-  - [ ] `GoogleOAuthClient` 구현
-  - [ ] `GoogleIntegrationController` 구현 (경로: `/integrations/google`)
-  - [ ] `GoogleIntegrationService` 구현
-  - [ ] DTO 정의
+- [ ] 2️⃣ API Gateway: Spring Security OAuth2 Client
+  - [ ] `build.gradle.kts`에 의존성 추가
+  - [ ] `application-local.yml`에 OAuth2 설정 추가
+  - [ ] `SecurityConfig.java` 작성 (Reactive)
+  - [ ] `OAuth2SuccessHandler.java` 작성
+  - [ ] 기존 JWT 필터와 통합
+
+- [ ] 3️⃣ User-Service: 토큰 저장 API
+  - [ ] `CredentialsController`에 `/credentials/google/save` API 추가
+  - [ ] `GoogleTokenSaveRequest` DTO 작성
+  - [ ] `CredentialsService.saveGoogleToken()` 구현
   - [ ] 내부 API: `/credentials/{userId}/google` 추가
 
-- [ ] 3️⃣ SQS 큐 생성
+- [ ] 4️⃣ SQS 큐 생성
   - [ ] `google-account-connected-queue`
   - [ ] `calendar-events-queue`
 
-- [ ] 4️⃣ Lambda: Google Calendar Sync
+- [ ] 5️⃣ Lambda: Google Calendar Sync
   - [ ] `google-calendar-lambda` 생성
   - [ ] `initial_sync_handler()` 구현
   - [ ] Dockerfile 작성
   - [ ] LocalStack 배포 스크립트 추가
 
-- [ ] 5️⃣ Schedule-Service 구현
+- [ ] 6️⃣ Schedule-Service 구현
   - [ ] `UserSchedule` 엔티티 추가
   - [ ] `UserScheduleRepository` 구현
   - [ ] `CalendarEventListener` 구현 (SQS)
@@ -1812,11 +1966,11 @@ def clean_schedule_database(mysql_connection):
   - [ ] `ScheduleService` 구현
   - [ ] DTO 정의
 
-- [ ] 6️⃣ 공유 DTO 추가
+- [ ] 7️⃣ 공유 DTO 추가
   - [ ] `GoogleAccountConnectedEvent`
   - [ ] `CalendarEventDto`
 
-- [ ] 7️⃣ E2E 테스트 작성 및 검증
+- [ ] 8️⃣ E2E 테스트 작성 및 검증
   - [ ] `test_google_calendar_sync_e2e.py` 작성
   - [ ] 테스트 통과 확인
 
@@ -1868,10 +2022,11 @@ def clean_schedule_database(mysql_connection):
 - **Google OAuth2**: Calendar API 접근 권한 (인가)
 - 이유: Cognito는 Google Access Token을 제공하지 않음
 
-### 2. Spring Security 사용하지 않음
-- 현재 프로젝트가 API Gateway에서 JWT 검증
-- Google OAuth2만을 위해 Security 추가는 과함
-- RestTemplate으로 직접 구현이 더 명확
+### 2. Spring Security OAuth2 Client 사용 (API Gateway)
+- Gateway가 OAuth2 플로우를 처리 (Authorization + Callback)
+- 토큰 획득 후 즉시 User-Service로 전달 (Redis 불필요)
+- 설정 기반으로 코드 양 65% 감소 (~450줄 → ~160줄)
+- 자동 토큰 갱신 및 검증된 표준 구현
 
 ### 3. Gateway 기반 라우팅
 - 모든 외부 요청은 8080 Gateway 통과

@@ -11,11 +11,11 @@ import java.util.Optional;
 @Repository
 public interface CredentialsRepository extends JpaRepository<Credentials, Long> {
 
-    Optional<Credentials> findByUserIdAndProvider(Long userId, CredentialProvider provider);
+    Optional<Credentials> findByCognitoSubAndProvider(String cognitoSub, CredentialProvider provider);
 
-    List<Credentials> findAllByUserId(Long userId);
+    List<Credentials> findAllByCognitoSub(String cognitoSub);
 
-    boolean existsByUserIdAndProvider(Long userId, CredentialProvider provider);
+    boolean existsByCognitoSubAndProvider(String cognitoSub, CredentialProvider provider);
 
-    void deleteByUserIdAndProvider(Long userId, CredentialProvider provider);
+    void deleteByCognitoSubAndProvider(String cognitoSub, CredentialProvider provider);
 }

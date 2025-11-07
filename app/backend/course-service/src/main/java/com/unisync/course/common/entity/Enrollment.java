@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "enrollments", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_user_course", columnNames = {"user_id", "course_id"})
+    @UniqueConstraint(name = "uk_user_course", columnNames = {"cognito_sub", "course_id"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -24,10 +24,10 @@ public class Enrollment {
     private Long id;
 
     /**
-     * 사용자 ID (User-Service 참조)
+     * Cognito 사용자 ID (User-Service 참조)
      */
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "cognito_sub", nullable = false, length = 255)
+    private String cognitoSub;
 
     /**
      * 과목

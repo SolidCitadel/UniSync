@@ -24,9 +24,9 @@ public class CourseController {
      */
     @GetMapping
     public ResponseEntity<List<CourseResponse>> getUserCourses(
-            @RequestParam Long userId
+            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
-        List<CourseResponse> courses = courseService.getUserCourses(userId);
+        List<CourseResponse> courses = courseService.getUserCourses(cognitoSub);
         return ResponseEntity.ok(courses);
     }
 

@@ -50,9 +50,9 @@ class IntegrationStatusIntegrationTest {
     @DisplayName("Canvas 연동 상태 조회 성공")
     void testGetIntegrationStatus_WithCanvas() throws Exception {
         // given: Canvas 연동 정보 저장
-        Long userId = 1L;
+        String cognitoSub = "test-cognito-sub-1";
         Credentials canvasCredentials = Credentials.builder()
-            .userId(userId)
+            .cognitoSub(cognitoSub)
             .provider(CredentialProvider.CANVAS)
             .encryptedToken("encrypted_token")
             .isConnected(true)
@@ -64,7 +64,7 @@ class IntegrationStatusIntegrationTest {
 
         // when: GET /api/v1/integrations/status
         String response = mockMvc.perform(get("/api/v1/integrations/status")
-                .header("X-User-Id", userId))
+                .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -85,10 +85,10 @@ class IntegrationStatusIntegrationTest {
     @DisplayName("Canvas + Google Calendar 모두 연동된 경우")
     void testGetIntegrationStatus_WithMultipleProviders() throws Exception {
         // given: Canvas와 Google Calendar 모두 연동
-        Long userId = 1L;
+        String cognitoSub = "test-cognito-sub-2";
 
         Credentials canvasCredentials = Credentials.builder()
-            .userId(userId)
+            .cognitoSub(cognitoSub)
             .provider(CredentialProvider.CANVAS)
             .encryptedToken("canvas_token")
             .isConnected(true)
@@ -98,7 +98,7 @@ class IntegrationStatusIntegrationTest {
         credentialsRepository.save(canvasCredentials);
 
         Credentials googleCredentials = Credentials.builder()
-            .userId(userId)
+            .cognitoSub(cognitoSub)
             .provider(CredentialProvider.GOOGLE_CALENDAR)
             .encryptedToken("google_token")
             .isConnected(true)
@@ -109,7 +109,7 @@ class IntegrationStatusIntegrationTest {
 
         // when: GET /api/v1/integrations/status
         String response = mockMvc.perform(get("/api/v1/integrations/status")
-                .header("X-User-Id", userId))
+                .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -131,11 +131,11 @@ class IntegrationStatusIntegrationTest {
     @DisplayName("연동되지 않은 사용자의 경우 모든 필드가 null")
     void testGetIntegrationStatus_NoIntegrations() throws Exception {
         // given: 연동 정보 없음
-        Long userId = 999L;
+        String cognitoSub = "test-cognito-sub-999";
 
         // when: GET /api/v1/integrations/status
         String response = mockMvc.perform(get("/api/v1/integrations/status")
-                .header("X-User-Id", userId))
+                .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -152,9 +152,9 @@ class IntegrationStatusIntegrationTest {
     @DisplayName("Canvas 연동되었으나 is_connected=false인 경우")
     void testGetIntegrationStatus_DisconnectedCanvas() throws Exception {
         // given: Canvas 연동되었으나 비활성화 상태
-        Long userId = 1L;
+        String cognitoSub = "test-cognito-sub-3";
         Credentials canvasCredentials = Credentials.builder()
-            .userId(userId)
+            .cognitoSub(cognitoSub)
             .provider(CredentialProvider.CANVAS)
             .encryptedToken("encrypted_token")
             .isConnected(false)  // 비활성화
@@ -165,7 +165,7 @@ class IntegrationStatusIntegrationTest {
 
         // when: GET /api/v1/integrations/status
         String response = mockMvc.perform(get("/api/v1/integrations/status")
-                .header("X-User-Id", userId))
+                .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

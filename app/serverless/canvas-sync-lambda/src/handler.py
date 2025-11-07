@@ -26,7 +26,7 @@ def initial_sync_handler(event, context):
 
     Input (from user-token-registered-queue):
         {
-            "userId": 1,
+            "cognitoSub": "abc-123-def-456",
             "provider": "CANVAS",
             "registeredAt": "2025-11-05T12:00:00Z",
             "externalUserId": "99040",
@@ -45,12 +45,12 @@ def initial_sync_handler(event, context):
 
         for record in records:
             message_body = json.loads(record['body'])
-            user_id = message_body['userId']
+            cognito_sub = message_body['cognitoSub']
 
-            print(f"🚀 Initial sync started for userId={user_id}")
+            print(f"🚀 Initial sync started for cognitoSub={cognito_sub}")
 
             # 1. User-Service에서 Canvas 토큰 조회
-            canvas_token = get_canvas_token(user_id)
+            canvas_token = get_canvas_token(cognito_sub)
 
             # 2. Canvas API: 사용자의 전체 Course 조회
             courses = fetch_user_courses(canvas_token)
@@ -60,7 +60,7 @@ def initial_sync_handler(event, context):
             for course in courses:
                 send_to_sqs('course-enrollment-queue', {
                     'eventType': 'COURSE_ENROLLMENT',
-                    'userId': user_id,
+                    'cognitoSub': cognito_sub,
                     'canvasCourseId': course['id'],
                     'courseName': course['name'],
                     'courseCode': course.get('course_code', ''),
@@ -90,7 +90,7 @@ def assignment_sync_handler(event, context):
         {
             "courseId": 123,
             "canvasCourseId": 789,
-            "leaderUserId": 1
+            "leaderCognitoSub": "abc-123-def-456"
         }
 
     Output:
@@ -107,12 +107,12 @@ def assignment_sync_handler(event, context):
             message_body = json.loads(record['body'])
             course_id = message_body['courseId']
             canvas_course_id = message_body['canvasCourseId']
-            leader_user_id = message_body['leaderUserId']
+            leader_cognito_sub = message_body['leaderCognitoSub']
 
             print(f"📥 Assignment sync started: courseId={course_id}, canvasCourseId={canvas_course_id}")
 
             # 1. User-Service에서 Leader의 Canvas 토큰 조회
-            canvas_token = get_canvas_token(leader_user_id)
+            canvas_token = get_canvas_token(leader_cognito_sub)
 
             # 2. Canvas API: 해당 Course의 Assignments 조회
             assignments = fetch_canvas_assignments(canvas_token, str(canvas_course_id))
@@ -230,9 +230,9 @@ def lambda_handler(event, context):
         raise
 
 
-def get_canvas_token(user_id: int) -> str:
-    """Call User-Service API to retrieve Canvas token (decrypted)"""
-    url = f"{USER_SERVICE_URL}/api/v1/credentials/{user_id}/canvas"
+def get_canvas_token(cognito_sub: str) -> str:
+    """Call User-Service API to retrieve Canvas token (decrypted) by cognitoSub"""
+    url = f"{USER_SERVICE_URL}/api/v1/credentials/canvas/by-cognito-sub/{cognito_sub}"
     headers = {
         'X-Api-Key': os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
     }
