@@ -92,8 +92,8 @@ class CourseApiIntegrationTest {
         // course3은 다른 사용자만 수강 중
         createEnrollment("test-cognito-sub-999", course3, true);
 
-        // when: GET /api/v1/courses with X-Cognito-Sub header
-        String response = mockMvc.perform(get("/api/v1/courses")
+        // when: GET /courses with X-Cognito-Sub header
+        String response = mockMvc.perform(get("/courses")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
@@ -113,8 +113,8 @@ class CourseApiIntegrationTest {
         // given: Course 생성
         Course course = createCourse(789L, "Spring Boot 고급", "CS301");
 
-        // when: GET /api/v1/courses/{courseId}
-        String response = mockMvc.perform(get("/api/v1/courses/{courseId}", course.getId()))
+        // when: GET /courses/{courseId}
+        String response = mockMvc.perform(get("/courses/{courseId}", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -131,8 +131,8 @@ class CourseApiIntegrationTest {
     @Test
     @DisplayName("존재하지 않는 Course 조회 시 404 반환")
     void testGetCourse_NotFound() throws Exception {
-        // when: GET /api/v1/courses/999999 (존재하지 않는 ID)
-        mockMvc.perform(get("/api/v1/courses/{courseId}", 999999L))
+        // when: GET /courses/999999 (존재하지 않는 ID)
+        mockMvc.perform(get("/courses/{courseId}", 999999L))
             .andExpect(status().isNotFound());
     }
 
@@ -149,8 +149,8 @@ class CourseApiIntegrationTest {
         Course otherCourse = createCourse(888L, "Other Course", "CS999");
         createAssignment(otherCourse, 2001L, "다른 과제", LocalDateTime.now());
 
-        // when: GET /api/v1/courses/{courseId}/assignments
-        String response = mockMvc.perform(get("/api/v1/courses/{courseId}/assignments", course.getId()))
+        // when: GET /courses/{courseId}/assignments
+        String response = mockMvc.perform(get("/courses/{courseId}/assignments", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -169,8 +169,8 @@ class CourseApiIntegrationTest {
         // given: Assignment가 없는 Course
         Course course = createCourse(789L, "Spring Boot 고급", "CS301");
 
-        // when: GET /api/v1/courses/{courseId}/assignments
-        String response = mockMvc.perform(get("/api/v1/courses/{courseId}/assignments", course.getId()))
+        // when: GET /courses/{courseId}/assignments
+        String response = mockMvc.perform(get("/courses/{courseId}/assignments", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

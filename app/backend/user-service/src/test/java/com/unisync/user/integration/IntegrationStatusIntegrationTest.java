@@ -62,8 +62,8 @@ class IntegrationStatusIntegrationTest {
             .build();
         credentialsRepository.save(canvasCredentials);
 
-        // when: GET /api/v1/integrations/status
-        String response = mockMvc.perform(get("/api/v1/integrations/status")
+        // when: GET /integrations/status
+        String response = mockMvc.perform(get("/integrations/status")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
@@ -107,8 +107,8 @@ class IntegrationStatusIntegrationTest {
             .build();
         credentialsRepository.save(googleCredentials);
 
-        // when: GET /api/v1/integrations/status
-        String response = mockMvc.perform(get("/api/v1/integrations/status")
+        // when: GET /integrations/status
+        String response = mockMvc.perform(get("/integrations/status")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
@@ -133,8 +133,8 @@ class IntegrationStatusIntegrationTest {
         // given: 연동 정보 없음
         String cognitoSub = "test-cognito-sub-999";
 
-        // when: GET /api/v1/integrations/status
-        String response = mockMvc.perform(get("/api/v1/integrations/status")
+        // when: GET /integrations/status
+        String response = mockMvc.perform(get("/integrations/status")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
@@ -163,8 +163,8 @@ class IntegrationStatusIntegrationTest {
             .build();
         credentialsRepository.save(canvasCredentials);
 
-        // when: GET /api/v1/integrations/status
-        String response = mockMvc.perform(get("/api/v1/integrations/status")
+        // when: GET /integrations/status
+        String response = mockMvc.perform(get("/integrations/status")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()

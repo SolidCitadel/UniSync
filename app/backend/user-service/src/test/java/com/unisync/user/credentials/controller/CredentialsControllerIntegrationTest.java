@@ -80,7 +80,7 @@ class CredentialsControllerIntegrationTest {
                 .build();
 
         // When & Then
-        mockMvc.perform(post("/api/v1/credentials/canvas")
+        mockMvc.perform(post("/credentials/canvas")
                         .header("X-Cognito-Sub", TEST_COGNITO_SUB)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -102,7 +102,7 @@ class CredentialsControllerIntegrationTest {
                 .build();
 
         // When & Then
-        mockMvc.perform(post("/api/v1/credentials/canvas")
+        mockMvc.perform(post("/credentials/canvas")
                         .header("X-Cognito-Sub", TEST_COGNITO_SUB)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -110,20 +110,20 @@ class CredentialsControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/credentials/canvas - 본인 토큰 조회 성공 (사용자)")
+    @DisplayName("GET /credentials/canvas - 본인 토큰 조회 성공 (사용자)")
     void getCanvasToken_AsUser_Success() throws Exception {
         // Given - 먼저 토큰 등록
         RegisterCanvasTokenRequest registerRequest = RegisterCanvasTokenRequest.builder()
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
-        mockMvc.perform(post("/api/v1/credentials/canvas")
+        mockMvc.perform(post("/credentials/canvas")
                 .header("X-Cognito-Sub", TEST_COGNITO_SUB)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(registerRequest)));
 
         // When & Then - 조회
-        mockMvc.perform(get("/api/v1/credentials/canvas")
+        mockMvc.perform(get("/credentials/canvas")
                         .header("X-Cognito-Sub", TEST_COGNITO_SUB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.canvasToken").value(TEST_CANVAS_TOKEN))
@@ -131,30 +131,30 @@ class CredentialsControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/credentials/canvas - 등록되지 않은 사용자 토큰 조회 실패")
+    @DisplayName("GET /credentials/canvas - 등록되지 않은 사용자 토큰 조회 실패")
     void getCanvasToken_AsUser_NotFound() throws Exception {
         // When & Then - 등록하지 않은 사용자가 조회
-        mockMvc.perform(get("/api/v1/credentials/canvas")
+        mockMvc.perform(get("/credentials/canvas")
                         .header("X-Cognito-Sub", "unregistered-cognito-sub"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("CANVAS_TOKEN_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("GET /api/v1/credentials/canvas/by-cognito-sub/{cognitoSub} - 서비스 API Key로 조회 성공")
+    @DisplayName("GET /credentials/canvas/by-cognito-sub/{cognitoSub} - 서비스 API Key로 조회 성공")
     void getCanvasToken_AsService_Success() throws Exception {
         // Given - 먼저 토큰 등록
         RegisterCanvasTokenRequest registerRequest = RegisterCanvasTokenRequest.builder()
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
-        mockMvc.perform(post("/api/v1/credentials/canvas")
+        mockMvc.perform(post("/credentials/canvas")
                 .header("X-Cognito-Sub", TEST_COGNITO_SUB)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(registerRequest)));
 
         // When & Then - 서비스가 API Key로 조회
-        mockMvc.perform(get("/api/v1/credentials/canvas/by-cognito-sub/{cognitoSub}", TEST_COGNITO_SUB)
+        mockMvc.perform(get("/credentials/canvas/by-cognito-sub/{cognitoSub}", TEST_COGNITO_SUB)
                         .header("X-Api-Key", canvasSyncApiKey))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.canvasToken").value(TEST_CANVAS_TOKEN))
@@ -162,30 +162,30 @@ class CredentialsControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/credentials/canvas/by-cognito-sub/{cognitoSub} - 잘못된 API Key로 조회 실패")
+    @DisplayName("GET /credentials/canvas/by-cognito-sub/{cognitoSub} - 잘못된 API Key로 조회 실패")
     void getCanvasToken_AsService_InvalidApiKey() throws Exception {
         // When & Then
-        mockMvc.perform(get("/api/v1/credentials/canvas/by-cognito-sub/{cognitoSub}", TEST_COGNITO_SUB)
+        mockMvc.perform(get("/credentials/canvas/by-cognito-sub/{cognitoSub}", TEST_COGNITO_SUB)
                         .header("X-Api-Key", "invalid-api-key"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/credentials/canvas - 토큰 삭제 성공")
+    @DisplayName("DELETE /credentials/canvas - 토큰 삭제 성공")
     void deleteCanvasToken_Success() throws Exception {
         // Given - 먼저 토큰 등록
         RegisterCanvasTokenRequest registerRequest = RegisterCanvasTokenRequest.builder()
                 .canvasToken(TEST_CANVAS_TOKEN)
                 .build();
 
-        mockMvc.perform(post("/api/v1/credentials/canvas")
+        mockMvc.perform(post("/credentials/canvas")
                 .header("X-Cognito-Sub", TEST_COGNITO_SUB)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(registerRequest)));
 
         // When & Then - 삭제
-        mockMvc.perform(delete("/api/v1/credentials/canvas")
+        mockMvc.perform(delete("/credentials/canvas")
                         .header("X-Cognito-Sub", TEST_COGNITO_SUB))
                 .andExpect(status().isNoContent());
 
@@ -195,10 +195,10 @@ class CredentialsControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/credentials/canvas - 등록되지 않은 토큰 삭제 실패")
+    @DisplayName("DELETE /credentials/canvas - 등록되지 않은 토큰 삭제 실패")
     void deleteCanvasToken_NotFound() throws Exception {
         // When & Then
-        mockMvc.perform(delete("/api/v1/credentials/canvas")
+        mockMvc.perform(delete("/credentials/canvas")
                         .header("X-Cognito-Sub", TEST_COGNITO_SUB))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("CANVAS_TOKEN_NOT_FOUND"));
