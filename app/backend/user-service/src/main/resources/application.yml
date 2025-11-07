@@ -6,7 +6,7 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${USER_SERVICE_DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    url: ${USER_SERVICE_DATABASE_URL}
     username: ${USER_SERVICE_DB_USER}
     password: ${USER_SERVICE_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver

@@ -122,16 +122,45 @@ EventBridge
 ## 환경변수 및 프로파일 관리 규칙
 
 ### 프로파일 구분
-- **`local`**: IDE 직접 실행, `.env` 파일 자동 로드, 의미 있는 기본값 제공
-- **`docker`**: Docker Compose, 환경변수 주입, 기본값 없음
+- **`local`**: IDE 직접 실행, `.env` 파일 자동 로드 (spring-dotenv)
+- **`docker`**: Docker Compose, 환경변수 주입
 - **`test`**: H2 인메모리 DB, 고정 테스트 값
 
 ### 핵심 원칙
-1. **`application.yml`**: 기본값 없음, 환경변수만 참조 (`${CANVAS_BASE_URL}`)
-2. **`application-local.yml`**: 의미 있는 기본값만 제공 (`${CANVAS_BASE_URL:https://khcanvas.khu.ac.kr}`)
-3. **`application-docker.yml`**: 기본값 없음 (docker-compose가 주입)
-4. **기본값 제공 금지**: 환경에 따라 달라지는 값, 의미 없는 placeholder, 보안 정보
-5. **`.env` 파일**: 프로젝트 루트, spring-dotenv로 자동 로드, `.gitignore` 포함
+1. **모든 `application*.yml`**: 기본값 없음, 환경변수만 참조
+2. **`.env` 파일**: 프로젝트 루트 1개, 로컬 개발용
+3. **docker-compose*.yml**: 각 서비스에 환경변수 주입
+4. **배포 환경**: 환경변수 직접 주입
+5. **환경변수 누락 시**: 즉시 실패
+
+### 데이터베이스 연결 표준
+각 서비스는 완전한 JDBC URL을 환경변수로 받음:
+```yaml
+# application.yml
+spring:
+  datasource:
+    url: ${USER_SERVICE_DATABASE_URL}
+    username: ${USER_SERVICE_DB_USER}
+    password: ${USER_SERVICE_DB_PASSWORD}
+```
+
+```bash
+# .env (로컬)
+USER_SERVICE_DATABASE_URL=jdbc:mysql://localhost:3307/user_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+COURSE_SERVICE_DATABASE_URL=jdbc:mysql://localhost:3307/course_db?...
+```
+
+```yaml
+# docker-compose.app.yml
+user-service:
+  environment:
+    - USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db?...
+```
+
+```bash
+# 배포 환경
+USER_SERVICE_DATABASE_URL=jdbc:mysql://mydb.xxx.rds.amazonaws.com:3306/user_db?...
+```
 
 ## 주의사항
 

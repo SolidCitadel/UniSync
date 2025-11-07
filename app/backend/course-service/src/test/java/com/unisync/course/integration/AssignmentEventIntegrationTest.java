@@ -64,9 +64,9 @@ class AssignmentEventIntegrationTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         // MySQL 설정
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("COURSE_SERVICE_DATABASE_URL", mysql::getJdbcUrl);
+        registry.add("COURSE_SERVICE_DB_USER", mysql::getUsername);
+        registry.add("COURSE_SERVICE_DB_PASSWORD", mysql::getPassword);
 
         // LocalStack SQS 설정
         registry.add("spring.cloud.aws.sqs.endpoint",

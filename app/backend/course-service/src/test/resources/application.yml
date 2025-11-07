@@ -2,6 +2,12 @@ spring:
   application:
     name: course-service-test
 
+  datasource:
+    url: ${COURSE_SERVICE_DATABASE_URL}
+    username: ${COURSE_SERVICE_DB_USER}
+    password: ${COURSE_SERVICE_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
   jpa:
     properties:
       hibernate:
