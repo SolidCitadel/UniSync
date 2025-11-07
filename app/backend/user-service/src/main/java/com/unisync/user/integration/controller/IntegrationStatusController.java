@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 외부 서비스 연동 상태 조회 API
  */
 @RestController
-@RequestMapping("/api/v1/integrations")
+@RequestMapping("/integrations")
 @RequiredArgsConstructor
 @Tag(name = "Integration Status", description = "외부 연동 상태 조회 API")
 public class IntegrationStatusController {

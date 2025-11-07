@@ -120,15 +120,26 @@ def assignment_sync_handler(event, context):
 
             # 3. 각 Assignment마다 SQS 이벤트 발행
             for assignment in assignments:
+                # submissionTypes를 문자열로 변환 (Java는 String을 기대)
+                submission_types = assignment.get('submission_types', [])
+                submission_types_str = ','.join(submission_types) if submission_types else ''
+
+                # dueAt을 LocalDateTime 형식으로 변환 (timezone 제거)
+                due_at = assignment.get('due_at')
+                due_at_formatted = None
+                if due_at:
+                    # ISO 8601 (2025-11-15T23:59:00Z) → LocalDateTime (2025-11-15T23:59:00)
+                    due_at_formatted = due_at.replace('Z', '').split('.')[0]
+
                 send_to_sqs('assignment-events-queue', {
                     'eventType': 'ASSIGNMENT_CREATED',
-                    'courseId': course_id,
+                    'canvasCourseId': canvas_course_id,
                     'canvasAssignmentId': assignment['id'],
                     'title': assignment['name'],
                     'description': assignment.get('description', ''),
-                    'dueAt': assignment.get('due_at'),
+                    'dueAt': due_at_formatted,
                     'pointsPossible': assignment.get('points_possible'),
-                    'submissionTypes': assignment.get('submission_types', []),
+                    'submissionTypes': submission_types_str,
                     'htmlUrl': assignment.get('html_url'),
                     'publishedAt': datetime.utcnow().isoformat()
                 })
@@ -184,15 +195,26 @@ def lambda_handler(event, context):
         sent_count = 0
 
         for assignment in assignments:
+            # submissionTypes를 문자열로 변환 (Java는 String을 기대)
+            submission_types = assignment.get('submission_types', [])
+            submission_types_str = ','.join(submission_types) if submission_types else ''
+
+            # dueAt을 LocalDateTime 형식으로 변환 (timezone 제거)
+            due_at = assignment.get('due_at')
+            due_at_formatted = None
+            if due_at:
+                # ISO 8601 (2025-11-15T23:59:00Z) → LocalDateTime (2025-11-15T23:59:00)
+                due_at_formatted = due_at.replace('Z', '').split('.')[0]
+
             send_to_sqs('assignment-events-queue', {
                 'eventType': 'ASSIGNMENT_CREATED',
-                'courseId': course_id,
+                'canvasCourseId': canvas_course_id,
                 'canvasAssignmentId': assignment['id'],
                 'title': assignment['name'],
                 'description': assignment.get('description', ''),
-                'dueAt': assignment.get('due_at'),
+                'dueAt': due_at_formatted,
                 'pointsPossible': assignment.get('points_possible'),
-                'submissionTypes': assignment.get('submission_types', []),
+                'submissionTypes': submission_types_str,
                 'htmlUrl': assignment.get('html_url')
             })
             sent_count += 1
@@ -232,7 +254,7 @@ def lambda_handler(event, context):
 
 def get_canvas_token(cognito_sub: str) -> str:
     """Call User-Service API to retrieve Canvas token (decrypted) by cognitoSub"""
-    url = f"{USER_SERVICE_URL}/api/v1/credentials/canvas/by-cognito-sub/{cognito_sub}"
+    url = f"{USER_SERVICE_URL}/credentials/canvas/by-cognito-sub/{cognito_sub}"
     headers = {
         'X-Api-Key': os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
     }

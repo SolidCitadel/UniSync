@@ -18,9 +18,11 @@ services:
       - USER_SERVICE_URL=http://user-service:8081
       - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
     volumes:
+      - ".:/workspace"
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "localstack-test-data:/var/lib/localstack"
     networks:
       - test-network
     healthcheck:
@@ -161,3 +163,6 @@ services:
 networks:
   test-network:
     driver: bridge
+
+volumes:
+  localstack-test-data:

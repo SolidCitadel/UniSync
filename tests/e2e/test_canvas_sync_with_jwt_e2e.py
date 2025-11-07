@@ -33,11 +33,11 @@ class TestCanvasSyncWithJWTE2E:
         }
 
         print("\n" + "=" * 80)
-        print("🚀 E2E Test: JWT 인증 + Canvas 자동 동기화")
+        print("[E2E Test] JWT 인증 + Canvas 자동 동기화")
         print("=" * 80)
-        print(f"📧 사용자: {email}")
-        print(f"🆔 Cognito Sub: {cognito_sub}")
-        print(f"🔑 JWT Token: {id_token[:20]}...")
+        print(f"[User] {email}")
+        print(f"[Cognito Sub] {cognito_sub}")
+        print(f"[JWT Token] {id_token[:20]}...")
         print("=" * 80)
 
         # ================================================================
@@ -56,7 +56,7 @@ class TestCanvasSyncWithJWTE2E:
 
         register_data = register_response.json()
         assert register_data.get("success") is True, "토큰 등록 응답이 success=false"
-        print(f"  ✅ Canvas 토큰 등록 완료 (즉시 응답)")
+        print(f"  [OK] Canvas 토큰 등록 완료 (즉시 응답)")
 
         # ================================================================
         # Step 2: 연동 상태 확인 (API Gateway 경유, JWT 인증)
@@ -76,7 +76,7 @@ class TestCanvasSyncWithJWTE2E:
         assert status_data["canvas"]["isConnected"] is True, "Canvas 연동 상태가 false"
 
         canvas_username = status_data["canvas"].get("externalUsername")
-        print(f"  ✅ Canvas 연동 확인: {canvas_username}")
+        print(f"  [OK] Canvas 연동 확인: {canvas_username}")
 
         # ================================================================
         # Step 3: 자동 동기화 대기
@@ -98,10 +98,10 @@ class TestCanvasSyncWithJWTE2E:
                 if response.status_code == 200:
                     courses = response.json()
                     if len(courses) > 0:
-                        print(f"  ✅ {len(courses)} courses 동기화 완료")
+                        print(f"  [OK] {len(courses)} courses 동기화 완료")
                         return True
             except Exception as e:
-                print(f"  ⏳ 대기 중... ({str(e)[:50]})")
+                print(f"  [WAIT] 대기 중... ({str(e)[:50]})")
             return False
 
         try:
@@ -125,7 +125,7 @@ class TestCanvasSyncWithJWTE2E:
         courses = courses_response.json()
         assert len(courses) > 0, "조회된 Course가 없음"
 
-        print(f"  ✅ {len(courses)} courses 조회됨")
+        print(f"  [OK] {len(courses)} courses 조회됨")
         for i, course in enumerate(courses[:3], 1):  # 처음 3개만 출력
             print(f"     {i}. {course['name']} ({course['courseCode']})")
         if len(courses) > 3:
@@ -152,10 +152,10 @@ class TestCanvasSyncWithJWTE2E:
                 if response.status_code == 200:
                     assignments = response.json()
                     if len(assignments) > 0:
-                        print(f"  ✅ {len(assignments)} assignments 동기화 완료")
+                        print(f"  [OK] {len(assignments)} assignments 동기화 완료")
                         return True
             except Exception as e:
-                print(f"  ⏳ Assignment 대기 중...")
+                print(f"  [WAIT] Assignment 대기 중...")
             return False
 
         try:
@@ -163,7 +163,7 @@ class TestCanvasSyncWithJWTE2E:
                    f"[FAIL] Assignment 동기화 실패 (Course: {first_course_name})")
         except TimeoutError:
             # Assignment가 없는 Course일 수 있음
-            print(f"  ⚠️  Course '{first_course_name}'에 Assignment가 없을 수 있음")
+            print(f"  [WARN] Course '{first_course_name}'에 Assignment가 없을 수 있음")
 
         # 최종 Assignment 조회
         assignments_response = requests.get(
@@ -178,23 +178,23 @@ class TestCanvasSyncWithJWTE2E:
         assignments = assignments_response.json()
 
         if len(assignments) > 0:
-            print(f"  ✅ Course '{first_course_name}'에 {len(assignments)} assignments 조회됨")
+            print(f"  [OK] Course '{first_course_name}'에 {len(assignments)} assignments 조회됨")
             for i, assignment in enumerate(assignments[:3], 1):  # 처음 3개만 출력
                 due_at = assignment.get("dueAt", "기한 없음")
                 print(f"     {i}. {assignment['title']} (Due: {due_at})")
             if len(assignments) > 3:
                 print(f"     ... 외 {len(assignments) - 3}개")
         else:
-            print(f"  ℹ️  Course '{first_course_name}'에 Assignment가 없습니다")
+            print(f"  [INFO] Course '{first_course_name}'에 Assignment가 없습니다")
 
         # ================================================================
         # 최종 결과
         # ================================================================
         print("\n" + "=" * 80)
-        print("✅ E2E 테스트 성공!")
+        print("[PASS] E2E 테스트 성공!")
         print(f"   - 사용자: {canvas_username} (cognitoSub={cognito_sub})")
-        print(f"   - JWT 인증: ✅")
-        print(f"   - API Gateway: ✅")
+        print(f"   - JWT 인증: [OK]")
+        print(f"   - API Gateway: [OK]")
         print(f"   - Courses: {len(courses)}개")
         print(f"   - Assignments: {len(assignments)}개 (첫 번째 Course)")
         print("=" * 80 + "\n")
@@ -211,7 +211,7 @@ class TestCanvasSyncWithJWTE2E:
         gateway_url = service_urls["gateway"]
 
         print("\n" + "=" * 80)
-        print("🔒 JWT 인증 실패 테스트")
+        print("[TEST] JWT 인증 실패 테스트")
         print("=" * 80)
 
         # Case 1: Authorization 헤더 없이 요청
@@ -220,7 +220,7 @@ class TestCanvasSyncWithJWTE2E:
             f"{gateway_url}/api/v1/courses",
             timeout=5
         )
-        print(f"  ✅ 예상대로 401 Unauthorized: {response.status_code}")
+        print(f"  [OK] 예상대로 401 Unauthorized: {response.status_code}")
         assert response.status_code == 401, "인증 헤더가 없으면 401을 반환해야 함"
 
         # Case 2: 잘못된 토큰
@@ -230,7 +230,7 @@ class TestCanvasSyncWithJWTE2E:
             headers={"Authorization": "Bearer invalid-token-12345"},
             timeout=5
         )
-        print(f"  ✅ 예상대로 401 Unauthorized: {response.status_code}")
+        print(f"  [OK] 예상대로 401 Unauthorized: {response.status_code}")
         assert response.status_code == 401, "잘못된 토큰은 401을 반환해야 함"
 
         # Case 3: Bearer가 없는 토큰
@@ -240,9 +240,9 @@ class TestCanvasSyncWithJWTE2E:
             headers={"Authorization": "some-random-token"},
             timeout=5
         )
-        print(f"  ✅ 예상대로 401 Unauthorized: {response.status_code}")
+        print(f"  [OK] 예상대로 401 Unauthorized: {response.status_code}")
         assert response.status_code == 401, "Bearer 접두사가 없으면 401을 반환해야 함"
 
         print("\n" + "=" * 80)
-        print("✅ JWT 인증 실패 테스트 통과!")
+        print("[PASS] JWT 인증 실패 테스트 통과!")
         print("=" * 80 + "\n")

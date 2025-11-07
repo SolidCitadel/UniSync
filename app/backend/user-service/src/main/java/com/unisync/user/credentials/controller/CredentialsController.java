@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/credentials")
+@RequestMapping("/credentials")
 @RequiredArgsConstructor
 @Tag(name = "Credentials", description = "외부 서비스 인증 정보 관리 API")
 public class CredentialsController {
@@ -33,7 +33,7 @@ public class CredentialsController {
             @RequestHeader(value = "X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody RegisterCanvasTokenRequest request
     ) {
-        log.info("POST /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
+        log.info("POST /credentials/canvas - Cognito Sub: {}", cognitoSub);
 
         RegisterCanvasTokenResponse response = credentialsService.registerCanvasToken(cognitoSub, request);
 
@@ -52,7 +52,7 @@ public class CredentialsController {
             @PathVariable Long userId,
             @RequestHeader(value = "X-Api-Key", required = false) String apiKey
     ) {
-        log.info("GET /api/v1/credentials/{}/canvas (Legacy userId API)", userId);
+        log.info("GET /credentials/{}/canvas (Legacy userId API)", userId);
 
         // API Key 검증
         if (apiKey != null) {
@@ -75,7 +75,7 @@ public class CredentialsController {
     public ResponseEntity<CanvasTokenResponse> getCanvasToken(
             @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
-        log.info("GET /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
+        log.info("GET /credentials/canvas - Cognito Sub: {}", cognitoSub);
 
         CanvasTokenResponse response = credentialsService.getCanvasTokenByCognitoSub(cognitoSub);
 
@@ -92,7 +92,7 @@ public class CredentialsController {
             @PathVariable String cognitoSub,
             @RequestHeader(value = "X-Api-Key") String apiKey
     ) {
-        log.info("GET /api/v1/credentials/canvas/by-cognito-sub/{} (Internal API)", cognitoSub);
+        log.info("GET /credentials/canvas/by-cognito-sub/{} (Internal API)", cognitoSub);
 
         // API Key 검증
         String caller = serviceAuthValidator.validateAndGetCaller(apiKey);
@@ -111,7 +111,7 @@ public class CredentialsController {
     public ResponseEntity<Void> deleteCanvasToken(
             @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
-        log.info("DELETE /api/v1/credentials/canvas - Cognito Sub: {}", cognitoSub);
+        log.info("DELETE /credentials/canvas - Cognito Sub: {}", cognitoSub);
 
         credentialsService.deleteCanvasToken(cognitoSub);
 

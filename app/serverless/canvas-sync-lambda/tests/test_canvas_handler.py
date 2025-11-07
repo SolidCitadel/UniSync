@@ -175,7 +175,7 @@ class TestGetCanvasToken:
 
         # Then: Verify API call
         mock_requests_get.assert_called_once_with(
-            'http://localhost:8081/api/v1/credentials/canvas/by-cognito-sub/test-cognito-sub-10',
+            'http://localhost:8081/credentials/canvas/by-cognito-sub/test-cognito-sub-10',
             headers={'X-Api-Key': 'local-dev-token'},
             timeout=5
         )

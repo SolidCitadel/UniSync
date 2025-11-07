@@ -3,7 +3,8 @@
     "allow": [
       "Bash(./gradlew clean test:*)",
       "Bash(cat:*)",
-      "Bash(./gradlew test:*)"
+      "Bash(./gradlew test:*)",
+      "Bash(docker-compose:*)"
     ],
     "deny": [],
     "ask": []

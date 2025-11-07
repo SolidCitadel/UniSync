@@ -12,7 +12,7 @@ spring:
         - id: user-service
           uri: ${USER_SERVICE_URL}
           predicates:
-            - Path=/api/v1/auth/**,/api/v1/users/**,/api/v1/friends/**,/api/v1/credentials/**
+            - Path=/api/v1/auth/**,/api/v1/users/**,/api/v1/friends/**,/api/v1/credentials/**,/api/v1/integrations/**
           filters:
             - RewritePath=/api/v1/(?<segment>.*), /$\{segment}
             - name: JwtAuthenticationFilter
