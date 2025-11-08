@@ -1,0 +1,363 @@
+package com.unisync.schedule.todos.service;
+
+import com.unisync.schedule.common.entity.Todo;
+import com.unisync.schedule.common.entity.Todo.TodoStatus;
+import com.unisync.schedule.common.exception.UnauthorizedAccessException;
+import com.unisync.schedule.common.repository.CategoryRepository;
+import com.unisync.schedule.common.repository.TodoRepository;
+import com.unisync.schedule.todos.dto.TodoRequest;
+import com.unisync.schedule.todos.dto.TodoResponse;
+import com.unisync.schedule.todos.exception.InvalidTodoException;
+import com.unisync.schedule.todos.exception.TodoNotFoundException;
+import com.unisync.schedule.categories.exception.CategoryNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TodoService {
+
+    private final TodoRepository todoRepository;
+    private final CategoryRepository categoryRepository;
+
+    /**
+     * 할일 생성
+     */
+    @Transactional
+    public TodoResponse createTodo(TodoRequest request, Long userId) {
+        log.info("할일 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+
+        // 날짜 유효성 검증
+        validateTodoDates(request.getStartDate(), request.getDueDate());
+
+        // 카테고리 존재 여부 확인
+        validateCategoryAccess(request.getCategoryId(), userId);
+
+        // 부모 할일이 있는 경우 검증
+        if (request.getParentTodoId() != null) {
+            validateParentTodo(request.getParentTodoId(), userId);
+        }
+
+        // Todo 엔티티 생성
+        Todo todo = Todo.builder()
+                .userId(userId)
+                .groupId(request.getGroupId())
+                .categoryId(request.getCategoryId())
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .startDate(request.getStartDate())
+                .dueDate(request.getDueDate())
+                .status(TodoStatus.TODO)
+                .priority(request.getPriority())
+                .progressPercentage(0)
+                .parentTodoId(request.getParentTodoId())
+                .scheduleId(request.getScheduleId())
+                .isAiGenerated(false) // 수동 생성은 false
+                .build();
+
+        Todo savedTodo = todoRepository.save(todo);
+        log.info("할일 생성 완료 - todoId: {}", savedTodo.getTodoId());
+
+        // 부모 할일의 진행률 재계산
+        if (savedTodo.getParentTodoId() != null) {
+            updateParentProgress(savedTodo.getParentTodoId());
+        }
+
+        return TodoResponse.from(savedTodo);
+    }
+
+    /**
+     * 할일 ID로 조회
+     */
+    @Transactional(readOnly = true)
+    public TodoResponse getTodoById(Long todoId) {
+        log.info("할일 조회 - todoId: {}", todoId);
+
+        Todo todo = todoRepository.findById(todoId)
+                .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
+
+        return TodoResponse.from(todo);
+    }
+
+    /**
+     * 사용자의 모든 할일 조회
+     */
+    @Transactional(readOnly = true)
+    public List<TodoResponse> getTodosByUserId(Long userId) {
+        log.info("사용자 할일 전체 조회 - userId: {}", userId);
+
+        List<Todo> todos = todoRepository.findByUserId(userId);
+
+        return todos.stream()
+                .map(TodoResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 특정 기간의 할일 조회
+     */
+    @Transactional(readOnly = true)
+    public List<TodoResponse> getTodosByDateRange(Long userId, LocalDate start, LocalDate end) {
+        log.info("기간별 할일 조회 - userId: {}, start: {}, end: {}", userId, start, end);
+
+        // 날짜 유효성 검증
+        validateTodoDates(start, end);
+
+        List<Todo> todos = todoRepository.findByUserIdAndDateRange(userId, start, end);
+
+        return todos.stream()
+                .map(TodoResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 서브태스크 조회
+     */
+    @Transactional(readOnly = true)
+    public List<TodoResponse> getSubtasks(Long parentTodoId) {
+        log.info("서브태스크 조회 - parentTodoId: {}", parentTodoId);
+
+        // 부모 할일 존재 여부 확인
+        todoRepository.findById(parentTodoId)
+                .orElseThrow(() -> new TodoNotFoundException("부모 할일을 찾을 수 없습니다. ID: " + parentTodoId));
+
+        List<Todo> subtasks = todoRepository.findByParentTodoId(parentTodoId);
+
+        return subtasks.stream()
+                .map(TodoResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 할일 수정
+     */
+    @Transactional
+    public TodoResponse updateTodo(Long todoId, TodoRequest request, Long userId) {
+        log.info("할일 수정 요청 - todoId: {}, userId: {}", todoId, userId);
+
+        // 할일 조회 및 권한 확인
+        Todo todo = todoRepository.findById(todoId)
+                .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
+
+        validateTodoOwnership(todo, userId);
+
+        // 날짜 유효성 검증
+        validateTodoDates(request.getStartDate(), request.getDueDate());
+
+        // 카테고리 변경 시 존재 여부 확인
+        if (!todo.getCategoryId().equals(request.getCategoryId())) {
+            validateCategoryAccess(request.getCategoryId(), userId);
+        }
+
+        // 할일 정보 업데이트
+        todo.setTitle(request.getTitle());
+        todo.setDescription(request.getDescription());
+        todo.setStartDate(request.getStartDate());
+        todo.setDueDate(request.getDueDate());
+        todo.setCategoryId(request.getCategoryId());
+        todo.setGroupId(request.getGroupId());
+        todo.setPriority(request.getPriority());
+        todo.setScheduleId(request.getScheduleId());
+
+        Todo updatedTodo = todoRepository.save(todo);
+        log.info("할일 수정 완료 - todoId: {}", todoId);
+
+        return TodoResponse.from(updatedTodo);
+    }
+
+    /**
+     * 할일 상태 변경
+     */
+    @Transactional
+    public TodoResponse updateTodoStatus(Long todoId, TodoStatus status, Long userId) {
+        log.info("할일 상태 변경 요청 - todoId: {}, status: {}, userId: {}", todoId, status, userId);
+
+        // 할일 조회 및 권한 확인
+        Todo todo = todoRepository.findById(todoId)
+                .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
+
+        validateTodoOwnership(todo, userId);
+
+        // 상태 업데이트
+        todo.setStatus(status);
+
+        // 상태에 따라 진행률 자동 설정
+        if (status == TodoStatus.DONE) {
+            todo.setProgressPercentage(100);
+        } else if (status == TodoStatus.TODO) {
+            todo.setProgressPercentage(0);
+        }
+
+        Todo updatedTodo = todoRepository.save(todo);
+        log.info("할일 상태 변경 완료 - todoId: {}, status: {}", todoId, status);
+
+        // 부모 할일의 진행률 재계산
+        if (updatedTodo.getParentTodoId() != null) {
+            updateParentProgress(updatedTodo.getParentTodoId());
+        }
+
+        return TodoResponse.from(updatedTodo);
+    }
+
+    /**
+     * 할일 진행률 변경
+     */
+    @Transactional
+    public TodoResponse updateTodoProgress(Long todoId, Integer progress, Long userId) {
+        log.info("할일 진행률 변경 요청 - todoId: {}, progress: {}%, userId: {}", todoId, progress, userId);
+
+        // 진행률 유효성 검증
+        if (progress < 0 || progress > 100) {
+            throw new InvalidTodoException("진행률은 0에서 100 사이여야 합니다.");
+        }
+
+        // 할일 조회 및 권한 확인
+        Todo todo = todoRepository.findById(todoId)
+                .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
+
+        validateTodoOwnership(todo, userId);
+
+        // 진행률 업데이트
+        todo.setProgressPercentage(progress);
+
+        // 진행률에 따라 상태 자동 변경
+        if (progress == 0) {
+            todo.setStatus(TodoStatus.TODO);
+        } else if (progress == 100) {
+            todo.setStatus(TodoStatus.DONE);
+        } else {
+            todo.setStatus(TodoStatus.IN_PROGRESS);
+        }
+
+        Todo updatedTodo = todoRepository.save(todo);
+        log.info("할일 진행률 변경 완료 - todoId: {}, progress: {}%", todoId, progress);
+
+        // 부모 할일의 진행률 재계산
+        if (updatedTodo.getParentTodoId() != null) {
+            updateParentProgress(updatedTodo.getParentTodoId());
+        }
+
+        return TodoResponse.from(updatedTodo);
+    }
+
+    /**
+     * 할일 삭제
+     */
+    @Transactional
+    public void deleteTodo(Long todoId, Long userId) {
+        log.info("할일 삭제 요청 - todoId: {}, userId: {}", todoId, userId);
+
+        // 할일 조회 및 권한 확인
+        Todo todo = todoRepository.findById(todoId)
+                .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
+
+        validateTodoOwnership(todo, userId);
+
+        // 서브태스크가 있는 경우 함께 삭제
+        List<Todo> subtasks = todoRepository.findByParentTodoId(todoId);
+        if (!subtasks.isEmpty()) {
+            log.info("서브태스크 {}개 함께 삭제", subtasks.size());
+            todoRepository.deleteAll(subtasks);
+        }
+
+        Long parentTodoId = todo.getParentTodoId();
+
+        todoRepository.delete(todo);
+        log.info("할일 삭제 완료 - todoId: {}", todoId);
+
+        // 부모 할일의 진행률 재계산
+        if (parentTodoId != null) {
+            updateParentProgress(parentTodoId);
+        }
+    }
+
+    /**
+     * 부모 할일의 진행률 재계산
+     */
+    private void updateParentProgress(Long parentTodoId) {
+        Todo parentTodo = todoRepository.findById(parentTodoId).orElse(null);
+        if (parentTodo == null) {
+            return;
+        }
+
+        List<Todo> subtasks = todoRepository.findByParentTodoId(parentTodoId);
+        if (subtasks.isEmpty()) {
+            // 서브태스크가 없으면 진행률 유지
+            return;
+        }
+
+        // 서브태스크들의 평균 진행률 계산
+        int totalProgress = subtasks.stream()
+                .mapToInt(Todo::getProgressPercentage)
+                .sum();
+        int averageProgress = totalProgress / subtasks.size();
+
+        parentTodo.setProgressPercentage(averageProgress);
+
+        // 진행률에 따라 상태 자동 변경
+        if (averageProgress == 0) {
+            parentTodo.setStatus(TodoStatus.TODO);
+        } else if (averageProgress == 100) {
+            parentTodo.setStatus(TodoStatus.DONE);
+        } else {
+            parentTodo.setStatus(TodoStatus.IN_PROGRESS);
+        }
+
+        todoRepository.save(parentTodo);
+        log.info("부모 할일 진행률 재계산 완료 - parentTodoId: {}, progress: {}%", parentTodoId, averageProgress);
+    }
+
+    /**
+     * 날짜 유효성 검증
+     */
+    private void validateTodoDates(LocalDate startDate, LocalDate dueDate) {
+        if (startDate == null || dueDate == null) {
+            throw new InvalidTodoException("시작 날짜와 마감 날짜는 필수입니다.");
+        }
+
+        if (dueDate.isBefore(startDate)) {
+            throw new InvalidTodoException("마감 날짜는 시작 날짜보다 늦어야 합니다.");
+        }
+    }
+
+    /**
+     * 할일 소유권 검증
+     */
+    private void validateTodoOwnership(Todo todo, Long userId) {
+        // 그룹 할일이 아니고, userId가 일치하지 않으면 권한 없음
+        if (todo.getGroupId() == null && !todo.getUserId().equals(userId)) {
+            throw new UnauthorizedAccessException("해당 할일에 접근할 권한이 없습니다.");
+        }
+    }
+
+    /**
+     * 카테고리 접근 권한 검증
+     */
+    private void validateCategoryAccess(Long categoryId, Long userId) {
+        categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
+
+        // 추가적으로 카테고리가 해당 사용자 또는 그룹에 속하는지 검증 가능
+        // 현재는 존재 여부만 확인
+    }
+
+    /**
+     * 부모 할일 검증
+     */
+    private void validateParentTodo(Long parentTodoId, Long userId) {
+        Todo parentTodo = todoRepository.findById(parentTodoId)
+                .orElseThrow(() -> new TodoNotFoundException("부모 할일을 찾을 수 없습니다. ID: " + parentTodoId));
+
+        // 부모 할일의 소유자와 일치하는지 확인
+        if (parentTodo.getGroupId() == null && !parentTodo.getUserId().equals(userId)) {
+            throw new UnauthorizedAccessException("부모 할일에 접근할 권한이 없습니다.");
+        }
+    }
+}
