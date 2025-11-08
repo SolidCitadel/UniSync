@@ -20,15 +20,15 @@ Canvas LMS 연동 학업 일정관리 서비스. **자동 동기화 + AI 분석*
 
 **진행 중**:
 - 🚧 User-Service의 인증 및 Canvas 토큰 관리
-- 🚧 Schedule-Service의 일정 통합 기능
+- 🚧 Schedule-Service의 일정 및 할일 관리 기능
 - 🚧 Step Functions 워크플로우 구성
-- 🚧 LLM Task 생성 자동화
+- 🚧 LLM 할일 자동 생성
 
 ## 아키텍처
 - **마이크로서비스** (3개): Spring Boot 기반, 서비스별 DB 분리
   - **User-Service**: 사용자/인증/소셜 기능
-  - **Course-Service**: Canvas 학업 데이터 (과목/과제/Task)
-  - **Schedule-Service**: 시간 기반 일정 통합
+  - **Course-Service**: Canvas 학업 데이터 (과목/과제)
+  - **Schedule-Service**: 일정(Schedule, 시간 단위) 및 할일(Todo, 기간 단위) 통합 관리
 - **서버리스**: Canvas-Sync-Workflow, Google-Calendar-Sync-Workflow (Step Functions + Lambda), LLM-Lambda
 - **이벤트 기반**: SQS로 비동기 통신
 
@@ -74,14 +74,15 @@ EventBridge (5분마다)
   → Canvas API 폴링 (Leader 토큰)
   → 새 과제 감지
      → SQS: assignment-events-queue
-     → LLM-Lambda: 과제 분석
-     → SQS: task-creation-queue
-     → Course-Service: Assignment & Task 저장
-     → Course-Service → Schedule-Service: 일정 생성
+     → Course-Service: Assignment 저장
+     → Schedule-Service:
+        1. 일정(Schedule) 자동 생성 (과제 마감일)
+        2. LLM-Lambda 트리거: 과제 설명 분석
+        3. 할일(Todo) 및 서브태스크 자동 생성
   → 제출 감지
      → SQS: submission-events-queue
      → LLM-Lambda: 제출물 검증
-     → Course-Service: Task 상태 업데이트
+     → Schedule-Service: 일정/할일 상태 업데이트
 ```
 
 ### 외부 캘린더 동기화
@@ -95,10 +96,13 @@ EventBridge
 ```
 
 ## 데이터 모델 핵심
-- **Assignments**: `canvas_assignment_id` (UNIQUE)
-- **Tasks**: `assignment_id` FK, `parent_task_id` (자기참조), `is_ai_generated`
-- **Enrollments**: `is_sync_leader` (Leader 플래그)
-- **Credentials**: `provider` ENUM, `access_token` (암호화)
+- **Assignments**: `canvas_assignment_id` (UNIQUE) - Course-Service
+- **Schedules**: `start_time`, `end_time`, `source` (CANVAS/USER/GOOGLE 등), `category_id` (필수) - Schedule-Service
+- **Todos**: `start_date`, `due_date` (둘 다 필수), `schedule_id` FK, `parent_todo_id` (서브태스크), `is_ai_generated` - Schedule-Service
+- **Categories**: 일정/할일 분류 체계, 개인/그룹별 - Schedule-Service
+- **Groups**: 협업을 위한 그룹, 권한 관리 (OWNER, ADMIN, MEMBER) - Schedule-Service
+- **Enrollments**: `is_sync_leader` (Leader 플래그) - Course-Service
+- **Credentials**: `provider` ENUM, `access_token` (암호화) - User-Service
 
 ## 공유 모듈 (Shared Modules)
 
@@ -221,15 +225,34 @@ com.unisync.user/
 - Entity 직접 반환 금지 - 각 도메인의 DTO만 사용
 
 ## 서비스 포트
-- **API Gateway: 8080** (모든 요청의 진입점)
+- **API Gateway: 8080** (모든 요청의 진입점, JWT 인증)
 - User-Service: 8081
 - Course-Service: 8082
 - Schedule-Service: 8083
 
-**라우팅 규칙**:
-- `/api/v1/auth/**, /api/v1/users/**, /api/v1/friends/**` → User-Service
-- `/api/v1/courses/**, /api/v1/assignments/**, /api/v1/tasks/**` → Course-Service
-- `/api/v1/schedules/**` → Schedule-Service
+**API Gateway 라우팅** (path prefix `/api/v1` 제거 후 백엔드 서비스로 전달):
+```yaml
+# User-Service (사용자/인증/소셜/그룹)
+/api/v1/auth/**        → /auth/**
+/api/v1/users/**       → /users/**
+/api/v1/friends/**     → /friends/**
+/api/v1/groups/**      → /groups/**
+
+# Course-Service (Canvas 학업 데이터)
+/api/v1/courses/**     → /courses/**
+/api/v1/assignments/** → /assignments/**
+/api/v1/notices/**     → /notices/**
+
+# Schedule-Service (일정 + 할일)
+/api/v1/schedules/**   → /schedules/**
+/api/v1/todos/**       → /todos/**
+/api/v1/categories/**  → /categories/**
+```
+
+**백엔드 서비스 엔드포인트**: 환경변수로 주입 (로컬/Docker/ECS 환경별 상이)
+
+**인증 예외** (JWT 불필요):
+- `/api/v1/auth/register`, `/api/v1/auth/login`
 
 ## 테스트 구조
 
