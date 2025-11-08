@@ -20,9 +20,9 @@ UniSync/
 ├── app/
 │   ├── backend/
 │   │   ├── api-gateway/        # API Gateway + JWT 인증 (8080)
-│   │   ├── user-service/       # 사용자/인증/소셜 (8081)
+│   │   ├── user-service/       # 사용자/인증/소셜/그룹 (8081)
 │   │   ├── course-service/     # Canvas 학업 데이터 (8082)
-│   │   └── schedule-service/   # 시간 기반 일정 통합 (8083)
+│   │   └── schedule-service/   # 일정(Schedule) + 할일(Todo) (8083)
 │   ├── serverless/
 │   │   ├── canvas-sync-lambda/ # Canvas API 호출
 │   │   ├── llm-lambda/         # LLM Task 생성/검증
@@ -181,9 +181,9 @@ aws --endpoint-url=http://localhost:4566 s3 ls
 
 각 마이크로서비스는 독립적인 데이터베이스를 사용합니다:
 
-- `user_db`: 사용자/인증/소셜 (User, Credentials, Friendships)
-- `course_db`: Canvas 학업 데이터 (Courses, Enrollments, Assignments, Notices, Tasks, Sync_Status)
-- `schedule_db`: 시간 기반 일정 (User_Schedules)
+- `user_db`: 사용자/인증/소셜/그룹 (Users, Credentials, Friendships, Groups, Group_Members)
+- `course_db`: Canvas 학업 데이터 (Courses, Enrollments, Assignments, Notices, Sync_Status)
+- `schedule_db`: 일정 및 할일 (Schedules, Todos, Categories)
 
 ```bash
 # MySQL 접속
