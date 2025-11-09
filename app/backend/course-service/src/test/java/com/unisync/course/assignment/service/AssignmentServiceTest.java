@@ -1,10 +1,12 @@
 package com.unisync.course.assignment.service;
 
 import com.unisync.shared.dto.sqs.AssignmentEventMessage;
+import com.unisync.course.assignment.exception.AssignmentNotFoundException;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.repository.AssignmentRepository;
 import com.unisync.course.common.repository.CourseRepository;
+import com.unisync.course.course.exception.CourseNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -126,8 +128,8 @@ class AssignmentServiceTest {
 
         // when & then
         assertThatThrownBy(() -> assignmentService.createAssignment(validMessage))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Course not found");
+            .isInstanceOf(CourseNotFoundException.class)
+            .hasMessageContaining("과목을 찾을 수 없습니다");
 
         then(assignmentRepository).should(never()).save(any(Assignment.class));
     }
@@ -169,8 +171,8 @@ class AssignmentServiceTest {
 
         // when & then
         assertThatThrownBy(() -> assignmentService.updateAssignment(validMessage))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Assignment not found");
+            .isInstanceOf(AssignmentNotFoundException.class)
+            .hasMessageContaining("과제를 찾을 수 없습니다");
 
         then(assignmentRepository).should(never()).save(any(Assignment.class));
     }

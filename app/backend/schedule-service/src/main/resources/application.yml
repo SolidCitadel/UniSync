@@ -22,7 +22,7 @@ spring:
 aws:
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
-    region: ${AWS_REGION:us-east-1}
+    region: ${AWS_REGION:ap-northeast-2}
     queues:
       assignment-events: assignment-events-queue
       task-creation: task-creation-queue

@@ -1,9 +1,9 @@
 spring:
   datasource:
     url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
     username: sa
     password:
+    driver-class-name: org.h2.Driver
 
   jpa:
     hibernate:
@@ -12,18 +12,25 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
-
-  h2:
-    console:
-      enabled: false
+    show-sql: false
+    open-in-view: false
 
 aws:
   sqs:
     endpoint: http://localhost:4566
-    region: us-east-1
+    region: ap-northeast-2
+    queues:
+      assignment-events: assignment-events-queue
+      task-creation: task-creation-queue
+      llm-analysis: llm-analysis-queue
 
 services:
   user-service:
     url: http://localhost:8081
   course-service:
     url: http://localhost:8082
+
+logging:
+  level:
+    com.unisync: DEBUG
+    org.springframework.web: DEBUG

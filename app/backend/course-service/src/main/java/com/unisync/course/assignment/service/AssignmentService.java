@@ -2,10 +2,12 @@ package com.unisync.course.assignment.service;
 
 import com.unisync.shared.dto.sqs.AssignmentEventMessage;
 import com.unisync.course.assignment.dto.AssignmentResponse;
+import com.unisync.course.assignment.exception.AssignmentNotFoundException;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.repository.AssignmentRepository;
 import com.unisync.course.common.repository.CourseRepository;
+import com.unisync.course.course.exception.CourseNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,8 +41,8 @@ public class AssignmentService {
 
         // 2. Course 조회 (Canvas Course ID로)
         Course course = courseRepository.findByCanvasCourseId(message.getCanvasCourseId())
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Course not found: canvasCourseId=" + message.getCanvasCourseId()));
+            .orElseThrow(() -> new CourseNotFoundException(
+                "과목을 찾을 수 없습니다: canvasCourseId=" + message.getCanvasCourseId()));
 
         // 3. Assignment 생성
         Assignment assignment = Assignment.builder()
@@ -67,8 +69,8 @@ public class AssignmentService {
     public void updateAssignment(AssignmentEventMessage message) {
         // Canvas Assignment ID로 기존 레코드 조회
         Assignment assignment = assignmentRepository.findByCanvasAssignmentId(message.getCanvasAssignmentId())
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Assignment not found: canvasAssignmentId=" + message.getCanvasAssignmentId()));
+            .orElseThrow(() -> new AssignmentNotFoundException(
+                "과제를 찾을 수 없습니다: canvasAssignmentId=" + message.getCanvasAssignmentId()));
 
         // 필드 업데이트
         assignment.updateFromCanvas(
