@@ -130,33 +130,73 @@ EventBridge
 - **`docker`**: Docker Compose, 환경변수 주입
 - **`test`**: 테스트용, H2 인메모리 DB
 
-### 로컬 개발 환경 설정
+### 로컬 개발 환경 설정 (중요!)
 
-**초기 설정** (신규 개발자):
+**구조 개요**:
+```
+루트/.env (gitignored)
+  ↓ (LocalStack 초기화 스크립트가 자동 업데이트)
+  ↓ (sync-local-config.py로 동기화)
+  ↓
+각 서비스/application-local.yml (gitignored, 하드코딩)
+  ↓
+IDE에서 서비스 실행 (Profile: local)
+```
+
+**1단계: LocalStack 실행** (최초 1회 또는 재시작 시)
 ```bash
-cd app/backend/{service}/src/main/resources
+docker-compose up -d
+# LocalStack 초기화 스크립트가 Cognito User Pool 생성 후 루트/.env 자동 업데이트
+```
+
+**2단계: 환경변수 동기화** (IDE 로컬 실행 전)
+```bash
+python scripts/dev/sync-local-config.py
+```
+
+이 스크립트는:
+- 루트 `.env` 파일에서 모든 환경변수 읽기
+- 각 서비스의 `application-local.yml` 파일에 자동 업데이트
+  - Cognito User Pool ID, Client ID
+  - MySQL 비밀번호
+  - 암호화 키
+  - SQS 큐 이름
+  - API 키
+  - Canvas Base URL
+- YAML 형식과 주석 유지
+
+**3단계: IDE에서 서비스 실행**
+- Active Profile을 `local`로 설정
+- 각 서비스는 `application-local.yml`의 하드코딩된 값 사용
+
+**신규 개발자 초기 설정**:
+```bash
+# 1. 각 서비스별로 application-local.yml 생성
+cd app/backend/user-service/src/main/resources
 cp application-local.yml.example application-local.yml
-# application-local.yml 편집 후 IDE에서 Active Profile을 'local'로 설정
+
+cd ../../course-service/src/main/resources
+cp application-local.yml.example application-local.yml
+
+cd ../../schedule-service/src/main/resources
+cp application-local.yml.example application-local.yml
+
+cd ../../api-gateway/src/main/resources
+cp application-local.yml.example application-local.yml
+
+# 2. LocalStack 실행
+docker-compose up -d
+
+# 3. 환경변수 동기화
+python scripts/dev/sync-local-config.py
+
+# 4. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
 ```
 
-**구조**:
-```yaml
-# application-local.yml (gitignored, 각 서비스마다 존재)
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3307/user_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-    username: unisync
-    password: unisync_password
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-
-aws:
-  region: ap-northeast-2
-  cognito:
-    user-pool-id: ap-northeast-2_xxxxx  # LocalStack 실제 값
-```
+**주의사항**:
+- `application-local.yml`은 `.gitignore`에 포함되어 커밋되지 않음
+- LocalStack 재시작 시 User Pool ID가 변경될 수 있으므로 `sync-local-config.py` 재실행 필요
+- `.env` 파일도 `.gitignore`에 포함되어 있으며, 민감한 정보(API 키 등) 포함
 
 ### Docker/배포 환경
 
@@ -166,11 +206,13 @@ user-service:
   environment:
     - SPRING_PROFILES_ACTIVE=docker
     - USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db?...
+    - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}  # .env에서 주입
 ```
 
 ```bash
 # AWS ECS (프로덕션)
 USER_SERVICE_DATABASE_URL=jdbc:mysql://rds-endpoint/user_db?...
+COGNITO_USER_POOL_ID=ap-northeast-2_xxx  # AWS Secrets Manager에서 주입
 ```
 
 ## 주의사항

@@ -100,27 +100,6 @@ else
   echo "⚠ .env 파일을 찾을 수 없습니다: $ENV_FILE"
 fi
 
-# Output 파일 생성 (로컬 IDE 개발자용 - application-local.yml에 복사)
-OUTPUT_FILE="/workspace/.localstack-outputs.yml"
-echo ""
-echo "LocalStack 출력 파일 생성 중..."
-
-cat > "$OUTPUT_FILE" << EOF
-# LocalStack에서 자동 생성된 값들
-# 이 값들을 각 서비스의 application-local.yml에 복사하세요
-
-# AWS Cognito 설정
-aws:
-  region: $REGION
-  cognito:
-    user-pool-id: $USER_POOL_ID
-    client-id: $CLIENT_ID
-    region: $REGION
-    endpoint: http://localhost:4566
-EOF
-
-echo "✓ Output 파일 생성 완료: $OUTPUT_FILE"
-
 # 정보 출력
 echo ""
 echo "========================================="
@@ -130,11 +109,9 @@ echo "User Pool ID: $USER_POOL_ID"
 echo "Client ID: $CLIENT_ID"
 echo "Region: $REGION"
 echo ""
-echo "생성된 값은 다음 파일에 저장되었습니다:"
-echo "  $OUTPUT_FILE"
+echo ".env 파일이 업데이트되었습니다."
 echo ""
-echo "다음 단계:"
-echo "  1. cat .localstack-outputs.yml 내용 확인"
-echo "  2. 각 서비스의 application-local.yml에 복사"
-echo "  3. docker-compose -f docker-compose-app.yml up"
+echo "IDE에서 로컬 개발을 시작하려면:"
+echo "  1. python scripts/dev/sync-local-config.py 실행"
+echo "  2. IDE에서 서비스 실행 (Active Profile: local)"
 echo "========================================="

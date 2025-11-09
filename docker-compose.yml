@@ -19,6 +19,7 @@ services:
       - CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL}
       - USER_SERVICE_URL=http://user-service:8081
     volumes:
+      - ".:/workspace"  # 프로젝트 루트 마운트 (스크립트가 .env 파일 업데이트 가능)
       - "./localstack-init:/etc/localstack/init/ready.d"  # 초기화 스크립트
       - "./app/serverless:/var/lib/localstack/serverless"  # Lambda 소스
       - "/var/run/docker.sock:/var/run/docker.sock"
