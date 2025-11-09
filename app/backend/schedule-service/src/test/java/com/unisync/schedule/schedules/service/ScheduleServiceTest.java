@@ -43,13 +43,13 @@ class ScheduleServiceTest {
 
     private Schedule testSchedule;
     private ScheduleRequest testRequest;
-    private Long userId;
+    private String cognitoSub;
     private Long scheduleId;
     private Long categoryId;
 
     @BeforeEach
     void setUp() {
-        userId = 1L;
+        cognitoSub = "test-user-cognito-sub";
         scheduleId = 100L;
         categoryId = 10L;
 
@@ -65,7 +65,7 @@ class ScheduleServiceTest {
 
         testSchedule = new Schedule();
         testSchedule.setScheduleId(scheduleId);
-        testSchedule.setUserId(userId);
+        testSchedule.setCognitoSub(cognitoSub);
         testSchedule.setCategoryId(categoryId);
         testSchedule.setTitle("중간고사 프로젝트");
         testSchedule.setDescription("Spring Boot 프로젝트 제출");
@@ -87,7 +87,7 @@ class ScheduleServiceTest {
         given(scheduleRepository.save(any(Schedule.class))).willReturn(testSchedule);
 
         // when
-        ScheduleResponse response = scheduleService.createSchedule(testRequest, userId);
+        ScheduleResponse response = scheduleService.createSchedule(testRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -106,7 +106,7 @@ class ScheduleServiceTest {
         testRequest.setEndTime(LocalDateTime.of(2025, 11, 10, 9, 0));
 
         // when & then
-        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, userId))
+        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, cognitoSub))
                 .isInstanceOf(InvalidScheduleException.class)
                 .hasMessageContaining("종료 시간은 시작 시간보다 늦어야 합니다");
 
@@ -120,7 +120,7 @@ class ScheduleServiceTest {
         given(categoryRepository.findById(categoryId)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, userId))
+        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, cognitoSub))
                 .isInstanceOf(CategoryNotFoundException.class)
                 .hasMessageContaining("카테고리를 찾을 수 없습니다");
 
@@ -161,17 +161,17 @@ class ScheduleServiceTest {
     void getSchedulesByUserId_Success() {
         // given
         List<Schedule> schedules = List.of(testSchedule);
-        given(scheduleRepository.findByUserId(userId)).willReturn(schedules);
+        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(schedules);
 
         // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(userId);
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub);
 
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
-        assertThat(responses.get(0).getUserId()).isEqualTo(userId);
+        assertThat(responses.get(0).getCognitoSub()).isEqualTo(cognitoSub);
 
-        then(scheduleRepository).should().findByUserId(userId);
+        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
     }
 
     @Test
@@ -181,17 +181,17 @@ class ScheduleServiceTest {
         LocalDateTime startDate = LocalDateTime.of(2025, 11, 1, 0, 0);
         LocalDateTime endDate = LocalDateTime.of(2025, 11, 30, 23, 59);
         List<Schedule> schedules = List.of(testSchedule);
-        given(scheduleRepository.findByUserIdAndDateRange(userId, startDate, endDate))
+        given(scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, startDate, endDate))
                 .willReturn(schedules);
 
         // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByDateRange(userId, startDate, endDate);
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate);
 
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
 
-        then(scheduleRepository).should().findByUserIdAndDateRange(userId, startDate, endDate);
+        then(scheduleRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
     }
 
     @Test
@@ -211,7 +211,7 @@ class ScheduleServiceTest {
         updateRequest.setSource(ScheduleSource.USER);
 
         // when
-        ScheduleResponse response = scheduleService.updateSchedule(scheduleId, updateRequest, userId);
+        ScheduleResponse response = scheduleService.updateSchedule(scheduleId, updateRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -223,11 +223,11 @@ class ScheduleServiceTest {
     @DisplayName("일정 수정 실패 - 권한 없음")
     void updateSchedule_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "unauthorized-user-sub";
         given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
 
         // when & then
-        assertThatThrownBy(() -> scheduleService.updateSchedule(scheduleId, testRequest, unauthorizedUserId))
+        assertThatThrownBy(() -> scheduleService.updateSchedule(scheduleId, testRequest, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 일정에 접근할 권한이 없습니다");
 
@@ -242,7 +242,7 @@ class ScheduleServiceTest {
         given(scheduleRepository.save(any(Schedule.class))).willReturn(testSchedule);
 
         // when
-        ScheduleResponse response = scheduleService.updateScheduleStatus(scheduleId, ScheduleStatus.DONE, userId);
+        ScheduleResponse response = scheduleService.updateScheduleStatus(scheduleId, ScheduleStatus.DONE, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -258,7 +258,7 @@ class ScheduleServiceTest {
         willDoNothing().given(scheduleRepository).delete(testSchedule);
 
         // when
-        scheduleService.deleteSchedule(scheduleId, userId);
+        scheduleService.deleteSchedule(scheduleId, cognitoSub);
 
         // then
         then(scheduleRepository).should().findById(scheduleId);
@@ -269,11 +269,11 @@ class ScheduleServiceTest {
     @DisplayName("일정 삭제 실패 - 권한 없음")
     void deleteSchedule_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "unauthorized-user-sub";
         given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
 
         // when & then
-        assertThatThrownBy(() -> scheduleService.deleteSchedule(scheduleId, unauthorizedUserId))
+        assertThatThrownBy(() -> scheduleService.deleteSchedule(scheduleId, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 일정에 접근할 권한이 없습니다");
 

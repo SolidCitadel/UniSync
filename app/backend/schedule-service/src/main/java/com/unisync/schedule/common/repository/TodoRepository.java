@@ -15,17 +15,17 @@ import java.util.List;
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     // 사용자 ID로 조회
-    List<Todo> findByUserId(Long userId);
+    List<Todo> findByCognitoSub(String cognitoSub);
 
     // 그룹 ID로 조회
     List<Todo> findByGroupId(Long groupId);
 
     // 특정 기간의 할일 조회 (사용자)
-    @Query("SELECT t FROM Todo t WHERE t.userId = :userId " +
+    @Query("SELECT t FROM Todo t WHERE t.cognitoSub = :cognitoSub " +
            "AND t.startDate >= :startDate AND t.dueDate <= :endDate " +
            "ORDER BY t.dueDate, t.priority DESC")
-    List<Todo> findByUserIdAndDateRange(
-        @Param("userId") Long userId,
+    List<Todo> findByCognitoSubAndDateRange(
+        @Param("cognitoSub") String cognitoSub,
         @Param("startDate") LocalDate startDate,
         @Param("endDate") LocalDate endDate
     );
@@ -41,13 +41,13 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     );
 
     // 카테고리로 조회
-    List<Todo> findByCategoryIdAndUserId(Long categoryId, Long userId);
+    List<Todo> findByCategoryIdAndCognitoSub(Long categoryId, String cognitoSub);
 
     // 상태로 조회
-    List<Todo> findByUserIdAndStatus(Long userId, TodoStatus status);
+    List<Todo> findByCognitoSubAndStatus(String cognitoSub, TodoStatus status);
 
     // 우선순위로 조회
-    List<Todo> findByUserIdAndPriority(Long userId, TodoPriority priority);
+    List<Todo> findByCognitoSubAndPriority(String cognitoSub, TodoPriority priority);
 
     // 서브태스크 조회
     List<Todo> findByParentTodoId(Long parentTodoId);
@@ -62,5 +62,5 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     List<Todo> findByScheduleId(Long scheduleId);
 
     // AI 생성 할일 조회
-    List<Todo> findByUserIdAndIsAiGenerated(Long userId, Boolean isAiGenerated);
+    List<Todo> findByCognitoSubAndIsAiGenerated(String cognitoSub, Boolean isAiGenerated);
 }

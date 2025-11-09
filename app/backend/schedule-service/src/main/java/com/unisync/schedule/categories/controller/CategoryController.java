@@ -23,8 +23,8 @@ public class CategoryController {
 
     @GetMapping
     @Operation(summary = "카테고리 목록 조회")
-    public ResponseEntity<List<CategoryResponse>> getCategories(@RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(categoryService.getCategoriesByUserId(userId));
+    public ResponseEntity<List<CategoryResponse>> getCategories(@RequestHeader("X-Cognito-Sub") String cognitoSub) {
+        return ResponseEntity.ok(categoryService.getCategoriesByUserId(cognitoSub));
     }
 
     @GetMapping("/{categoryId}")
@@ -36,29 +36,29 @@ public class CategoryController {
     @PostMapping
     @Operation(summary = "카테고리 생성")
     public ResponseEntity<CategoryResponse> createCategory(
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody CategoryRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(categoryService.createCategory(request, userId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(categoryService.createCategory(request, cognitoSub));
     }
 
     @PutMapping("/{categoryId}")
     @Operation(summary = "카테고리 수정")
     public ResponseEntity<CategoryResponse> updateCategory(
             @PathVariable Long categoryId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody CategoryRequest request
     ) {
-        return ResponseEntity.ok(categoryService.updateCategory(categoryId, request, userId));
+        return ResponseEntity.ok(categoryService.updateCategory(categoryId, request, cognitoSub));
     }
 
     @DeleteMapping("/{categoryId}")
     @Operation(summary = "카테고리 삭제")
     public ResponseEntity<Void> deleteCategory(
             @PathVariable Long categoryId,
-            @RequestHeader("X-User-Id") Long userId
+            @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
-        categoryService.deleteCategory(categoryId, userId);
+        categoryService.deleteCategory(categoryId, cognitoSub);
         return ResponseEntity.noContent().build();
     }
 }

@@ -35,12 +35,12 @@ class CategoryServiceTest {
     private Category testCategory;
     private Category defaultCategory;
     private CategoryRequest testRequest;
-    private Long userId;
+    private String cognitoSub;
     private Long categoryId;
 
     @BeforeEach
     void setUp() {
-        userId = 1L;
+        cognitoSub = "test-user-sub-abc123";
         categoryId = 10L;
 
         testRequest = new CategoryRequest();
@@ -50,7 +50,7 @@ class CategoryServiceTest {
 
         testCategory = new Category();
         testCategory.setCategoryId(categoryId);
-        testCategory.setUserId(userId);
+        testCategory.setCognitoSub(cognitoSub);
         testCategory.setName("학업");
         testCategory.setColor("#FF5733");
         testCategory.setIcon("📚");
@@ -58,7 +58,7 @@ class CategoryServiceTest {
 
         defaultCategory = new Category();
         defaultCategory.setCategoryId(100L);
-        defaultCategory.setUserId(userId);
+        defaultCategory.setCognitoSub(cognitoSub);
         defaultCategory.setName("기본");
         defaultCategory.setColor("#000000");
         defaultCategory.setIcon("📌");
@@ -69,11 +69,11 @@ class CategoryServiceTest {
     @DisplayName("카테고리 생성 성공")
     void createCategory_Success() {
         // given
-        given(categoryRepository.existsByUserIdAndName(userId, "학업")).willReturn(false);
+        given(categoryRepository.existsByCognitoSubAndName(cognitoSub, "학업")).willReturn(false);
         given(categoryRepository.save(any(Category.class))).willReturn(testCategory);
 
         // when
-        CategoryResponse response = categoryService.createCategory(testRequest, userId);
+        CategoryResponse response = categoryService.createCategory(testRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -81,9 +81,9 @@ class CategoryServiceTest {
         assertThat(response.getName()).isEqualTo("학업");
         assertThat(response.getColor()).isEqualTo("#FF5733");
         assertThat(response.getIcon()).isEqualTo("📚");
-        assertThat(response.getUserId()).isEqualTo(userId);
+        assertThat(response.getCognitoSub()).isEqualTo(cognitoSub);
 
-        then(categoryRepository).should().existsByUserIdAndName(userId, "학업");
+        then(categoryRepository).should().existsByCognitoSubAndName(cognitoSub, "학업");
         then(categoryRepository).should().save(any(Category.class));
     }
 
@@ -91,10 +91,10 @@ class CategoryServiceTest {
     @DisplayName("카테고리 생성 실패 - 중복된 이름")
     void createCategory_DuplicateName() {
         // given
-        given(categoryRepository.existsByUserIdAndName(userId, "학업")).willReturn(true);
+        given(categoryRepository.existsByCognitoSubAndName(cognitoSub, "학업")).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> categoryService.createCategory(testRequest, userId))
+        assertThatThrownBy(() -> categoryService.createCategory(testRequest, cognitoSub))
                 .isInstanceOf(DuplicateCategoryException.class)
                 .hasMessageContaining("이미 존재하는 카테고리 이름입니다");
 
@@ -135,17 +135,17 @@ class CategoryServiceTest {
     void getCategoriesByUserId_Success() {
         // given
         List<Category> categories = List.of(testCategory, defaultCategory);
-        given(categoryRepository.findByUserId(userId)).willReturn(categories);
+        given(categoryRepository.findByCognitoSub(cognitoSub)).willReturn(categories);
 
         // when
-        List<CategoryResponse> responses = categoryService.getCategoriesByUserId(userId);
+        List<CategoryResponse> responses = categoryService.getCategoriesByUserId(cognitoSub);
 
         // then
         assertThat(responses).hasSize(2);
-        assertThat(responses.get(0).getUserId()).isEqualTo(userId);
-        assertThat(responses.get(1).getUserId()).isEqualTo(userId);
+        assertThat(responses.get(0).getCognitoSub()).isEqualTo(cognitoSub);
+        assertThat(responses.get(1).getCognitoSub()).isEqualTo(cognitoSub);
 
-        then(categoryRepository).should().findByUserId(userId);
+        then(categoryRepository).should().findByCognitoSub(cognitoSub);
     }
 
     @Test
@@ -153,7 +153,7 @@ class CategoryServiceTest {
     void updateCategory_Success() {
         // given
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(testCategory));
-        given(categoryRepository.existsByUserIdAndName(userId, "개인")).willReturn(false);
+        given(categoryRepository.existsByCognitoSubAndName(cognitoSub, "개인")).willReturn(false);
         given(categoryRepository.save(any(Category.class))).willReturn(testCategory);
 
         CategoryRequest updateRequest = new CategoryRequest();
@@ -162,7 +162,7 @@ class CategoryServiceTest {
         updateRequest.setIcon("🏠");
 
         // when
-        CategoryResponse response = categoryService.updateCategory(categoryId, updateRequest, userId);
+        CategoryResponse response = categoryService.updateCategory(categoryId, updateRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -174,11 +174,11 @@ class CategoryServiceTest {
     @DisplayName("카테고리 수정 실패 - 권한 없음")
     void updateCategory_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "different-user-sub-xyz";
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(testCategory));
 
         // when & then
-        assertThatThrownBy(() -> categoryService.updateCategory(categoryId, testRequest, unauthorizedUserId))
+        assertThatThrownBy(() -> categoryService.updateCategory(categoryId, testRequest, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 카테고리에 접근할 권한이 없습니다");
 
@@ -194,7 +194,7 @@ class CategoryServiceTest {
 
         // when & then
         assertThatThrownBy(() -> categoryService.updateCategory(
-                defaultCategory.getCategoryId(), testRequest, userId))
+                defaultCategory.getCategoryId(), testRequest, cognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("기본 카테고리는 수정할 수 없습니다");
 
@@ -206,7 +206,7 @@ class CategoryServiceTest {
     void updateCategory_DuplicateName() {
         // given
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(testCategory));
-        given(categoryRepository.existsByUserIdAndName(userId, "개인")).willReturn(true);
+        given(categoryRepository.existsByCognitoSubAndName(cognitoSub, "개인")).willReturn(true);
 
         CategoryRequest updateRequest = new CategoryRequest();
         updateRequest.setName("개인");
@@ -214,7 +214,7 @@ class CategoryServiceTest {
         updateRequest.setIcon("🏠");
 
         // when & then
-        assertThatThrownBy(() -> categoryService.updateCategory(categoryId, updateRequest, userId))
+        assertThatThrownBy(() -> categoryService.updateCategory(categoryId, updateRequest, cognitoSub))
                 .isInstanceOf(DuplicateCategoryException.class)
                 .hasMessageContaining("이미 존재하는 카테고리 이름입니다");
 
@@ -234,13 +234,13 @@ class CategoryServiceTest {
         updateRequest.setIcon("📚");
 
         // when
-        CategoryResponse response = categoryService.updateCategory(categoryId, updateRequest, userId);
+        CategoryResponse response = categoryService.updateCategory(categoryId, updateRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
         then(categoryRepository).should().findById(categoryId);
         then(categoryRepository).should().save(any(Category.class));
-        then(categoryRepository).should(never()).existsByUserIdAndName(anyLong(), anyString());
+        then(categoryRepository).should(never()).existsByCognitoSubAndName(anyString(), anyString());
     }
 
     @Test
@@ -251,7 +251,7 @@ class CategoryServiceTest {
         willDoNothing().given(categoryRepository).delete(testCategory);
 
         // when
-        categoryService.deleteCategory(categoryId, userId);
+        categoryService.deleteCategory(categoryId, cognitoSub);
 
         // then
         then(categoryRepository).should().findById(categoryId);
@@ -262,11 +262,11 @@ class CategoryServiceTest {
     @DisplayName("카테고리 삭제 실패 - 권한 없음")
     void deleteCategory_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "different-user-sub-xyz";
         given(categoryRepository.findById(categoryId)).willReturn(Optional.of(testCategory));
 
         // when & then
-        assertThatThrownBy(() -> categoryService.deleteCategory(categoryId, unauthorizedUserId))
+        assertThatThrownBy(() -> categoryService.deleteCategory(categoryId, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 카테고리에 접근할 권한이 없습니다");
 
@@ -282,7 +282,7 @@ class CategoryServiceTest {
 
         // when & then
         assertThatThrownBy(() -> categoryService.deleteCategory(
-                defaultCategory.getCategoryId(), userId))
+                defaultCategory.getCategoryId(), cognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("기본 카테고리는 삭제할 수 없습니다");
 
@@ -311,7 +311,7 @@ class CategoryServiceTest {
         testRequest.setIcon("👥");
 
         // when
-        CategoryResponse response = categoryService.createCategory(testRequest, userId);
+        CategoryResponse response = categoryService.createCategory(testRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -332,7 +332,7 @@ class CategoryServiceTest {
         given(categoryRepository.existsByGroupIdAndName(groupId, "팀 프로젝트")).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> categoryService.createCategory(testRequest, userId))
+        assertThatThrownBy(() -> categoryService.createCategory(testRequest, cognitoSub))
                 .isInstanceOf(DuplicateCategoryException.class)
                 .hasMessageContaining("이미 존재하는 카테고리 이름입니다");
 

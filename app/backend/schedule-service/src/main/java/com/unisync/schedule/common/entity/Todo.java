@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "todos", indexes = {
-    @Index(name = "idx_user_id", columnList = "user_id"),
+    @Index(name = "idx_cognito_sub", columnList = "cognito_sub"),
     @Index(name = "idx_group_id", columnList = "group_id"),
     @Index(name = "idx_category_id", columnList = "category_id"),
     @Index(name = "idx_status", columnList = "status"),
@@ -31,8 +31,8 @@ public class Todo {
     @Column(name = "todo_id")
     private Long todoId;
 
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "cognito_sub", length = 255)
+    private String cognitoSub;
 
     @Column(name = "group_id")
     private Long groupId;

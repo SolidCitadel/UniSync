@@ -31,23 +31,23 @@ public class TodoService {
      * 할일 생성
      */
     @Transactional
-    public TodoResponse createTodo(TodoRequest request, Long userId) {
-        log.info("할일 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+    public TodoResponse createTodo(TodoRequest request, String cognitoSub) {
+        log.info("할일 생성 요청 - cognitoSub: {}, title: {}", cognitoSub, request.getTitle());
 
         // 날짜 유효성 검증
         validateTodoDates(request.getStartDate(), request.getDueDate());
 
         // 카테고리 존재 여부 확인
-        validateCategoryAccess(request.getCategoryId(), userId);
+        validateCategoryAccess(request.getCategoryId(), cognitoSub);
 
         // 부모 할일이 있는 경우 검증
         if (request.getParentTodoId() != null) {
-            validateParentTodo(request.getParentTodoId(), userId);
+            validateParentTodo(request.getParentTodoId(), cognitoSub);
         }
 
         // Todo 엔티티 생성
         Todo todo = Todo.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .groupId(request.getGroupId())
                 .categoryId(request.getCategoryId())
                 .title(request.getTitle())
@@ -90,10 +90,10 @@ public class TodoService {
      * 사용자의 모든 할일 조회
      */
     @Transactional(readOnly = true)
-    public List<TodoResponse> getTodosByUserId(Long userId) {
-        log.info("사용자 할일 전체 조회 - userId: {}", userId);
+    public List<TodoResponse> getTodosByUserId(String cognitoSub) {
+        log.info("사용자 할일 전체 조회 - cognitoSub: {}", cognitoSub);
 
-        List<Todo> todos = todoRepository.findByUserId(userId);
+        List<Todo> todos = todoRepository.findByCognitoSub(cognitoSub);
 
         return todos.stream()
                 .map(TodoResponse::from)
@@ -104,13 +104,13 @@ public class TodoService {
      * 특정 기간의 할일 조회
      */
     @Transactional(readOnly = true)
-    public List<TodoResponse> getTodosByDateRange(Long userId, LocalDate start, LocalDate end) {
-        log.info("기간별 할일 조회 - userId: {}, start: {}, end: {}", userId, start, end);
+    public List<TodoResponse> getTodosByDateRange(String cognitoSub, LocalDate start, LocalDate end) {
+        log.info("기간별 할일 조회 - cognitoSub: {}, start: {}, end: {}", cognitoSub, start, end);
 
         // 날짜 유효성 검증
         validateTodoDates(start, end);
 
-        List<Todo> todos = todoRepository.findByUserIdAndDateRange(userId, start, end);
+        List<Todo> todos = todoRepository.findByCognitoSubAndDateRange(cognitoSub, start, end);
 
         return todos.stream()
                 .map(TodoResponse::from)
@@ -139,21 +139,21 @@ public class TodoService {
      * 할일 수정
      */
     @Transactional
-    public TodoResponse updateTodo(Long todoId, TodoRequest request, Long userId) {
-        log.info("할일 수정 요청 - todoId: {}, userId: {}", todoId, userId);
+    public TodoResponse updateTodo(Long todoId, TodoRequest request, String cognitoSub) {
+        log.info("할일 수정 요청 - todoId: {}, cognitoSub: {}", todoId, cognitoSub);
 
         // 할일 조회 및 권한 확인
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
 
-        validateTodoOwnership(todo, userId);
+        validateTodoOwnership(todo, cognitoSub);
 
         // 날짜 유효성 검증
         validateTodoDates(request.getStartDate(), request.getDueDate());
 
         // 카테고리 변경 시 존재 여부 확인
         if (!todo.getCategoryId().equals(request.getCategoryId())) {
-            validateCategoryAccess(request.getCategoryId(), userId);
+            validateCategoryAccess(request.getCategoryId(), cognitoSub);
         }
 
         // 할일 정보 업데이트
@@ -176,14 +176,14 @@ public class TodoService {
      * 할일 상태 변경
      */
     @Transactional
-    public TodoResponse updateTodoStatus(Long todoId, TodoStatus status, Long userId) {
-        log.info("할일 상태 변경 요청 - todoId: {}, status: {}, userId: {}", todoId, status, userId);
+    public TodoResponse updateTodoStatus(Long todoId, TodoStatus status, String cognitoSub) {
+        log.info("할일 상태 변경 요청 - todoId: {}, status: {}, cognitoSub: {}", todoId, status, cognitoSub);
 
         // 할일 조회 및 권한 확인
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
 
-        validateTodoOwnership(todo, userId);
+        validateTodoOwnership(todo, cognitoSub);
 
         // 상태 업데이트
         todo.setStatus(status);
@@ -210,8 +210,8 @@ public class TodoService {
      * 할일 진행률 변경
      */
     @Transactional
-    public TodoResponse updateTodoProgress(Long todoId, Integer progress, Long userId) {
-        log.info("할일 진행률 변경 요청 - todoId: {}, progress: {}%, userId: {}", todoId, progress, userId);
+    public TodoResponse updateTodoProgress(Long todoId, Integer progress, String cognitoSub) {
+        log.info("할일 진행률 변경 요청 - todoId: {}, progress: {}%, cognitoSub: {}", todoId, progress, cognitoSub);
 
         // 진행률 유효성 검증
         if (progress < 0 || progress > 100) {
@@ -222,7 +222,7 @@ public class TodoService {
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
 
-        validateTodoOwnership(todo, userId);
+        validateTodoOwnership(todo, cognitoSub);
 
         // 진행률 업데이트
         todo.setProgressPercentage(progress);
@@ -251,14 +251,14 @@ public class TodoService {
      * 할일 삭제
      */
     @Transactional
-    public void deleteTodo(Long todoId, Long userId) {
-        log.info("할일 삭제 요청 - todoId: {}, userId: {}", todoId, userId);
+    public void deleteTodo(Long todoId, String cognitoSub) {
+        log.info("할일 삭제 요청 - todoId: {}, cognitoSub: {}", todoId, cognitoSub);
 
         // 할일 조회 및 권한 확인
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new TodoNotFoundException("할일을 찾을 수 없습니다. ID: " + todoId));
 
-        validateTodoOwnership(todo, userId);
+        validateTodoOwnership(todo, cognitoSub);
 
         // 서브태스크가 있는 경우 함께 삭제
         List<Todo> subtasks = todoRepository.findByParentTodoId(todoId);
@@ -330,9 +330,9 @@ public class TodoService {
     /**
      * 할일 소유권 검증
      */
-    private void validateTodoOwnership(Todo todo, Long userId) {
-        // 그룹 할일이 아니고, userId가 일치하지 않으면 권한 없음
-        if (todo.getGroupId() == null && !todo.getUserId().equals(userId)) {
+    private void validateTodoOwnership(Todo todo, String cognitoSub) {
+        // 그룹 할일이 아니고, cognitoSub가 일치하지 않으면 권한 없음
+        if (todo.getGroupId() == null && !todo.getCognitoSub().equals(cognitoSub)) {
             throw new UnauthorizedAccessException("해당 할일에 접근할 권한이 없습니다.");
         }
     }
@@ -340,7 +340,7 @@ public class TodoService {
     /**
      * 카테고리 접근 권한 검증
      */
-    private void validateCategoryAccess(Long categoryId, Long userId) {
+    private void validateCategoryAccess(Long categoryId, String cognitoSub) {
         categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
@@ -351,12 +351,12 @@ public class TodoService {
     /**
      * 부모 할일 검증
      */
-    private void validateParentTodo(Long parentTodoId, Long userId) {
+    private void validateParentTodo(Long parentTodoId, String cognitoSub) {
         Todo parentTodo = todoRepository.findById(parentTodoId)
                 .orElseThrow(() -> new TodoNotFoundException("부모 할일을 찾을 수 없습니다. ID: " + parentTodoId));
 
         // 부모 할일의 소유자와 일치하는지 확인
-        if (parentTodo.getGroupId() == null && !parentTodo.getUserId().equals(userId)) {
+        if (parentTodo.getGroupId() == null && !parentTodo.getCognitoSub().equals(cognitoSub)) {
             throw new UnauthorizedAccessException("부모 할일에 접근할 권한이 없습니다.");
         }
     }

@@ -28,15 +28,15 @@ public class TodoController {
     @GetMapping
     @Operation(summary = "할일 목록 조회")
     public ResponseEntity<List<TodoResponse>> getTodos(
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         List<TodoResponse> todos;
         if (startDate != null && endDate != null) {
-            todos = todoService.getTodosByDateRange(userId, startDate, endDate);
+            todos = todoService.getTodosByDateRange(cognitoSub, startDate, endDate);
         } else {
-            todos = todoService.getTodosByUserId(userId);
+            todos = todoService.getTodosByUserId(cognitoSub);
         }
         return ResponseEntity.ok(todos);
     }
@@ -56,60 +56,60 @@ public class TodoController {
     @PostMapping
     @Operation(summary = "할일 생성")
     public ResponseEntity<TodoResponse> createTodo(
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody TodoRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(todoService.createTodo(request, userId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(todoService.createTodo(request, cognitoSub));
     }
 
     @PostMapping("/{todoId}/subtasks")
     @Operation(summary = "서브태스크 생성")
     public ResponseEntity<TodoResponse> createSubtask(
             @PathVariable Long todoId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody TodoRequest request
     ) {
         request.setParentTodoId(todoId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(todoService.createTodo(request, userId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(todoService.createTodo(request, cognitoSub));
     }
 
     @PutMapping("/{todoId}")
     @Operation(summary = "할일 수정")
     public ResponseEntity<TodoResponse> updateTodo(
             @PathVariable Long todoId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody TodoRequest request
     ) {
-        return ResponseEntity.ok(todoService.updateTodo(todoId, request, userId));
+        return ResponseEntity.ok(todoService.updateTodo(todoId, request, cognitoSub));
     }
 
     @PatchMapping("/{todoId}/status")
     @Operation(summary = "할일 상태 변경")
     public ResponseEntity<TodoResponse> updateTodoStatus(
             @PathVariable Long todoId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody UpdateTodoStatusRequest request
     ) {
-        return ResponseEntity.ok(todoService.updateTodoStatus(todoId, request.getStatus(), userId));
+        return ResponseEntity.ok(todoService.updateTodoStatus(todoId, request.getStatus(), cognitoSub));
     }
 
     @PatchMapping("/{todoId}/progress")
     @Operation(summary = "할일 진행률 변경")
     public ResponseEntity<TodoResponse> updateTodoProgress(
             @PathVariable Long todoId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody UpdateTodoProgressRequest request
     ) {
-        return ResponseEntity.ok(todoService.updateTodoProgress(todoId, request.getProgressPercentage(), userId));
+        return ResponseEntity.ok(todoService.updateTodoProgress(todoId, request.getProgressPercentage(), cognitoSub));
     }
 
     @DeleteMapping("/{todoId}")
     @Operation(summary = "할일 삭제")
     public ResponseEntity<Void> deleteTodo(
             @PathVariable Long todoId,
-            @RequestHeader("X-User-Id") Long userId
+            @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
-        todoService.deleteTodo(todoId, userId);
+        todoService.deleteTodo(todoId, cognitoSub);
         return ResponseEntity.noContent().build();
     }
 }

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 public class CategoryResponse {
 
     private Long categoryId;
-    private Long userId;
+    private String cognitoSub;
     private Long groupId;
     private String name;
     private String color;
@@ -27,7 +27,7 @@ public class CategoryResponse {
     public static CategoryResponse from(Category category) {
         return CategoryResponse.builder()
                 .categoryId(category.getCategoryId())
-                .userId(category.getUserId())
+                .cognitoSub(category.getCognitoSub())
                 .groupId(category.getGroupId())
                 .name(category.getName())
                 .color(category.getColor())

@@ -16,17 +16,17 @@ import java.util.Optional;
 public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 사용자 ID로 조회
-    List<Schedule> findByUserId(Long userId);
+    List<Schedule> findByCognitoSub(String cognitoSub);
 
     // 그룹 ID로 조회
     List<Schedule> findByGroupId(Long groupId);
 
     // 특정 기간의 일정 조회 (사용자)
-    @Query("SELECT s FROM Schedule s WHERE s.userId = :userId " +
+    @Query("SELECT s FROM Schedule s WHERE s.cognitoSub = :cognitoSub " +
            "AND s.startTime >= :startDate AND s.endTime <= :endDate " +
            "ORDER BY s.startTime")
-    List<Schedule> findByUserIdAndDateRange(
-        @Param("userId") Long userId,
+    List<Schedule> findByCognitoSubAndDateRange(
+        @Param("cognitoSub") String cognitoSub,
         @Param("startDate") LocalDateTime startDate,
         @Param("endDate") LocalDateTime endDate
     );
@@ -42,10 +42,10 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     );
 
     // 카테고리로 조회
-    List<Schedule> findByCategoryIdAndUserId(Long categoryId, Long userId);
+    List<Schedule> findByCategoryIdAndCognitoSub(Long categoryId, String cognitoSub);
 
     // 상태로 조회
-    List<Schedule> findByUserIdAndStatus(Long userId, ScheduleStatus status);
+    List<Schedule> findByCognitoSubAndStatus(String cognitoSub, ScheduleStatus status);
 
     // 외부 소스로 조회 (Canvas, Google Calendar 등)
     Optional<Schedule> findBySourceAndSourceId(ScheduleSource source, String sourceId);

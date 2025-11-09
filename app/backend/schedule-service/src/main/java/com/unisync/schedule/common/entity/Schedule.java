@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "schedules", indexes = {
-    @Index(name = "idx_user_id", columnList = "user_id"),
+    @Index(name = "idx_cognito_sub", columnList = "cognito_sub"),
     @Index(name = "idx_group_id", columnList = "group_id"),
     @Index(name = "idx_category_id", columnList = "category_id"),
     @Index(name = "idx_start_time", columnList = "start_time"),
@@ -28,8 +28,8 @@ public class Schedule {
     @Column(name = "schedule_id")
     private Long scheduleId;
 
-    @Column(name = "user_id")
-    private Long userId;
+    @Column(name = "cognito_sub", length = 255)
+    private String cognitoSub;
 
     @Column(name = "group_id")
     private Long groupId;

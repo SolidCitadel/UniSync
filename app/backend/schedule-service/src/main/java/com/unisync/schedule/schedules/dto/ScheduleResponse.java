@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 public class ScheduleResponse {
 
     private Long scheduleId;
-    private Long userId;
+    private String cognitoSub;
     private Long groupId;
     private Long categoryId;
     private String title;
@@ -34,7 +34,7 @@ public class ScheduleResponse {
     public static ScheduleResponse from(Schedule schedule) {
         return ScheduleResponse.builder()
                 .scheduleId(schedule.getScheduleId())
-                .userId(schedule.getUserId())
+                .cognitoSub(schedule.getCognitoSub())
                 .groupId(schedule.getGroupId())
                 .categoryId(schedule.getCategoryId())
                 .title(schedule.getTitle())

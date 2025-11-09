@@ -32,18 +32,18 @@ public class ScheduleService {
      * 일정 생성
      */
     @Transactional
-    public ScheduleResponse createSchedule(ScheduleRequest request, Long userId) {
-        log.info("일정 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+    public ScheduleResponse createSchedule(ScheduleRequest request, String cognitoSub) {
+        log.info("일정 생성 요청 - cognitoSub: {}, title: {}", cognitoSub, request.getTitle());
 
         // 날짜 유효성 검증
         validateScheduleDates(request.getStartTime(), request.getEndTime());
 
         // 카테고리 존재 여부 확인
-        validateCategoryAccess(request.getCategoryId(), userId);
+        validateCategoryAccess(request.getCategoryId(), cognitoSub);
 
         // Schedule 엔티티 생성
         Schedule schedule = Schedule.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .groupId(request.getGroupId())
                 .categoryId(request.getCategoryId())
                 .title(request.getTitle())
@@ -81,10 +81,10 @@ public class ScheduleService {
      * 사용자의 모든 일정 조회
      */
     @Transactional(readOnly = true)
-    public List<ScheduleResponse> getSchedulesByUserId(Long userId) {
-        log.info("사용자 일정 전체 조회 - userId: {}", userId);
+    public List<ScheduleResponse> getSchedulesByUserId(String cognitoSub) {
+        log.info("사용자 일정 전체 조회 - cognitoSub: {}", cognitoSub);
 
-        List<Schedule> schedules = scheduleRepository.findByUserId(userId);
+        List<Schedule> schedules = scheduleRepository.findByCognitoSub(cognitoSub);
 
         return schedules.stream()
                 .map(ScheduleResponse::from)
@@ -95,13 +95,13 @@ public class ScheduleService {
      * 특정 기간의 일정 조회
      */
     @Transactional(readOnly = true)
-    public List<ScheduleResponse> getSchedulesByDateRange(Long userId, LocalDateTime start, LocalDateTime end) {
-        log.info("기간별 일정 조회 - userId: {}, start: {}, end: {}", userId, start, end);
+    public List<ScheduleResponse> getSchedulesByDateRange(String cognitoSub, LocalDateTime start, LocalDateTime end) {
+        log.info("기간별 일정 조회 - cognitoSub: {}, start: {}, end: {}", cognitoSub, start, end);
 
         // 날짜 유효성 검증
         validateScheduleDates(start, end);
 
-        List<Schedule> schedules = scheduleRepository.findByUserIdAndDateRange(userId, start, end);
+        List<Schedule> schedules = scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, start, end);
 
         return schedules.stream()
                 .map(ScheduleResponse::from)
@@ -112,21 +112,21 @@ public class ScheduleService {
      * 일정 수정
      */
     @Transactional
-    public ScheduleResponse updateSchedule(Long scheduleId, ScheduleRequest request, Long userId) {
-        log.info("일정 수정 요청 - scheduleId: {}, userId: {}", scheduleId, userId);
+    public ScheduleResponse updateSchedule(Long scheduleId, ScheduleRequest request, String cognitoSub) {
+        log.info("일정 수정 요청 - scheduleId: {}, cognitoSub: {}", scheduleId, cognitoSub);
 
         // 일정 조회 및 권한 확인
         Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new ScheduleNotFoundException("일정을 찾을 수 없습니다. ID: " + scheduleId));
 
-        validateScheduleOwnership(schedule, userId);
+        validateScheduleOwnership(schedule, cognitoSub);
 
         // 날짜 유효성 검증
         validateScheduleDates(request.getStartTime(), request.getEndTime());
 
         // 카테고리 변경 시 존재 여부 확인
         if (!schedule.getCategoryId().equals(request.getCategoryId())) {
-            validateCategoryAccess(request.getCategoryId(), userId);
+            validateCategoryAccess(request.getCategoryId(), cognitoSub);
         }
 
         // 일정 정보 업데이트
@@ -150,14 +150,14 @@ public class ScheduleService {
      * 일정 상태 변경
      */
     @Transactional
-    public ScheduleResponse updateScheduleStatus(Long scheduleId, ScheduleStatus status, Long userId) {
-        log.info("일정 상태 변경 요청 - scheduleId: {}, status: {}, userId: {}", scheduleId, status, userId);
+    public ScheduleResponse updateScheduleStatus(Long scheduleId, ScheduleStatus status, String cognitoSub) {
+        log.info("일정 상태 변경 요청 - scheduleId: {}, status: {}, cognitoSub: {}", scheduleId, status, cognitoSub);
 
         // 일정 조회 및 권한 확인
         Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new ScheduleNotFoundException("일정을 찾을 수 없습니다. ID: " + scheduleId));
 
-        validateScheduleOwnership(schedule, userId);
+        validateScheduleOwnership(schedule, cognitoSub);
 
         // 상태 업데이트
         schedule.setStatus(status);
@@ -172,14 +172,14 @@ public class ScheduleService {
      * 일정 삭제
      */
     @Transactional
-    public void deleteSchedule(Long scheduleId, Long userId) {
-        log.info("일정 삭제 요청 - scheduleId: {}, userId: {}", scheduleId, userId);
+    public void deleteSchedule(Long scheduleId, String cognitoSub) {
+        log.info("일정 삭제 요청 - scheduleId: {}, cognitoSub: {}", scheduleId, cognitoSub);
 
         // 일정 조회 및 권한 확인
         Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new ScheduleNotFoundException("일정을 찾을 수 없습니다. ID: " + scheduleId));
 
-        validateScheduleOwnership(schedule, userId);
+        validateScheduleOwnership(schedule, cognitoSub);
 
         scheduleRepository.delete(schedule);
         log.info("일정 삭제 완료 - scheduleId: {}", scheduleId);
@@ -201,9 +201,9 @@ public class ScheduleService {
     /**
      * 일정 소유권 검증
      */
-    private void validateScheduleOwnership(Schedule schedule, Long userId) {
-        // 그룹 일정이 아니고, userId가 일치하지 않으면 권한 없음
-        if (schedule.getGroupId() == null && !schedule.getUserId().equals(userId)) {
+    private void validateScheduleOwnership(Schedule schedule, String cognitoSub) {
+        // 그룹 일정이 아니고, cognitoSub가 일치하지 않으면 권한 없음
+        if (schedule.getGroupId() == null && !schedule.getCognitoSub().equals(cognitoSub)) {
             throw new UnauthorizedAccessException("해당 일정에 접근할 권한이 없습니다.");
         }
     }
@@ -211,7 +211,7 @@ public class ScheduleService {
     /**
      * 카테고리 접근 권한 검증
      */
-    private void validateCategoryAccess(Long categoryId, Long userId) {
+    private void validateCategoryAccess(Long categoryId, String cognitoSub) {
         categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 

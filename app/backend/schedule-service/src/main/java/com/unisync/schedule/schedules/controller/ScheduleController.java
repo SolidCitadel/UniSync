@@ -28,15 +28,15 @@ public class ScheduleController {
     @GetMapping
     @Operation(summary = "일정 목록 조회", description = "사용자의 일정 목록을 조회합니다.")
     public ResponseEntity<List<ScheduleResponse>> getSchedules(
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
         List<ScheduleResponse> schedules;
         if (startDate != null && endDate != null) {
-            schedules = scheduleService.getSchedulesByDateRange(userId, startDate, endDate);
+            schedules = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate);
         } else {
-            schedules = scheduleService.getSchedulesByUserId(userId);
+            schedules = scheduleService.getSchedulesByUserId(cognitoSub);
         }
         return ResponseEntity.ok(schedules);
     }
@@ -50,39 +50,39 @@ public class ScheduleController {
     @PostMapping
     @Operation(summary = "일정 생성")
     public ResponseEntity<ScheduleResponse> createSchedule(
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody ScheduleRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(scheduleService.createSchedule(request, userId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(scheduleService.createSchedule(request, cognitoSub));
     }
 
     @PutMapping("/{scheduleId}")
     @Operation(summary = "일정 수정")
     public ResponseEntity<ScheduleResponse> updateSchedule(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody ScheduleRequest request
     ) {
-        return ResponseEntity.ok(scheduleService.updateSchedule(scheduleId, request, userId));
+        return ResponseEntity.ok(scheduleService.updateSchedule(scheduleId, request, cognitoSub));
     }
 
     @PatchMapping("/{scheduleId}/status")
     @Operation(summary = "일정 상태 변경")
     public ResponseEntity<ScheduleResponse> updateScheduleStatus(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody UpdateScheduleStatusRequest request
     ) {
-        return ResponseEntity.ok(scheduleService.updateScheduleStatus(scheduleId, request.getStatus(), userId));
+        return ResponseEntity.ok(scheduleService.updateScheduleStatus(scheduleId, request.getStatus(), cognitoSub));
     }
 
     @DeleteMapping("/{scheduleId}")
     @Operation(summary = "일정 삭제")
     public ResponseEntity<Void> deleteSchedule(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-User-Id") Long userId
+            @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
-        scheduleService.deleteSchedule(scheduleId, userId);
+        scheduleService.deleteSchedule(scheduleId, cognitoSub);
         return ResponseEntity.noContent().build();
     }
 }

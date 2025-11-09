@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class TodoResponse {
 
     private Long todoId;
-    private Long userId;
+    private String cognitoSub;
     private Long groupId;
     private Long categoryId;
     private String title;
@@ -35,7 +35,7 @@ public class TodoResponse {
     public static TodoResponse from(Todo todo) {
         return TodoResponse.builder()
                 .todoId(todo.getTodoId())
-                .userId(todo.getUserId())
+                .cognitoSub(todo.getCognitoSub())
                 .groupId(todo.getGroupId())
                 .categoryId(todo.getCategoryId())
                 .title(todo.getTitle())

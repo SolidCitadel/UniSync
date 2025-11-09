@@ -26,12 +26,12 @@ public class CategoryService {
      * 카테고리 생성
      */
     @Transactional
-    public CategoryResponse createCategory(CategoryRequest request, Long userId) {
-        log.info("카테고리 생성 요청 - userId: {}, name: {}", userId, request.getName());
+    public CategoryResponse createCategory(CategoryRequest request, String cognitoSub) {
+        log.info("카테고리 생성 요청 - cognitoSub: {}, name: {}", cognitoSub, request.getName());
 
         // 개인 카테고리인 경우 중복 체크
         if (request.getGroupId() == null) {
-            if (categoryRepository.existsByUserIdAndName(userId, request.getName())) {
+            if (categoryRepository.existsByCognitoSubAndName(cognitoSub, request.getName())) {
                 throw new DuplicateCategoryException("이미 존재하는 카테고리 이름입니다: " + request.getName());
             }
         } else {
@@ -43,7 +43,7 @@ public class CategoryService {
 
         // Category 엔티티 생성
         Category category = Category.builder()
-                .userId(userId)
+                .cognitoSub(cognitoSub)
                 .groupId(request.getGroupId())
                 .name(request.getName())
                 .color(request.getColor())
@@ -74,10 +74,10 @@ public class CategoryService {
      * 사용자의 모든 카테고리 조회
      */
     @Transactional(readOnly = true)
-    public List<CategoryResponse> getCategoriesByUserId(Long userId) {
-        log.info("사용자 카테고리 전체 조회 - userId: {}", userId);
+    public List<CategoryResponse> getCategoriesByUserId(String cognitoSub) {
+        log.info("사용자 카테고리 전체 조회 - cognitoSub: {}", cognitoSub);
 
-        List<Category> categories = categoryRepository.findByUserId(userId);
+        List<Category> categories = categoryRepository.findByCognitoSub(cognitoSub);
 
         return categories.stream()
                 .map(CategoryResponse::from)
@@ -88,14 +88,14 @@ public class CategoryService {
      * 카테고리 수정
      */
     @Transactional
-    public CategoryResponse updateCategory(Long categoryId, CategoryRequest request, Long userId) {
-        log.info("카테고리 수정 요청 - categoryId: {}, userId: {}", categoryId, userId);
+    public CategoryResponse updateCategory(Long categoryId, CategoryRequest request, String cognitoSub) {
+        log.info("카테고리 수정 요청 - categoryId: {}, cognitoSub: {}", categoryId, cognitoSub);
 
         // 카테고리 조회 및 권한 확인
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
-        validateCategoryOwnership(category, userId);
+        validateCategoryOwnership(category, cognitoSub);
 
         // 기본 카테고리는 수정 불가
         if (category.getIsDefault()) {
@@ -106,7 +106,7 @@ public class CategoryService {
         if (!category.getName().equals(request.getName())) {
             if (request.getGroupId() == null) {
                 // 개인 카테고리
-                if (categoryRepository.existsByUserIdAndName(userId, request.getName())) {
+                if (categoryRepository.existsByCognitoSubAndName(cognitoSub, request.getName())) {
                     throw new DuplicateCategoryException("이미 존재하는 카테고리 이름입니다: " + request.getName());
                 }
             } else {
@@ -133,14 +133,14 @@ public class CategoryService {
      * 카테고리 삭제
      */
     @Transactional
-    public void deleteCategory(Long categoryId, Long userId) {
-        log.info("카테고리 삭제 요청 - categoryId: {}, userId: {}", categoryId, userId);
+    public void deleteCategory(Long categoryId, String cognitoSub) {
+        log.info("카테고리 삭제 요청 - categoryId: {}, cognitoSub: {}", categoryId, cognitoSub);
 
         // 카테고리 조회 및 권한 확인
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
-        validateCategoryOwnership(category, userId);
+        validateCategoryOwnership(category, cognitoSub);
 
         // 기본 카테고리는 삭제 불가
         if (category.getIsDefault()) {
@@ -158,9 +158,9 @@ public class CategoryService {
     /**
      * 카테고리 소유권 검증
      */
-    private void validateCategoryOwnership(Category category, Long userId) {
-        // 그룹 카테고리가 아니고, userId가 일치하지 않으면 권한 없음
-        if (category.getGroupId() == null && !category.getUserId().equals(userId)) {
+    private void validateCategoryOwnership(Category category, String cognitoSub) {
+        // 그룹 카테고리가 아니고, cognitoSub가 일치하지 않으면 권한 없음
+        if (category.getGroupId() == null && !category.getCognitoSub().equals(cognitoSub)) {
             throw new UnauthorizedAccessException("해당 카테고리에 접근할 권한이 없습니다.");
         }
     }

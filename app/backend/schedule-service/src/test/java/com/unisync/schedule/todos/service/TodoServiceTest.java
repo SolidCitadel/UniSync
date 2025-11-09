@@ -46,14 +46,14 @@ class TodoServiceTest {
     private Todo subtask1;
     private Todo subtask2;
     private TodoRequest testRequest;
-    private Long userId;
+    private String cognitoSub;
     private Long todoId;
     private Long parentTodoId;
     private Long categoryId;
 
     @BeforeEach
     void setUp() {
-        userId = 1L;
+        cognitoSub = "test-cognito-sub-12345";
         todoId = 100L;
         parentTodoId = 200L;
         categoryId = 10L;
@@ -68,7 +68,7 @@ class TodoServiceTest {
 
         testTodo = new Todo();
         testTodo.setTodoId(todoId);
-        testTodo.setUserId(userId);
+        testTodo.setCognitoSub(cognitoSub);
         testTodo.setCategoryId(categoryId);
         testTodo.setTitle("프로젝트 완성하기");
         testTodo.setDescription("Spring Boot 프로젝트");
@@ -81,7 +81,7 @@ class TodoServiceTest {
 
         parentTodo = new Todo();
         parentTodo.setTodoId(parentTodoId);
-        parentTodo.setUserId(userId);
+        parentTodo.setCognitoSub(cognitoSub);
         parentTodo.setCategoryId(categoryId);
         parentTodo.setTitle("부모 할일");
         parentTodo.setStartDate(LocalDate.of(2025, 11, 1));
@@ -91,7 +91,7 @@ class TodoServiceTest {
 
         subtask1 = new Todo();
         subtask1.setTodoId(101L);
-        subtask1.setUserId(userId);
+        subtask1.setCognitoSub(cognitoSub);
         subtask1.setParentTodoId(parentTodoId);
         subtask1.setTitle("서브태스크 1");
         subtask1.setStartDate(LocalDate.of(2025, 11, 1));
@@ -101,7 +101,7 @@ class TodoServiceTest {
 
         subtask2 = new Todo();
         subtask2.setTodoId(102L);
-        subtask2.setUserId(userId);
+        subtask2.setCognitoSub(cognitoSub);
         subtask2.setParentTodoId(parentTodoId);
         subtask2.setTitle("서브태스크 2");
         subtask2.setStartDate(LocalDate.of(2025, 11, 16));
@@ -120,7 +120,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        TodoResponse response = todoService.createTodo(testRequest, userId);
+        TodoResponse response = todoService.createTodo(testRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -139,7 +139,7 @@ class TodoServiceTest {
         testRequest.setDueDate(LocalDate.of(2025, 11, 1));
 
         // when & then
-        assertThatThrownBy(() -> todoService.createTodo(testRequest, userId))
+        assertThatThrownBy(() -> todoService.createTodo(testRequest, cognitoSub))
                 .isInstanceOf(InvalidTodoException.class)
                 .hasMessageContaining("마감 날짜는 시작 날짜보다 늦어야 합니다");
 
@@ -153,7 +153,7 @@ class TodoServiceTest {
         given(categoryRepository.findById(categoryId)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> todoService.createTodo(testRequest, userId))
+        assertThatThrownBy(() -> todoService.createTodo(testRequest, cognitoSub))
                 .isInstanceOf(CategoryNotFoundException.class)
                 .hasMessageContaining("카테고리를 찾을 수 없습니다");
 
@@ -172,7 +172,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        TodoResponse response = todoService.createTodo(testRequest, userId);
+        TodoResponse response = todoService.createTodo(testRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -191,7 +191,7 @@ class TodoServiceTest {
         given(todoRepository.findById(parentTodoId)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> todoService.createTodo(testRequest, userId))
+        assertThatThrownBy(() -> todoService.createTodo(testRequest, cognitoSub))
                 .isInstanceOf(TodoNotFoundException.class)
                 .hasMessageContaining("부모 할일을 찾을 수 없습니다");
 
@@ -232,17 +232,17 @@ class TodoServiceTest {
     void getTodosByUserId_Success() {
         // given
         List<Todo> todos = List.of(testTodo);
-        given(todoRepository.findByUserId(userId)).willReturn(todos);
+        given(todoRepository.findByCognitoSub(cognitoSub)).willReturn(todos);
 
         // when
-        List<TodoResponse> responses = todoService.getTodosByUserId(userId);
+        List<TodoResponse> responses = todoService.getTodosByUserId(cognitoSub);
 
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getTodoId()).isEqualTo(todoId);
-        assertThat(responses.get(0).getUserId()).isEqualTo(userId);
+        assertThat(responses.get(0).getCognitoSub()).isEqualTo(cognitoSub);
 
-        then(todoRepository).should().findByUserId(userId);
+        then(todoRepository).should().findByCognitoSub(cognitoSub);
     }
 
     @Test
@@ -281,7 +281,7 @@ class TodoServiceTest {
         updateRequest.setPriority(TodoPriority.URGENT);
 
         // when
-        TodoResponse response = todoService.updateTodo(todoId, updateRequest, userId);
+        TodoResponse response = todoService.updateTodo(todoId, updateRequest, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -293,11 +293,11 @@ class TodoServiceTest {
     @DisplayName("할일 수정 실패 - 권한 없음")
     void updateTodo_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "unauthorized-cognito-sub-999";
         given(todoRepository.findById(todoId)).willReturn(Optional.of(testTodo));
 
         // when & then
-        assertThatThrownBy(() -> todoService.updateTodo(todoId, testRequest, unauthorizedUserId))
+        assertThatThrownBy(() -> todoService.updateTodo(todoId, testRequest, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 할일에 접근할 권한이 없습니다");
 
@@ -312,7 +312,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        TodoResponse response = todoService.updateTodoStatus(todoId, TodoStatus.DONE, userId);
+        TodoResponse response = todoService.updateTodoStatus(todoId, TodoStatus.DONE, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -328,7 +328,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        TodoResponse response = todoService.updateTodoProgress(todoId, 50, userId);
+        TodoResponse response = todoService.updateTodoProgress(todoId, 50, cognitoSub);
 
         // then
         assertThat(response).isNotNull();
@@ -346,7 +346,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(subtask1, parentTodo);
 
         // when - subtask1의 진행률을 80%로 변경
-        todoService.updateTodoProgress(subtask1.getTodoId(), 80, userId);
+        todoService.updateTodoProgress(subtask1.getTodoId(), 80, cognitoSub);
 
         // then - 부모의 진행률은 (80 + 100) / 2 = 90이 되어야 함
         then(todoRepository).should(times(2)).save(any(Todo.class));
@@ -362,7 +362,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        todoService.updateTodoProgress(todoId, 0, userId);
+        todoService.updateTodoProgress(todoId, 0, cognitoSub);
 
         // then - 진행률 0%는 상태가 TODO로 변경되어야 함
         then(todoRepository).should().save(argThat(todo ->
@@ -378,7 +378,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        todoService.updateTodoProgress(todoId, 100, userId);
+        todoService.updateTodoProgress(todoId, 100, cognitoSub);
 
         // then - 진행률 100%는 상태가 DONE으로 변경되어야 함
         then(todoRepository).should().save(argThat(todo ->
@@ -394,7 +394,7 @@ class TodoServiceTest {
         given(todoRepository.save(any(Todo.class))).willReturn(testTodo);
 
         // when
-        todoService.updateTodoProgress(todoId, 50, userId);
+        todoService.updateTodoProgress(todoId, 50, cognitoSub);
 
         // then - 진행률 1-99%는 상태가 IN_PROGRESS로 변경되어야 함
         then(todoRepository).should().save(argThat(todo ->
@@ -410,7 +410,7 @@ class TodoServiceTest {
         willDoNothing().given(todoRepository).delete(testTodo);
 
         // when
-        todoService.deleteTodo(todoId, userId);
+        todoService.deleteTodo(todoId, cognitoSub);
 
         // then
         then(todoRepository).should().findById(todoId);
@@ -421,11 +421,11 @@ class TodoServiceTest {
     @DisplayName("할일 삭제 실패 - 권한 없음")
     void deleteTodo_Unauthorized() {
         // given
-        Long unauthorizedUserId = 999L;
+        String unauthorizedCognitoSub = "unauthorized-cognito-sub-999";
         given(todoRepository.findById(todoId)).willReturn(Optional.of(testTodo));
 
         // when & then
-        assertThatThrownBy(() -> todoService.deleteTodo(todoId, unauthorizedUserId))
+        assertThatThrownBy(() -> todoService.deleteTodo(todoId, unauthorizedCognitoSub))
                 .isInstanceOf(UnauthorizedAccessException.class)
                 .hasMessageContaining("해당 할일에 접근할 권한이 없습니다");
 
@@ -439,16 +439,16 @@ class TodoServiceTest {
         LocalDate startDate = LocalDate.of(2025, 11, 1);
         LocalDate endDate = LocalDate.of(2025, 11, 30);
         List<Todo> todos = List.of(testTodo);
-        given(todoRepository.findByUserIdAndDateRange(userId, startDate, endDate))
+        given(todoRepository.findByCognitoSubAndDateRange(cognitoSub, startDate, endDate))
                 .willReturn(todos);
 
         // when
-        List<TodoResponse> responses = todoService.getTodosByDateRange(userId, startDate, endDate);
+        List<TodoResponse> responses = todoService.getTodosByDateRange(cognitoSub, startDate, endDate);
 
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getTodoId()).isEqualTo(todoId);
 
-        then(todoRepository).should().findByUserIdAndDateRange(userId, startDate, endDate);
+        then(todoRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
     }
 }
