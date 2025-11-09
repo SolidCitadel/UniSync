@@ -1,0 +1,11 @@
+# Gradle Properties Example
+#
+# 사용법:
+# 1. 이 파일을 gradle.properties로 복사
+# 2. 실제 값으로 변경
+#
+# 주의: gradle.properties는 .gitignore에 포함되어 커밋되지 않습니다
+
+# LocalStack Pro Auth Token (테스트용)
+# https://app.localstack.cloud에서 발급
+localstackAuthToken=your-localstack-auth-token-here

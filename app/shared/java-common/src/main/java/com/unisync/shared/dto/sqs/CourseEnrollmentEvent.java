@@ -1,6 +1,5 @@
 package com.unisync.shared.dto.sqs;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -49,18 +48,15 @@ public class CourseEnrollmentEvent {
     /**
      * 시작일
      */
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSS][.SSS]'Z'")
     private LocalDateTime startAt;
 
     /**
      * 종료일
      */
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSS][.SSS]'Z'")
     private LocalDateTime endAt;
 
     /**
      * 이벤트 발행 시간
      */
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSS][.SSS]")
     private LocalDateTime publishedAt;
 }

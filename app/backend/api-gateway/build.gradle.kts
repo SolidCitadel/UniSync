@@ -52,6 +52,11 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.cloud:spring-cloud-starter-contract-stub-runner")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+
+    // Testcontainers for LocalStack
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:localstack:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
 }
 
 dependencyManagement {
@@ -62,4 +67,7 @@ dependencyManagement {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // LocalStack Pro 인증을 위해 gradle.properties의 토큰을 테스트 환경변수로 전달
+    environment("LOCALSTACK_AUTH_TOKEN", project.findProperty("localstackAuthToken") as String? ?: "")
 }

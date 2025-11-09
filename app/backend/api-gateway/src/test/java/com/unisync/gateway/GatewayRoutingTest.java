@@ -1,80 +1,121 @@
 package com.unisync.gateway;
 
+import com.unisync.gateway.service.CognitoJwtVerifier;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 /**
- * API Gateway 라우팅 및 경로 재작성 테스트
- * MockWebServer를 사용하여 백엔드 서비스를 모킹하고 Gateway의 동작을 검증합니다.
+ * API Gateway 라우팅 테스트
+ * - MockWebServer로 백엔드 서비스 모킹 (고정 포트: 8081, 8082, 8083)
+ * - 라우팅 및 경로 재작성만 검증
+ * - JWT 검증은 Mock으로 처리 (인증 통합 테스트는 GatewayIntegrationTest에서)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
+@ActiveProfiles("local")
 class GatewayRoutingTest {
 
     @Autowired
     private WebTestClient webClient;
 
+    @MockBean
+    private CognitoJwtVerifier cognitoJwtVerifier;
+
     private static MockWebServer userService;
     private static MockWebServer courseService;
-    private static MockWebServer syncService;
     private static MockWebServer scheduleService;
-    private static MockWebServer socialService;
 
     /**
-     * MockWebServer를 실제 서비스 포트에 바인딩
+     * MockWebServer를 고정 포트로 시작
+     * - application-local.yml의 서비스 URL(localhost:8081, 8082, 8083)에 맞춤
      */
-    @BeforeEach
-    void setUp() throws IOException {
+    @BeforeAll
+    static void startMockServers() throws IOException {
         userService = new MockWebServer();
         userService.start(8081);
 
         courseService = new MockWebServer();
         courseService.start(8082);
 
-        syncService = new MockWebServer();
-        syncService.start(8083);
-
         scheduleService = new MockWebServer();
-        scheduleService.start(8084);
-
-        socialService = new MockWebServer();
-        socialService.start(8085);
+        scheduleService.start(8083);
     }
 
     /**
-     * 테스트 후 MockWebServer 종료
-     */
-    @AfterEach
-    void tearDown() throws IOException {
-        if (userService != null) userService.shutdown();
-        if (courseService != null) courseService.shutdown();
-        if (syncService != null) syncService.shutdown();
-        if (scheduleService != null) scheduleService.shutdown();
-        if (socialService != null) socialService.shutdown();
-    }
-
-    /**
-     * Spring 속성을 동적으로 설정 (테스트 환경에서 JWT 검증 비활성화)
+     * Dummy Cognito 설정만 주입 (Mock 사용하므로 실제 값 불필요)
      */
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
-        // JWT 필터를 우회하기 위해 모든 경로를 제외 경로로 설정
-        registry.add("jwt.exclude-paths[0]", () -> "/**");
+        registry.add("aws.cognito.user-pool-id", () -> "test-pool-id");
+        registry.add("aws.cognito.region", () -> "ap-northeast-2");
+        registry.add("aws.cognito.endpoint", () -> "http://localhost:4566");
+    }
+
+    /**
+     * 각 테스트 전에 MockWebServer 큐 정리
+     * (이전 테스트의 요청이 남아있지 않도록)
+     */
+    @BeforeEach
+    void setUp() throws InterruptedException {
+        // MockWebServer 큐에서 남은 요청 제거 (타임아웃 10ms)
+        while (userService.takeRequest(10, TimeUnit.MILLISECONDS) != null) {
+            // 큐가 비어있으면 null 반환
+        }
+        while (courseService.takeRequest(10, TimeUnit.MILLISECONDS) != null) {
+            // 큐가 비어있으면 null 반환
+        }
+        while (scheduleService.takeRequest(10, TimeUnit.MILLISECONDS) != null) {
+            // 큐가 비어있으면 null 반환
+        }
+
+        // CognitoJwtVerifier Mock 동작 정의 (모든 JWT 토큰 허용)
+        when(cognitoJwtVerifier.isValid(anyString())).thenReturn(true);
+        when(cognitoJwtVerifier.verify(anyString())).thenReturn(Map.of(
+                "sub", "test-user-id",
+                "email", "test@test.com",
+                "name", "Test User"
+        ));
+        when(cognitoJwtVerifier.extractUserId(any())).thenReturn("test-user-id");
+        when(cognitoJwtVerifier.extractEmail(any())).thenReturn("test@test.com");
+        when(cognitoJwtVerifier.extractName(any())).thenReturn("Test User");
+
+        // WebTestClient에 기본 Authorization 헤더 설정 (더미 JWT 토큰)
+        webClient = webClient.mutate()
+                .defaultHeader("Authorization", "Bearer dummy-jwt-token")
+                .build();
+    }
+
+    /**
+     * 모든 테스트 종료 후 MockWebServer 종료
+     */
+    @AfterAll
+    static void tearDown() throws IOException {
+        if (userService != null) userService.shutdown();
+        if (courseService != null) courseService.shutdown();
+        if (scheduleService != null) scheduleService.shutdown();
     }
 
     // ==================== User Service 테스트 ====================
@@ -82,13 +123,31 @@ class GatewayRoutingTest {
     @Test
     @DisplayName("User Service: /api/v1/auth/signup → /auth/signup 경로 재작성")
     void testAuthSignupPathRewrite() throws InterruptedException {
-        // Given: Mock 응답 설정
+        // Given: Mock 응답 설정 (2번 요청하므로 2번 enqueue)
+        userService.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setBody("{\"message\":\"User created\"}")
+                .addHeader("Content-Type", "application/json"));
         userService.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setBody("{\"message\":\"User created\"}")
                 .addHeader("Content-Type", "application/json"));
 
         // When: Gateway로 요청
+        webClient.post()
+                .uri("/api/v1/auth/signup")
+                .bodyValue("{\"email\":\"test@test.com\",\"password\":\"password\"}")
+                .exchange()
+                .expectBody(String.class)
+                .consumeWith(response -> {
+                    System.out.println("=== Test Response ===");
+                    System.out.println("Status: " + response.getStatus());
+                    System.out.println("Body: " + response.getResponseBody());
+                    System.out.println("====================");
+                })
+                .returnResult();
+
+        // 다시 요청해서 검증
         webClient.post()
                 .uri("/api/v1/auth/signup")
                 .bodyValue("{\"email\":\"test@test.com\",\"password\":\"password\"}")
@@ -201,13 +260,13 @@ class GatewayRoutingTest {
         assertThat(request.getPath()).isEqualTo("/courses/456");
     }
 
-    // ==================== Sync Service 테스트 ====================
+    // ==================== Course Service - Sync 경로 테스트 ====================
 
     @Test
-    @DisplayName("Sync Service: /api/v1/sync/status → /sync/status 경로 재작성")
+    @DisplayName("Course Service: /api/v1/sync/status → /sync/status 경로 재작성")
     void testSyncPathRewrite() throws InterruptedException {
-        // Given
-        syncService.enqueue(new MockResponse()
+        // Given: /api/v1/sync/**는 course-service로 라우팅됨
+        courseService.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setBody("{\"status\":\"synced\"}"));
 
@@ -218,7 +277,7 @@ class GatewayRoutingTest {
                 .expectStatus().isOk();
 
         // Then
-        RecordedRequest request = syncService.takeRequest();
+        RecordedRequest request = courseService.takeRequest();
         assertThat(request.getPath()).isEqualTo("/sync/status");
     }
 
@@ -243,25 +302,44 @@ class GatewayRoutingTest {
         assertThat(request.getPath()).isEqualTo("/schedules");
     }
 
-    // ==================== Social Service 테스트 ====================
+    // ==================== Todos/Categories 경로 테스트 ====================
 
     @Test
-    @DisplayName("Social Service: /api/v1/social/feed → /social/feed 경로 재작성")
-    void testSocialPathRewrite() throws InterruptedException {
+    @DisplayName("Schedule Service: /api/v1/todos → /todos 경로 재작성")
+    void testTodosPathRewrite() throws InterruptedException {
         // Given
-        socialService.enqueue(new MockResponse()
+        scheduleService.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setBody("[]"));
 
         // When
         webClient.get()
-                .uri("/api/v1/social/feed")
+                .uri("/api/v1/todos")
                 .exchange()
                 .expectStatus().isOk();
 
         // Then
-        RecordedRequest request = socialService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/social/feed");
+        RecordedRequest request = scheduleService.takeRequest();
+        assertThat(request.getPath()).isEqualTo("/todos");
+    }
+
+    @Test
+    @DisplayName("Schedule Service: /api/v1/categories → /categories 경로 재작성")
+    void testCategoriesPathRewrite() throws InterruptedException {
+        // Given
+        scheduleService.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setBody("[]"));
+
+        // When
+        webClient.get()
+                .uri("/api/v1/categories")
+                .exchange()
+                .expectStatus().isOk();
+
+        // Then
+        RecordedRequest request = scheduleService.takeRequest();
+        assertThat(request.getPath()).isEqualTo("/categories");
     }
 
     // ==================== 404 테스트 ====================

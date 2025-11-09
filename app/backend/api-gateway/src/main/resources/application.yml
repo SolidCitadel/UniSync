@@ -7,34 +7,7 @@ spring:
 
   cloud:
     gateway:
-      routes:
-        # User Service (사용자/인증/소셜)
-        - id: user-service
-          uri: ${USER_SERVICE_URL}
-          predicates:
-            - Path=/api/v1/auth/**,/api/v1/users/**,/api/v1/friends/**,/api/v1/credentials/**,/api/v1/integrations/**
-          filters:
-            - RewritePath=/api/v1/(?<segment>.*), /$\{segment}
-            - name: JwtAuthenticationFilter
-
-        # Course Service (Canvas 학업 데이터: 과목/과제/Task/공지/동기화)
-        - id: course-service
-          uri: ${COURSE_SERVICE_URL}
-          predicates:
-            - Path=/api/v1/courses/**,/api/v1/assignments/**,/api/v1/tasks/**,/api/v1/notices/**,/api/v1/sync/**
-          filters:
-            - RewritePath=/api/v1/(?<segment>.*), /$\{segment}
-            - name: JwtAuthenticationFilter
-
-        # Schedule Service (시간 기반 일정 통합)
-        - id: schedule-service
-          uri: ${SCHEDULE_SERVICE_URL}
-          predicates:
-            - Path=/api/v1/schedules/**
-          filters:
-            - RewritePath=/api/v1/(?<segment>.*), /$\{segment}
-            - name: JwtAuthenticationFilter
-
+      # Routes는 GatewayRoutesConfig.java에서 Java Config로 관리
       # CORS 설정
       globalcors:
         cors-configurations:
@@ -53,6 +26,15 @@ spring:
             allowCredentials: true
             maxAge: 3600
 
+# Service URLs (환경변수로 주입 필수)
+services:
+  user-service:
+    url: ${USER_SERVICE_URL}
+  course-service:
+    url: ${COURSE_SERVICE_URL}
+  schedule-service:
+    url: ${SCHEDULE_SERVICE_URL}
+
 # AWS Cognito Configuration
 aws:
   cognito:
@@ -60,11 +42,11 @@ aws:
     region: ${COGNITO_REGION}
     endpoint: ${COGNITO_ENDPOINT}
 
-# JWT 검증 제외 경로
+# JWT 검증 제외 경로 (원본 요청 경로 기준, RewritePath 실행 전)
 jwt:
   exclude-paths:
-    - /auth/**
-    - /actuator/**
+    - /api/v1/auth/**  # 인증 API (회원가입, 로그인)
+    - /actuator/**      # 헬스체크
 
 # Actuator 설정
 management:
