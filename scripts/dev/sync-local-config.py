@@ -17,37 +17,38 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 
-# 서비스별 환경변수 매핑 (YAML 키 -> .env 키)
+# 서비스별 환경변수 매핑 (YAML 전체 경로 -> .env 키)
+# 형식: ("부모.경로.키", "ENV_VAR_NAME")
 SERVICE_CONFIG_MAP = {
     "user-service": [
-        ("password", "MYSQL_PASSWORD"),
-        ("user-pool-id", "COGNITO_USER_POOL_ID"),
-        ("client-id", "COGNITO_CLIENT_ID"),
-        ("user-token-registered", "SQS_USER_TOKEN_REGISTERED_QUEUE"),
-        ("key", "ENCRYPTION_KEY"),
-        ("canvas-sync-lambda", "CANVAS_SYNC_API_KEY"),
-        ("llm-lambda", "LLM_LAMBDA_API_KEY"),
-        ("base-url", "CANVAS_BASE_URL"),
+        ("spring.datasource.password", "MYSQL_PASSWORD"),
+        ("aws.cognito.user-pool-id", "COGNITO_USER_POOL_ID"),
+        ("aws.cognito.client-id", "COGNITO_CLIENT_ID"),
+        ("aws.sqs.queues.user-token-registered", "SQS_USER_TOKEN_REGISTERED_QUEUE"),
+        ("unisync.encryption.key", "ENCRYPTION_KEY"),
+        ("unisync.api-keys.canvas-sync-lambda", "CANVAS_SYNC_API_KEY"),
+        ("unisync.api-keys.llm-lambda", "LLM_LAMBDA_API_KEY"),
+        ("canvas.base-url", "CANVAS_BASE_URL"),
     ],
     "course-service": [
-        ("password", "MYSQL_PASSWORD"),
-        ("assignment-events", "SQS_ASSIGNMENT_EVENTS_QUEUE"),
-        ("submission-events", "SQS_SUBMISSION_EVENTS_QUEUE"),
+        ("spring.datasource.password", "MYSQL_PASSWORD"),
+        ("sqs.queues.assignment-events", "SQS_ASSIGNMENT_EVENTS_QUEUE"),
+        ("sqs.queues.submission-events", "SQS_SUBMISSION_EVENTS_QUEUE"),
     ],
     "schedule-service": [
-        ("password", "MYSQL_PASSWORD"),
-        ("assignment-events", "SQS_ASSIGNMENT_EVENTS_QUEUE"),
-        ("task-creation", "SQS_TASK_CREATION_QUEUE"),
+        ("spring.datasource.password", "MYSQL_PASSWORD"),
+        ("aws.sqs.queues.assignment-events", "SQS_ASSIGNMENT_EVENTS_QUEUE"),
+        ("aws.sqs.queues.task-creation", "SQS_TASK_CREATION_QUEUE"),
     ],
     "api-gateway": [
-        ("user-pool-id", "COGNITO_USER_POOL_ID"),
+        ("aws.cognito.user-pool-id", "COGNITO_USER_POOL_ID"),
     ],
 }
 
 
 def load_env_file(env_path: Path) -> Dict[str, str]:
     """
-    .env 파일에서 환경변수 읽기
+    .env 파일에서 환경변수 읽기 (주석 제거)
     """
     env_vars = {}
 
@@ -65,44 +66,95 @@ def load_env_file(env_path: Path) -> Dict[str, str]:
             # KEY=VALUE 형식 파싱
             if '=' in line:
                 key, value = line.split('=', 1)
-                env_vars[key.strip()] = value.strip()
+                value = value.strip()
+
+                # 값에서 주석 제거 (# 이후 모두 제거)
+                # 단, URL에 # 이 포함될 수 있으므로 공백 뒤의 #만 제거
+                comment_match = re.match(r'^(.+?)\s+#.*$', value)
+                if comment_match:
+                    value = comment_match.group(1).strip()
+
+                env_vars[key.strip()] = value
 
     return env_vars
 
 
-def update_yaml_value(content: str, yaml_key: str, new_value: str, verbose: bool = True) -> Tuple[str, bool]:
+def update_yaml_value(content: str, yaml_path: str, new_value: str, verbose: bool = True) -> Tuple[str, bool]:
     """
-    YAML 파일에서 특정 키의 값을 업데이트
+    YAML 파일에서 특정 경로의 값을 업데이트 (전체 경로 추적 방식)
 
     Args:
         content: YAML 파일 내용
-        yaml_key: 업데이트할 YAML 키
+        yaml_path: 업데이트할 YAML 전체 경로 (예: "spring.datasource.password")
         new_value: 새로운 값
         verbose: 업데이트 메시지 출력 여부
 
     Returns:
         (업데이트된 YAML 내용, 업데이트 성공 여부)
     """
-    # YAML 들여쓰기를 유지하면서 값만 교체
-    # 패턴: "  key: value  # 주석"
-    pattern = rf'^(\s*{re.escape(yaml_key)}:\s+)(.+?)(\s*(?:#.*)?$)'
-
     lines = content.split('\n')
     updated_lines = []
     updated = False
 
+    # 경로를 구성 요소로 분리 (예: "spring.datasource.password" -> ["spring", "datasource", "password"])
+    path_parts = yaml_path.split('.')
+
+    # 현재 경로 추적을 위한 스택 (들여쓰기 레벨 -> 키 이름)
+    path_stack = []
+
     for line in lines:
-        match = re.match(pattern, line)
-        if match:
-            indent = match.group(1)
-            comment = match.group(3)
-            # 값만 교체, 들여쓰기와 주석은 유지
-            updated_line = f"{indent}{new_value}{comment}"
-            updated_lines.append(updated_line)
-            if verbose:
-                print(f"    [OK] {yaml_key}: {new_value}")
-            updated = True
+        # 주석 또는 빈 줄은 그대로 유지
+        if not line.strip() or line.strip().startswith('#'):
+            updated_lines.append(line)
+            continue
+
+        # 들여쓰기 레벨 계산 (공백 개수)
+        indent_match = re.match(r'^(\s*)', line)
+        indent = len(indent_match.group(1)) if indent_match else 0
+
+        # YAML 키-값 패턴 매칭 (key: value 또는 key:)
+        kv_match = re.match(r'^(\s*)([a-zA-Z0-9_-]+):\s*(.*)$', line)
+
+        if kv_match:
+            key = kv_match.group(2)
+            value = kv_match.group(3)
+
+            # 들여쓰기 레벨이 감소하면 스택에서 제거
+            while path_stack and path_stack[-1][0] >= indent:
+                path_stack.pop()
+
+            # 현재 키를 스택에 추가
+            path_stack.append((indent, key))
+
+            # 현재 경로 구성 (스택의 키들을 점으로 연결)
+            current_path = '.'.join([k for _, k in path_stack])
+
+            # 경로가 일치하면 값 업데이트
+            if current_path == yaml_path:
+                # 값이 있는 경우 (key: value)
+                if value:
+                    # 주석 추출
+                    comment_match = re.match(r'^(.+?)(\s*#.*)?$', value)
+                    if comment_match:
+                        comment = comment_match.group(2) or ''
+                    else:
+                        comment = ''
+
+                    # 새 라인 구성
+                    indent_str = kv_match.group(1)
+                    updated_line = f"{indent_str}{key}: {new_value}{comment}"
+                    updated_lines.append(updated_line)
+
+                    if verbose:
+                        print(f"    [OK] {yaml_path}: {new_value}")
+                    updated = True
+                else:
+                    # 값이 없는 경우 (중첩된 객체) - 그대로 유지
+                    updated_lines.append(line)
+            else:
+                updated_lines.append(line)
         else:
+            # YAML 키-값 패턴이 아닌 경우 그대로 유지
             updated_lines.append(line)
 
     return '\n'.join(updated_lines), updated
