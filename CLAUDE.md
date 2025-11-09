@@ -17,12 +17,13 @@ Canvas LMS 연동 학업 일정관리 서비스. **자동 동기화 + AI 분석*
 - ✅ 공유 모듈(java-common, python-common) 기반 DTO 표준화
 - ✅ E2E 통합 테스트 환경
 - ✅ course-service의 SQS 구독 및 Assignment 처리
+- ✅ **Schedule-Service Phase 1 완료** (일정/할일/카테고리 CRUD, 서브태스크, 단위 테스트)
 
 **진행 중**:
 - 🚧 User-Service의 인증 및 Canvas 토큰 관리
-- 🚧 Schedule-Service의 일정 및 할일 관리 기능
+- 🚧 Schedule-Service의 그룹 기능 (Phase 4)
 - 🚧 Step Functions 워크플로우 구성
-- 🚧 LLM 할일 자동 생성
+- 🚧 Canvas 과제 자동 동기화 및 LLM 할일 자동 생성
 
 ## 아키텍처
 - **마이크로서비스** (3개): Spring Boot 기반, 서비스별 DB 분리
@@ -100,7 +101,8 @@ EventBridge
 - **Schedules**: `start_time`, `end_time`, `source` (CANVAS/USER/GOOGLE 등), `category_id` (필수) - Schedule-Service
 - **Todos**: `start_date`, `due_date` (둘 다 필수), `schedule_id` FK, `parent_todo_id` (서브태스크), `is_ai_generated` - Schedule-Service
 - **Categories**: 일정/할일 분류 체계, 개인/그룹별 - Schedule-Service
-- **Groups**: 협업을 위한 그룹, 권한 관리 (OWNER, ADMIN, MEMBER) - Schedule-Service
+- **Groups**: 협업을 위한 그룹, 권한 관리 (OWNER, ADMIN, MEMBER) - User-Service
+- **Group_Members**: 그룹 멤버십 및 역할 관리 - User-Service
 - **Enrollments**: `is_sync_leader` (Leader 플래그) - Course-Service
 - **Credentials**: `provider` ENUM, `access_token` (암호화) - User-Service
 
@@ -292,7 +294,7 @@ com.unisync.user/
 /api/v1/assignments/** → /assignments/**
 /api/v1/notices/**     → /notices/**
 
-# Schedule-Service (일정 + 할일)
+# Schedule-Service (일정 + 할일 + 카테고리)
 /api/v1/schedules/**   → /schedules/**
 /api/v1/todos/**       → /todos/**
 /api/v1/categories/**  → /categories/**
