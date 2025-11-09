@@ -1,0 +1,43 @@
+# Local Development Profile Example
+#
+# 사용법:
+# 1. 이 파일을 application-local.yml로 복사
+# 2. 실제 값으로 변경
+# 3. IDE에서 Active Profile을 'local'로 설정하거나
+#    SPRING_PROFILES_ACTIVE=local 환경변수 설정
+#
+# 주의: application-local.yml은 .gitignore에 포함되어 커밋되지 않습니다
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3307/course_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: unisync
+    password: unisync_password
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  cloud:
+    aws:
+      region:
+        static: ap-northeast-2
+      credentials:
+        access-key: test
+        secret-key: test
+      sqs:
+        endpoint: http://localhost:4566
+
+# SQS Queue Names
+sqs:
+  queues:
+    assignment-events: assignment-events-queue
+    submission-events: submission-events-queue
+
+# Logging
+logging:
+  level:
+    com.unisync: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG

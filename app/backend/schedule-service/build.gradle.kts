@@ -35,9 +35,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-    // .env file support
-    implementation("me.paulschwarz:spring-dotenv:4.0.0")
-
     // MySQL Driver
     runtimeOnly("com.mysql:mysql-connector-j")
 

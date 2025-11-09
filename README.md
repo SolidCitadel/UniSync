@@ -66,29 +66,85 @@ UniSync/
 - **Java 21** (LTS)
 - **Gradle 8.5 이상** (또는 Gradle Wrapper 사용)
 
-### 2. 환경 변수 설정
-
-```bash
-# .env.example을 .env로 복사
-cp .env.example .env
-
-# .env 파일에서 필요한 값 수정 (JWT_SECRET, OPENAI_API_KEY 등)
-```
-
-### 3. Docker 컨테이너 시작
+### 2. Docker 컨테이너 시작 (최초 1회)
 
 ```bash
 # 모든 인프라 서비스 시작 (LocalStack, MySQL)
 docker-compose up -d
 
-# 로그 확인
-docker-compose logs -f
-
-# 특정 서비스만 시작
-docker-compose up -d localstack mysql
+# 로그 확인 (LocalStack 초기화 완료 대기)
+docker-compose logs -f localstack
+# "Cognito 설정 완료!" 메시지가 보일 때까지 대기
 ```
 
-### 4. 서비스 상태 확인
+### 3. LocalStack 출력값 확인
+
+LocalStack이 초기화되면 자동으로 `.localstack-outputs.yml` 파일이 생성됩니다:
+
+```bash
+# 생성된 값 확인
+cat .localstack-outputs.yml
+```
+
+출력 예시:
+```yaml
+# LocalStack에서 자동 생성된 값들
+# 이 값들을 각 서비스의 application-local.yml에 복사하세요
+
+# AWS Cognito 설정
+aws:
+  region: ap-northeast-2
+  cognito:
+    user-pool-id: ap-northeast-2_xxxxx
+    client-id: xxxxxxxxx
+    region: ap-northeast-2
+    endpoint: http://localhost:4566
+```
+
+### 4. 서비스별 로컬 설정 파일 생성
+
+각 Spring Boot 서비스마다 `application-local.yml` 파일을 생성합니다:
+
+```bash
+# User Service
+cd app/backend/user-service/src/main/resources
+cp application-local.yml.example application-local.yml
+
+# Course Service
+cd app/backend/course-service/src/main/resources
+cp application-local.yml.example application-local.yml
+
+# Schedule Service
+cd app/backend/schedule-service/src/main/resources
+cp application-local.yml.example application-local.yml
+```
+
+**각 서비스의 `application-local.yml`에 `.localstack-outputs.yml`의 값 복사**:
+
+```yaml
+# application-local.yml 편집
+# .localstack-outputs.yml의 cognito 설정을 복사
+aws:
+  cognito:
+    user-pool-id: ap-northeast-2_xxxxx  # .localstack-outputs.yml에서 복사
+    client-id: xxxxxxxxx                # .localstack-outputs.yml에서 복사
+```
+
+**참고**:
+- `application-local.yml`은 `.gitignore`에 포함되어 커밋되지 않습니다
+- 다른 LocalStack 설정(SQS endpoint 등)은 이미 올바르게 설정되어 있습니다
+
+### 5. IDE에서 Active Profile 설정
+
+각 서비스를 IDE에서 실행하려면 Active Profile을 `local`로 설정해야 합니다:
+
+**IntelliJ IDEA**:
+- Run/Debug Configurations → Active profiles: `local`
+
+**VS Code**:
+- `launch.json` → `"spring.profiles.active": "local"`
+
+### 6. 서비스 상태 확인
 
 ```bash
 # 컨테이너 상태 확인
@@ -101,25 +157,25 @@ docker exec -it unisync-mysql mysql -uroot -proot_password -e "SHOW DATABASES;"
 aws --endpoint-url=http://localhost:4566 sqs list-queues
 ```
 
-### 5-A. Spring Boot 서비스 실행 (개별)
+### 7-A. Spring Boot 서비스 실행 (개별)
 
 각 서비스를 별도 터미널에서 실행:
 
 ```bash
 # User Service
 cd app/backend/user-service
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=local'
 
 # Course Service
 cd app/backend/course-service
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=local'
 
 # Schedule Service
 cd app/backend/schedule-service
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-### 5-B. 전체 애플리케이션 실행 (Docker Compose)
+### 7-B. 전체 애플리케이션 실행 (Docker Compose)
 
 모든 서비스를 컨테이너로 한 번에 실행:
 

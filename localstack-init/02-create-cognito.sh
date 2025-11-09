@@ -85,7 +85,7 @@ else
   echo "✓ User Pool Client 생성 완료: $CLIENT_ID"
 fi
 
-# .env 파일 업데이트
+# .env 파일 업데이트 (Docker Compose용)
 echo ""
 echo ".env 파일 업데이트 중..."
 
@@ -98,10 +98,28 @@ if [ -f "$ENV_FILE" ]; then
   echo "✓ .env 파일 업데이트 완료: $ENV_FILE"
 else
   echo "⚠ .env 파일을 찾을 수 없습니다: $ENV_FILE"
-  echo "다음 값을 .env 파일에 수동으로 추가하세요:"
-  echo "COGNITO_USER_POOL_ID=$USER_POOL_ID"
-  echo "COGNITO_CLIENT_ID=$CLIENT_ID"
 fi
+
+# Output 파일 생성 (로컬 IDE 개발자용 - application-local.yml에 복사)
+OUTPUT_FILE="/workspace/.localstack-outputs.yml"
+echo ""
+echo "LocalStack 출력 파일 생성 중..."
+
+cat > "$OUTPUT_FILE" << EOF
+# LocalStack에서 자동 생성된 값들
+# 이 값들을 각 서비스의 application-local.yml에 복사하세요
+
+# AWS Cognito 설정
+aws:
+  region: $REGION
+  cognito:
+    user-pool-id: $USER_POOL_ID
+    client-id: $CLIENT_ID
+    region: $REGION
+    endpoint: http://localhost:4566
+EOF
+
+echo "✓ Output 파일 생성 완료: $OUTPUT_FILE"
 
 # 정보 출력
 echo ""
@@ -112,6 +130,11 @@ echo "User Pool ID: $USER_POOL_ID"
 echo "Client ID: $CLIENT_ID"
 echo "Region: $REGION"
 echo ""
-echo "이제 애플리케이션을 시작할 수 있습니다:"
-echo "  docker-compose -f docker-compose-app.yml up"
+echo "생성된 값은 다음 파일에 저장되었습니다:"
+echo "  $OUTPUT_FILE"
+echo ""
+echo "다음 단계:"
+echo "  1. cat .localstack-outputs.yml 내용 확인"
+echo "  2. 각 서비스의 application-local.yml에 복사"
+echo "  3. docker-compose -f docker-compose-app.yml up"
 echo "========================================="

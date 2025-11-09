@@ -58,6 +58,7 @@ build/
 .env
 .env.local
 .env.*.local
+.localstack-outputs.yml
 
 # Test results
 test-results/
@@ -65,8 +66,8 @@ test-results/
 ### Application Config ###
 # Note: application-*.yml profile files should be committed
 # Only ignore truly sensitive local overrides
-# application-local.yml
-# application-local.properties
+application-local.yml
+application-local.properties
 
 ### VS Code ###
 .vscode/
