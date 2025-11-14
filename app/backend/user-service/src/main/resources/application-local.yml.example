@@ -37,7 +37,6 @@ unisync:
     key: IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=  # 로컬 테스트용
   api-keys:
     canvas-sync-lambda: test-canvas-sync-key
-    llm-lambda: test-llm-key
 
 # Canvas Configuration
 canvas:

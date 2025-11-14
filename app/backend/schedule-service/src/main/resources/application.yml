@@ -29,7 +29,6 @@ aws:
     queues:
       assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
       task-creation: ${SQS_TASK_CREATION_QUEUE}
-      llm-analysis: ${SQS_LLM_ANALYSIS_QUEUE}
 
 # External Service URLs
 services:

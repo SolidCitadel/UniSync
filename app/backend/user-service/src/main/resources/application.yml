@@ -35,7 +35,6 @@ unisync:
     key: ${ENCRYPTION_KEY}
   api-keys:
     canvas-sync-lambda: ${CANVAS_SYNC_API_KEY}
-    llm-lambda: ${LLM_LAMBDA_API_KEY}
 
 # Canvas Configuration
 canvas:
