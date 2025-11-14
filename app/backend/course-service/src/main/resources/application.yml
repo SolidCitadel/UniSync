@@ -1,3 +1,6 @@
+# application.yml - 공통 기본 설정
+# 모든 프로파일이 공유하는 설정. 민감 정보는 ${...} 플레이스홀더로 정의합니다.
+
 server:
   port: 8082
 
@@ -17,18 +20,16 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
     open-in-view: false
-    hibernate:
-      ddl-auto: update
 
   cloud:
     aws:
       region:
-        static: ${AWS_REGION:us-east-1}
+        static: ${AWS_REGION}
       credentials:
-        access-key: ${AWS_ACCESS_KEY_ID:test}
-        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+        access-key: ${AWS_ACCESS_KEY_ID}
+        secret-key: ${AWS_SECRET_ACCESS_KEY}
       sqs:
-        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+        endpoint: ${AWS_SQS_ENDPOINT}
 
 # Swagger/OpenAPI
 springdoc:

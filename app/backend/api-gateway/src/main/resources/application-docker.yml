@@ -1,9 +1,0 @@
-# Docker Integration Test Profile
-# Usage: Set SPRING_PROFILES_ACTIVE=docker in docker-compose-app.yml
-# All required environment variables are injected from docker-compose-app.yml
-
-# Logging
-logging:
-  level:
-    com.unisync: INFO
-    org.springframework.cloud.gateway: INFO

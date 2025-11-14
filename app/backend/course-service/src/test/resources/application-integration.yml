@@ -1,3 +1,8 @@
+# application-integration.yml - 통합 테스트용 프로파일
+# @ActiveProfiles("integration")을 사용하는 Spring 통합 테스트(@SpringBootTest 등)에서 사용됩니다.
+# Testcontainers를 사용하여 동적으로 DB를 띄웁니다.
+# 주의: docker-compose.acceptance.yml과는 무관합니다.
+
 spring:
   application:
     name: course-service-test

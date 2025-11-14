@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## 프로젝트 개요
-Canvas LMS 연동 학업 일정관리 서비스. 자동 동기화 + AI 분석으로 수동 입력 제거.
+Canvas LMS 연동 학업 일정관리 서비스. Canvas 과제를 자동 동기화하여 일정/할일로 변환.
 
 ## 아키텍처
 - **마이크로서비스** (Spring Boot, 서비스별 DB 분리)
@@ -23,10 +23,19 @@ Canvas LMS 연동 학업 일정관리 서비스. 자동 동기화 + AI 분석으
 - AES-256 암호화 저장
 - Credentials 테이블 `provider='CANVAS'`
 
-### 2. AI 자동화 (사용자 버튼 없음)
+### 2. 단계별 구현 전략
+**Phase 1 (현재): 수동 API 기반 동기화**
+- Course-Service: REST API로 Canvas Sync Lambda 호출
+- Schedule-Service: REST API로 과제 → 일정/할일 변환 Lambda 호출
+- 사용자가 명시적으로 동기화 버튼 클릭
+
+**Phase 2 (계획): EventBridge 자동 동기화**
+- EventBridge 스케줄러로 주기적 자동 호출
+- 사용자 설정에 따른 동기화 주기 조정
+
+**Phase 3 (선택): LLM 기반 자동화 (시간 여유 시)**
 - 새 과제 감지 → LLM 자동 분석 → task/subtask 생성
 - 제출물 감지 → LLM 자동 검증 → 유효시 task 상태 DONE
-- Sync-Workflow에서 자동 실행
 
 ### 3. Leader 선출 (과목당 1명만 Canvas API 호출)
 - 과목 첫 연동자가 Leader (`is_sync_leader=true`)
@@ -36,7 +45,7 @@ Canvas LMS 연동 학업 일정관리 서비스. 자동 동기화 + AI 분석으
 ## 데이터 모델 핵심
 - **Assignments**: `canvas_assignment_id` UNIQUE (Course-Service)
 - **Schedules**: `start_time`, `end_time`, `source` (CANVAS/USER/GOOGLE), `category_id` 필수 (Schedule-Service)
-- **Todos**: `start_date`, `due_date` 필수, `schedule_id` FK, `parent_todo_id` (서브태스크), `is_ai_generated` (Schedule-Service)
+- **Todos**: `start_date`, `due_date` 필수, `schedule_id` FK, `parent_todo_id` (서브태스크) (Schedule-Service)
 - **Categories**: 일정/할일 분류, 개인/그룹별 (Schedule-Service)
 - **Groups**: 협업 그룹, 권한 관리 (OWNER, ADMIN, MEMBER) (User-Service)
 - **Group_Members**: 그룹 멤버십 및 역할 (User-Service)

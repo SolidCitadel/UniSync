@@ -27,7 +27,6 @@ SERVICE_CONFIG_MAP = {
         ("aws.sqs.queues.user-token-registered", "SQS_USER_TOKEN_REGISTERED_QUEUE"),
         ("unisync.encryption.key", "ENCRYPTION_KEY"),
         ("unisync.api-keys.canvas-sync-lambda", "CANVAS_SYNC_API_KEY"),
-        ("unisync.api-keys.llm-lambda", "LLM_LAMBDA_API_KEY"),
         ("canvas.base-url", "CANVAS_BASE_URL"),
     ],
     "course-service": [

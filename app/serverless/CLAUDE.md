@@ -4,23 +4,24 @@
 
 ## 핵심 워크플로우
 
-### Canvas 동기화
+### Canvas 동기화 (Phase 1 구현)
 ```
-EventBridge (5분마다)
-  → Canvas-Sync-Workflow (Step Functions)
+사용자 요청 (API 호출)
+  → Canvas-Sync-Lambda
   → Canvas API 폴링 (Leader 토큰)
   → 새 과제 감지
      → SQS: assignment-events-queue
      → Course-Service: Assignment 저장
      → Schedule-Service:
-        1. 일정(Schedule) 자동 생성 (과제 마감일)
-        2. LLM-Lambda 트리거: 과제 설명 분석
-        3. 할일(Todo) + 서브태스크 자동 생성
+        - 일정(Schedule) 생성 (과제 마감일)
+        - 할일(Todo) 생성 (과제 기반)
   → 제출 감지
      → SQS: submission-events-queue
-     → LLM-Lambda: 제출물 검증
      → Schedule-Service: 일정/할일 상태 업데이트
 ```
+
+**Phase 2 (계획)**: EventBridge 스케줄러로 자동 호출
+**Phase 3 (선택)**: LLM 분석 기반 자동 서브태스크 생성 및 제출물 검증
 
 ### Google Calendar 동기화
 ```
@@ -79,10 +80,10 @@ EventBridge
 - SQS로 이벤트 발행
 - 테스트: `app/serverless/canvas-sync-lambda/tests/`
 
-### llm-lambda
+### llm-lambda (Phase 3 - 향후 구현)
 - 과제 설명 분석 (할일/서브태스크 생성)
 - 제출물 검증 (완료 여부 판단)
-- 테스트: `app/serverless/llm-lambda/tests/`
+- 현재는 미구현, 시간 여유 시 추가 예정
 
 ## 테스트
 

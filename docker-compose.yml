@@ -1,11 +1,20 @@
+# docker-compose.yml - 기본 로컬 운영 환경
+# Usage: docker-compose up
+# 프론트엔드 연동, 인프라(IaC) 참조 등 '기본 환경'을 구성합니다.
+# 개인화가 필요하면 docker-compose.override.yml (.gitignore)을 사용하세요.
+
 services:
-  # LocalStack - AWS 서비스 로컬 에뮬레이션 (SQS, Step Functions, Lambda, S3 등)
+  # ==========================================
+  # Infrastructure Services
+  # ==========================================
+
+  # LocalStack - AWS 서비스 로컬 에뮬레이션
   localstack:
     image: localstack/localstack-pro
     container_name: unisync-localstack
     ports:
-      - "4566:4566"            # LocalStack Gateway
-      - "4510-4559:4510-4559"  # 외부 서비스 포트 범위
+      - "4566:4566"
+      - "4510-4559:4510-4559"
     environment:
       - SERVICES=sqs,stepfunctions,lambda,s3,secretsmanager,events,cognito-idp,elasticloadbalancingv2,ec2
       - DEBUG=1
@@ -13,19 +22,24 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
       - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}  # Pro 라이선스 토큰
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
       - AWS_REGION=${AWS_REGION}
       - LOCALSTACK_ENDPOINT=http://localhost:4566
       - CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL}
       - USER_SERVICE_URL=http://user-service:8081
     volumes:
       - ".:/workspace"  # 프로젝트 루트 마운트 (스크립트가 .env 파일 업데이트 가능)
-      - "./localstack-init:/etc/localstack/init/ready.d"  # 초기화 스크립트
-      - "./app/serverless:/var/lib/localstack/serverless"  # Lambda 소스
+      - "./localstack-init:/etc/localstack/init/ready.d"
+      - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "localstack-data:/var/lib/localstack"
     networks:
       - unisync-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # MySQL - 각 서비스별 데이터베이스
   mysql:
@@ -34,21 +48,197 @@ services:
     ports:
       - "3307:3306"  # 호스트 포트 변경 (호스트 3306 충돌 방지)
     environment:
-      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
       - MYSQL_USER=unisync
-      - MYSQL_PASSWORD=unisync_password
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-unisync_password}
       - TZ=Asia/Seoul
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./mysql-init:/docker-entrypoint-initdb.d  # 초기 DB 생성 스크립트
+      - ./mysql-init:/docker-entrypoint-initdb.d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
       - unisync-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ==========================================
+  # Application Services
+  # ==========================================
+
+  # User Service - 사용자/인증/소셜 기능
+  user-service:
+    build:
+      context: ./app
+      dockerfile: backend/user-service/Dockerfile
+    container_name: unisync-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=prod
+
+      # Database Configuration
+      - USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - USER_SERVICE_DB_USER=unisync
+      - USER_SERVICE_DB_PASSWORD=${MYSQL_PASSWORD:-unisync_password}
+
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+
+      # AWS Cognito Configuration (LocalStack)
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - COGNITO_REGION=${COGNITO_REGION:-ap-northeast-2}
+      - COGNITO_ENDPOINT=http://localstack:4566
+
+      # Canvas Configuration
+      - CANVAS_BASE_URL=${CANVAS_BASE_URL}
+
+      # UniSync Configuration
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
+      - SQS_USER_TOKEN_REGISTERED_QUEUE=${SQS_USER_TOKEN_REGISTERED_QUEUE}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    networks:
+      - unisync-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Course Service - 과목 및 과제 관리
+  course-service:
+    build:
+      context: ./app
+      dockerfile: backend/course-service/Dockerfile
+    container_name: unisync-course-service
+    ports:
+      - "8082:8082"
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=prod
+
+      # Database Configuration
+      - COURSE_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/course_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - COURSE_SERVICE_DB_USER=unisync
+      - COURSE_SERVICE_DB_PASSWORD=${MYSQL_PASSWORD:-unisync_password}
+
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+
+      # Service URLs
+      - USER_SERVICE_URL=http://user-service:8081
+    depends_on:
+      mysql:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    networks:
+      - unisync-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Schedule Service - 일정 및 할일 관리
+  schedule-service:
+    build:
+      context: ./app
+      dockerfile: backend/schedule-service/Dockerfile
+    container_name: unisync-schedule-service
+    ports:
+      - "8083:8083"
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=prod
+
+      # Database Configuration
+      - SCHEDULE_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/schedule_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - SCHEDULE_SERVICE_DB_USER=unisync
+      - SCHEDULE_SERVICE_DB_PASSWORD=${MYSQL_PASSWORD:-unisync_password}
+
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION}
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - SQS_ASSIGNMENT_EVENTS_QUEUE=${SQS_ASSIGNMENT_EVENTS_QUEUE}
+      - SQS_TASK_CREATION_QUEUE=${SQS_TASK_CREATION_QUEUE}
+
+      # Service URLs
+      - USER_SERVICE_URL=http://user-service:8081
+      - COURSE_SERVICE_URL=http://course-service:8082
+    depends_on:
+      mysql:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
+    networks:
+      - unisync-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # API Gateway - 통합 게이트웨이
+  api-gateway:
+    build:
+      context: ./app
+      dockerfile: backend/api-gateway/Dockerfile
+    container_name: unisync-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=prod
+
+      # Service URLs (Docker internal network)
+      - USER_SERVICE_URL=http://user-service:8081
+      - COURSE_SERVICE_URL=http://course-service:8082
+      - SCHEDULE_SERVICE_URL=http://schedule-service:8083
+
+      # AWS Cognito Configuration (LocalStack)
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_REGION=${COGNITO_REGION:-ap-northeast-2}
+      - COGNITO_ENDPOINT=http://localstack:4566
+    depends_on:
+      user-service:
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
+      schedule-service:
+        condition: service_healthy
+    networks:
+      - unisync-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   mysql-data:

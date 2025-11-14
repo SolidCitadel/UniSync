@@ -35,10 +35,61 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
 
 ## 환경변수 및 프로파일 관리
 
-### 프로파일 구분
-- **`local`**: 로컬 개발용, `application-local.yml` 하드코딩 (gitignored)
-- **`docker`**: Docker Compose, 환경변수 주입
-- **`test`**: 테스트용, H2 인메모리 DB
+### Spring 프로파일 (application-*.yml)
+
+각 서비스의 `src/main/resources/`에 다음 프로파일 파일들이 있습니다:
+
+1. **`application.yml`** (공통)
+   - 모든 프로파일이 공유하는 기본값
+   - 민감 정보는 `${...}` 플레이스홀더로 정의
+   - 커밋됨 ✓
+
+2. **`application-local.yml`** (로컬 개발용)
+   - IDE에서 main()을 직접 실행할 때 사용
+   - `docker-compose up`으로 띄운 인프라(MySQL, LocalStack)에 localhost로 접속
+   - `ddl-auto: update`, 상세 SQL 로깅, 민감 정보 하드코딩
+   - **반드시 .gitignore에 추가됨** (.gitignore ✓)
+
+3. **`application-acceptance.yml`** (인수 테스트용)
+   - `docker-compose.acceptance.yml`로 실행되는 앱 전용
+   - `ddl-auto: create-drop`, 테스트 독립성 보장
+   - 환경 변수로 설정 주입받음
+   - 커밋됨 ✓
+
+4. **`application-prod.yml`** (운영용)
+   - `docker-compose.yml` (로컬 운영환경) 및 실제 ECS 배포 시 사용
+   - `ddl-auto: validate`, `logging.level.root: INFO`, `shutdown: graceful`
+   - 환경 변수로 설정 주입받음
+   - 커밋됨 ✓
+
+**테스트 프로파일** (`src/test/resources/`):
+- **`application-integration.yml`** (통합 테스트용)
+  - `@ActiveProfiles("integration")` 사용하는 Spring 통합 테스트용
+  - Testcontainers 또는 H2 인메모리 DB 사용
+  - docker-compose와 무관
+  - 커밋됨 ✓
+
+### Docker Compose 파일
+
+1. **`docker-compose.yml`** (기본 로컬 운영 환경)
+   - `docker-compose up` 실행 시 사용
+   - 모든 서비스 정의 (LocalStack, MySQL, 백엔드 서비스들)
+   - `SPRING_PROFILES_ACTIVE=prod` 주입
+   - Docker 내부 네트워크용 엔드포인트 및 민감 정보를 환경 변수로 주입
+   - 커밋됨 ✓
+
+2. **`docker-compose.override.yml`** (개인화 - 필요 시 사용)
+   - `docker-compose up` 시 자동으로 병합되어 기본 설정 덮어쓰기
+   - 개인용 포트 변경, 로컬 코드 볼륨 마운트 등에 사용 가능
+   - 현재는 제공되지 않으며, 필요 시 직접 생성
+   - **반드시 .gitignore에 추가됨** (.gitignore ✓)
+
+3. **`docker-compose.acceptance.yml`** (인수 테스트 환경)
+   - `docker-compose -f docker-compose.acceptance.yml up`으로 실행
+   - 자동화된 인수/E2E 테스트 환경
+   - `SPRING_PROFILES_ACTIVE=acceptance` 주입
+   - 테스트용 휘발성 DB (tmpfs 볼륨 권장)
+   - 커밋됨 ✓
 
 ### 로컬 개발 환경 설정
 
@@ -46,48 +97,53 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
 ```
 루트/.env (gitignored)
   ↓ (LocalStack 초기화 스크립트 자동 업데이트)
-  ↓ (sync-local-config.py로 동기화)
   ↓
-각 서비스/application-local.yml (gitignored, 하드코딩)
+각 서비스/application-local.yml.example (커밋됨, 템플릿)
+  ↓ (수동 복사 또는 sync-local-config.py로 자동 생성)
+  ↓
+각 서비스/application-local.yml (gitignored, 실제 사용)
   ↓
 IDE 서비스 실행 (Profile: local)
 ```
 
 **초기 설정** (신규 개발자):
+
+방법 1: 수동 설정
 ```bash
 # 1. 각 서비스별 application-local.yml 생성
-cd app/backend/{service}/src/main/resources
+cd app/backend/user-service/src/main/resources
 cp application-local.yml.example application-local.yml
+# (course-service, schedule-service, api-gateway도 동일하게 반복)
 
-# 2. LocalStack 실행
-docker-compose up -d
+# 2. 인프라 실행 (MySQL, LocalStack)
+docker-compose up -d mysql localstack
 
-# 3. 환경변수 동기화
-python scripts/dev/sync-local-config.py
-
+# 3. .env 파일에서 생성된 값 확인 후 각 application-local.yml에 수동 입력
 # 4. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
 ```
 
+방법 2: 자동 동기화 (권장)
+```bash
+# 1. 인프라 실행 (MySQL, LocalStack)
+docker-compose up -d mysql localstack
+
+# 2. 환경변수 동기화 (application-local.yml 자동 생성/업데이트)
+python scripts/dev/sync-local-config.py
+
+# 3. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
+```
+
 **동기화 스크립트** (`sync-local-config.py`):
-- 루트 `.env` → 각 서비스 `application-local.yml` 자동 업데이트
+- `application-local.yml.example` → `application-local.yml` 복사 (없을 경우)
+- 루트 `.env` 값들을 각 서비스 `application-local.yml`에 자동 주입
 - Cognito User Pool ID/Client ID, MySQL 비밀번호, 암호화 키, SQS 큐 이름, API 키, Canvas Base URL
 - YAML 형식과 주석 유지
 
 **주의**:
 - `application-local.yml`은 gitignored (커밋 안됨)
+- `application-local.yml.example`은 템플릿으로 커밋됨
 - LocalStack 재시작시 User Pool ID 변경될 수 있음 → `sync-local-config.py` 재실행
 - `.env` 파일도 gitignored (민감 정보 포함)
-
-### Docker/배포 환경
-환경변수로 주입:
-```yaml
-# docker-compose.app.yml
-user-service:
-  environment:
-    - SPRING_PROFILES_ACTIVE=docker
-    - USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db?...
-    - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
-```
 
 ## DDD 구조 예시
 
