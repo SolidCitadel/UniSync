@@ -1,0 +1,16 @@
+# application-acceptance.yml - 인수 테스트용 프로파일
+# docker-compose.acceptance.yml에서 SPRING_PROFILES_ACTIVE=acceptance로 실행됩니다.
+# 모든 환경 변수는 docker-compose.acceptance.yml에서 주입됩니다.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # 테스트 독립성을 위한 휘발성 DB
+    show-sql: false  # 로그 볼륨 감소
+
+# Logging (운영과 유사한 레벨)
+logging:
+  level:
+    com.unisync: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: INFO

@@ -1,0 +1,17 @@
+# application-prod.yml - 운영용 프로파일
+# docker-compose.yml (로컬 운영 환경) 및 실제 ECS 배포 시 사용됩니다.
+# 모든 환경 변수는 docker-compose.yml 또는 ECS Task Definition에서 주입됩니다.
+
+# Logging (운영 레벨)
+logging:
+  level:
+    root: INFO
+    com.unisync: INFO
+    org.springframework.web: INFO
+    org.springframework.cloud.gateway: INFO
+
+# Server
+server:
+  shutdown: graceful  # 우아한 종료
+  netty:
+    connection-timeout: 20s

@@ -1,8 +1,12 @@
+# docker-compose.acceptance.yml - 인수 테스트 환경
+# Usage: docker-compose -f docker-compose.acceptance.yml up
+# 자동화된 인수/E2E 테스트 환경을 구성합니다.
+
 services:
   # LocalStack - AWS 서비스 로컬 에뮬레이션 (테스트용)
   localstack:
     image: localstack/localstack-pro
-    container_name: unisync-test-localstack
+    container_name: unisync-acceptance-localstack
     ports:
       - "4566:4566"
     environment:
@@ -22,19 +26,19 @@ services:
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "localstack-test-data:/var/lib/localstack"
+      - "localstack-acceptance-data:/var/lib/localstack"
     networks:
-      - test-network
+      - acceptance-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # MySQL - 테스트용 DB
+  # MySQL - 테스트용 휘발성 DB (tmpfs 권장)
   mysql:
     image: mysql:8.0
-    container_name: unisync-test-mysql
+    container_name: unisync-acceptance-mysql
     ports:
       - "3307:3306"
     environment:
@@ -46,7 +50,7 @@ services:
       - ./mysql-init:/docker-entrypoint-initdb.d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
-      - test-network
+      - acceptance-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ptest_password"]
       interval: 5s
@@ -58,11 +62,11 @@ services:
     build:
       context: ./app
       dockerfile: backend/user-service/Dockerfile
-    container_name: unisync-test-user-service
+    container_name: unisync-acceptance-user-service
     ports:
       - "8081:8081"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=acceptance
       - USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/${USER_SERVICE_DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       - USER_SERVICE_DB_USER=${USER_SERVICE_DB_USER}
       - USER_SERVICE_DB_PASSWORD=${USER_SERVICE_DB_PASSWORD}
@@ -85,7 +89,7 @@ services:
       localstack:
         condition: service_healthy
     networks:
-      - test-network
+      - acceptance-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
       interval: 10s
@@ -93,16 +97,16 @@ services:
       retries: 15
       start_period: 30s
 
-  # Course Service - 테스트 대상
+  # Course Service - 과목 및 과제 관리
   course-service:
     build:
       context: ./app
       dockerfile: backend/course-service/Dockerfile
-    container_name: unisync-test-course-service
+    container_name: unisync-acceptance-course-service
     ports:
       - "8082:8082"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=acceptance
       - COURSE_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/${COURSE_SERVICE_DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       - COURSE_SERVICE_DB_USER=${COURSE_SERVICE_DB_USER}
       - COURSE_SERVICE_DB_PASSWORD=${COURSE_SERVICE_DB_PASSWORD}
@@ -119,7 +123,7 @@ services:
       user-service:
         condition: service_healthy
     networks:
-      - test-network
+      - acceptance-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
       interval: 10s
@@ -132,7 +136,7 @@ services:
     build:
       context: ./app
       dockerfile: backend/api-gateway/Dockerfile
-    container_name: unisync-test-api-gateway
+    container_name: unisync-acceptance-api-gateway
     ports:
       - "8080:8080"
     environment:
@@ -148,7 +152,7 @@ services:
       course-service:
         condition: service_healthy
     networks:
-      - test-network
+      - acceptance-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 10s
@@ -157,8 +161,8 @@ services:
       start_period: 30s
 
 networks:
-  test-network:
+  acceptance-network:
     driver: bridge
 
 volumes:
-  localstack-test-data:
+  localstack-acceptance-data:

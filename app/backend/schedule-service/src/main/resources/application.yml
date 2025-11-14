@@ -1,3 +1,6 @@
+# application.yml - 공통 기본 설정
+# 모든 프로파일이 공유하는 설정. 민감 정보는 ${...} 플레이스홀더로 정의합니다.
+
 server:
   port: 8083
 
@@ -22,7 +25,7 @@ spring:
 aws:
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
-    region: ${AWS_REGION:ap-northeast-2}
+    region: ${AWS_REGION}
     queues:
       assignment-events: assignment-events-queue
       task-creation: task-creation-queue
@@ -31,9 +34,9 @@ aws:
 # External Service URLs
 services:
   user-service:
-    url: ${USER_SERVICE_URL:http://localhost:8081}
+    url: ${USER_SERVICE_URL}
   course-service:
-    url: ${COURSE_SERVICE_URL:http://localhost:8082}
+    url: ${COURSE_SERVICE_URL}
 
 # Swagger/OpenAPI
 springdoc:
