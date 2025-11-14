@@ -24,6 +24,12 @@ spring:
       sqs:
         endpoint: http://localhost:4566
 
+# SQS Queue Names
+sqs:
+  queues:
+    assignment-events: assignment-events-queue
+    submission-events: submission-events-queue
+
 # Logging (상세 로깅)
 logging:
   level:

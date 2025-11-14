@@ -19,6 +19,10 @@ aws:
   sqs:
     endpoint: http://localhost:4566
     region: ap-northeast-2
+    queues:
+      assignment-events: assignment-events-queue
+      task-creation: task-creation-queue
+      llm-analysis: llm-analysis-queue
 
 # External Service URLs (로컬 개발)
 services:

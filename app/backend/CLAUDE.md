@@ -78,9 +78,10 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
    - Docker 내부 네트워크용 엔드포인트 및 민감 정보를 환경 변수로 주입
    - 커밋됨 ✓
 
-2. **`docker-compose.override.yml`** (개인화)
+2. **`docker-compose.override.yml`** (개인화 - 필요 시 사용)
    - `docker-compose up` 시 자동으로 병합되어 기본 설정 덮어쓰기
-   - 개인용 포트 변경, 로컬 코드 볼륨 마운트 등
+   - 개인용 포트 변경, 로컬 코드 볼륨 마운트 등에 사용 가능
+   - 현재는 제공되지 않으며, 필요 시 직접 생성
    - **반드시 .gitignore에 추가됨** (.gitignore ✓)
 
 3. **`docker-compose.acceptance.yml`** (인수 테스트 환경)
