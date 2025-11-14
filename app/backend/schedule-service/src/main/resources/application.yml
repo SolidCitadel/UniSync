@@ -27,9 +27,9 @@ aws:
     endpoint: ${AWS_SQS_ENDPOINT}
     region: ${AWS_REGION}
     queues:
-      assignment-events: assignment-events-queue
-      task-creation: task-creation-queue
-      llm-analysis: llm-analysis-queue
+      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
+      task-creation: ${SQS_TASK_CREATION_QUEUE}
+      llm-analysis: ${SQS_LLM_ANALYSIS_QUEUE}
 
 # External Service URLs
 services:

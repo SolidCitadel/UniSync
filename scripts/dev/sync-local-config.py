@@ -39,6 +39,7 @@ SERVICE_CONFIG_MAP = {
         ("spring.datasource.password", "MYSQL_PASSWORD"),
         ("aws.sqs.queues.assignment-events", "SQS_ASSIGNMENT_EVENTS_QUEUE"),
         ("aws.sqs.queues.task-creation", "SQS_TASK_CREATION_QUEUE"),
+        ("aws.sqs.queues.llm-analysis", "SQS_LLM_ANALYSIS_QUEUE"),
     ],
     "api-gateway": [
         ("aws.cognito.user-pool-id", "COGNITO_USER_POOL_ID"),
