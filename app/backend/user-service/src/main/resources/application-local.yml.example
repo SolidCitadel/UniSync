@@ -1,59 +1,52 @@
-# Local Development Profile Example
-#
-# 사용법:
-# 1. 이 파일을 application-local.yml로 복사
-# 2. 실제 값으로 변경
-# 3. IDE에서 Active Profile을 'local'로 설정하거나
-#    SPRING_PROFILES_ACTIVE=local 환경변수 설정
-#
-# 주의: application-local.yml은 .gitignore에 포함되어 커밋되지 않습니다
+# application-local.yml - 로컬 개발용 프로파일
+# IDE에서 main()을 직접 실행할 때 사용 (반드시 .gitignore에 추가)
+# docker-compose up으로 띄운 인프라(MySQL, LocalStack)에 접속합니다.
 
 spring:
   datasource:
+    # docker-compose.yml의 MySQL (호스트 포트 3307)
     url: jdbc:mysql://localhost:3307/user_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: unisync
     password: unisync_password
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: update  # 개발 편의를 위한 자동 스키마 업데이트
     show-sql: true
 
 # AWS Configuration (LocalStack)
 aws:
   region: ap-northeast-2
-  endpoint: http://localhost:4566
   credentials:
     access-key: test
     secret-key: test
-
   cognito:
-    user-pool-id: ap-northeast-2_0ba219e6ff914508879b28f3de320169  # LocalStack에서 생성된 ID로 변경
-    client-id: lsqvkc06zho51p9f79zl2kgogc  # LocalStack에서 생성된 ID로 변경
+    user-pool-id: ap-northeast-2_XXXXXXXXX  # localstack-init 스크립트가 생성한 값으로 변경 필요
+    client-id: test-client-id
     region: ap-northeast-2
     endpoint: http://localhost:4566
-
   sqs:
     endpoint: http://localhost:4566
     region: ap-northeast-2
     queues:
       user-token-registered: user-token-registered-queue
 
-# UniSync Configuration
+# UniSync Configuration (로컬 테스트용 하드코딩)
 unisync:
   encryption:
-    key: IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=  # 실제 암호화 키로 변경
+    key: IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=  # 로컬 테스트용
   api-keys:
-    canvas-sync-lambda: 5BYYEpyP-Mh_anF4iAQAK7A10151umUIe7WEvO2O2Mk
-    llm-lambda: Ivxmu9FpwhqWMl8UfEA75AucikKAnSBEEIWdnDqGKzY
+    canvas-sync-lambda: test-canvas-sync-key
+    llm-lambda: test-llm-key
 
 # Canvas Configuration
 canvas:
   base-url: https://khcanvas.khu.ac.kr
 
-# Logging
+# Logging (상세 로깅)
 logging:
   level:
     com.unisync: DEBUG
-    org.springframework.web: INFO
+    org.springframework.web: DEBUG
     org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

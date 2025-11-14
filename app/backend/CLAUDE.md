@@ -96,14 +96,32 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
 ```
 루트/.env (gitignored)
   ↓ (LocalStack 초기화 스크립트 자동 업데이트)
-  ↓ (sync-local-config.py로 동기화)
   ↓
-각 서비스/application-local.yml (gitignored, 하드코딩)
+각 서비스/application-local.yml.example (커밋됨, 템플릿)
+  ↓ (수동 복사 또는 sync-local-config.py로 자동 생성)
+  ↓
+각 서비스/application-local.yml (gitignored, 실제 사용)
   ↓
 IDE 서비스 실행 (Profile: local)
 ```
 
 **초기 설정** (신규 개발자):
+
+방법 1: 수동 설정
+```bash
+# 1. 각 서비스별 application-local.yml 생성
+cd app/backend/user-service/src/main/resources
+cp application-local.yml.example application-local.yml
+# (course-service, schedule-service, api-gateway도 동일하게 반복)
+
+# 2. 인프라 실행 (MySQL, LocalStack)
+docker-compose up -d mysql localstack
+
+# 3. .env 파일에서 생성된 값 확인 후 각 application-local.yml에 수동 입력
+# 4. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
+```
+
+방법 2: 자동 동기화 (권장)
 ```bash
 # 1. 인프라 실행 (MySQL, LocalStack)
 docker-compose up -d mysql localstack
@@ -115,12 +133,14 @@ python scripts/dev/sync-local-config.py
 ```
 
 **동기화 스크립트** (`sync-local-config.py`):
-- 루트 `.env` → 각 서비스 `application-local.yml` 자동 업데이트
+- `application-local.yml.example` → `application-local.yml` 복사 (없을 경우)
+- 루트 `.env` 값들을 각 서비스 `application-local.yml`에 자동 주입
 - Cognito User Pool ID/Client ID, MySQL 비밀번호, 암호화 키, SQS 큐 이름, API 키, Canvas Base URL
 - YAML 형식과 주석 유지
 
 **주의**:
 - `application-local.yml`은 gitignored (커밋 안됨)
+- `application-local.yml.example`은 템플릿으로 커밋됨
 - LocalStack 재시작시 User Pool ID 변경될 수 있음 → `sync-local-config.py` 재실행
 - `.env` 파일도 gitignored (민감 정보 포함)
 
