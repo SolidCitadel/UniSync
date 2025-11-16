@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "3.4.1"
     id("io.spring.dependency-management") version "1.1.7"
+    id("co.uzzu.dotenv.gradle") version "4.0.0"
 }
 
 group = "com.unisync"
@@ -25,6 +26,12 @@ repositories {
 
 extra["springCloudVersion"] = "2024.0.0"
 extra["awsSdkVersion"] = "2.29.45"
+
+// dotenv 플러그인 설정 - 루트 디렉토리의 .env.local 파일 사용
+env {
+    val rootDir = projectDir.parentFile.parentFile.parentFile
+    dotEnvFile.set(file("$rootDir/.env.local"))
+}
 
 dependencies {
     // Spring Cloud Gateway
@@ -68,6 +75,11 @@ dependencyManagement {
 tasks.withType<Test> {
     useJUnitPlatform()
 
-    // LocalStack Pro 인증을 위해 gradle.properties의 토큰을 테스트 환경변수로 전달
-    environment("LOCALSTACK_AUTH_TOKEN", project.findProperty("localstackAuthToken") as String? ?: "")
+    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
+    environment(env.allVariables.get())
+}
+
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
+    environment(env.allVariables.get())
 }

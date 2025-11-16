@@ -1,35 +1,38 @@
-# docker-compose.acceptance.yml - 인수 테스트 환경
-# Usage: docker-compose -f docker-compose.acceptance.yml up --build
+# docker-compose.demo.yml - 데모 환경
+# Usage: docker-compose -f docker-compose.demo.yml up
 #
 # 용도:
-# - 자동화된 인수/E2E 테스트 환경 구성
-# - Spring Boot 서비스 빌드 및 실행
-# - 휘발성 볼륨 사용 (테스트 후 삭제 권장)
+# - 프론트엔드/인프라 담당자가 전체 시스템 확인
+# - DockerHub 이미지 사용 (빌드 불필요)
+# - 영구 볼륨 사용 (데이터 유지)
 #
 # 환경변수:
 # - .env (docker-compose 공통)
 # - .env.common (앱 컨테이너 기본값)
-# - .env.acceptance (acceptance 오버라이드)
+# - .env.demo (demo 오버라이드)
 #
-# 정리:
-# - docker-compose -f docker-compose.acceptance.yml down -v
+# 참고:
+# - LocalStack 초기화 후 .env의 Cognito 값 업데이트 필요
+# - .env.demo의 API 키들을 실제 값으로 변경 필요
 
 services:
-  # LocalStack - AWS 서비스 로컬 에뮬레이션 (테스트용)
+  # LocalStack - AWS 서비스 로컬 에뮬레이션
   localstack:
     image: localstack/localstack-pro
-    container_name: unisync-acceptance-localstack
+    container_name: unisync-demo-localstack
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=sqs,lambda,cognito-idp,iam
+      - SERVICES=sqs,stepfunctions,lambda,s3,secretsmanager,events,cognito-idp,elasticloadbalancingv2,ec2
       - DEBUG=1
+      - PERSISTENCE=1
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
       - AWS_REGION=${AWS_REGION}
-      - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
       - LOCALSTACK_ENDPOINT=http://localhost:4566
+      - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
       - USER_SERVICE_URL=http://user-service:8081
       - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
     volumes:
@@ -37,20 +40,19 @@ services:
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
-    tmpfs:
-      - /var/lib/localstack  # 익명 볼륨 대신 tmpfs 사용
+      - "demo-localstack-data:/var/lib/localstack"
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # MySQL - 테스트용 휘발성 DB
+  # MySQL - 영구 데이터 저장
   mysql:
     image: mysql:8.0
-    container_name: unisync-acceptance-mysql
+    container_name: unisync-demo-mysql
     ports:
       - "3307:3306"
     environment:
@@ -59,31 +61,28 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - TZ=Asia/Seoul
     volumes:
+      - demo-mysql-data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
-    tmpfs:
-      - /var/lib/mysql  # 익명 볼륨 대신 tmpfs 사용
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # User Service - 인증 및 Canvas 토큰 관리
+  # User Service - DockerHub 이미지
   user-service:
-    build:
-      context: ./app
-      dockerfile: backend/user-service/Dockerfile
-    container_name: unisync-acceptance-user-service
+    image: solidcitadel/unisync-user-service:latest
+    container_name: unisync-demo-user-service
     ports:
       - "8081:8081"
     env_file:
       - .env.common
-      - .env.acceptance
+      - .env.demo
     environment:
-      - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_PROFILES_ACTIVE=prod
       - AWS_SQS_ENDPOINT=http://localstack:4566
       - COGNITO_ENDPOINT=http://localstack:4566
     depends_on:
@@ -92,27 +91,25 @@ services:
       localstack:
         condition: service_healthy
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
-  # Course Service - 과목 및 과제 관리
+  # Course Service - DockerHub 이미지
   course-service:
-    build:
-      context: ./app
-      dockerfile: backend/course-service/Dockerfile
-    container_name: unisync-acceptance-course-service
+    image: solidcitadel/unisync-course-service:latest
+    container_name: unisync-demo-course-service
     ports:
       - "8082:8082"
     env_file:
       - .env.common
-      - .env.acceptance
+      - .env.demo
     environment:
-      - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_PROFILES_ACTIVE=prod
       - AWS_SQS_ENDPOINT=http://localstack:4566
       - USER_SERVICE_URL=http://user-service:8081
     depends_on:
@@ -123,27 +120,25 @@ services:
       user-service:
         condition: service_healthy
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
-  # Schedule Service - 일정 및 할일 관리
+  # Schedule Service - DockerHub 이미지
   schedule-service:
-    build:
-      context: ./app
-      dockerfile: backend/schedule-service/Dockerfile
-    container_name: unisync-acceptance-schedule-service
+    image: solidcitadel/unisync-schedule-service:latest
+    container_name: unisync-demo-schedule-service
     ports:
       - "8083:8083"
     env_file:
       - .env.common
-      - .env.acceptance
+      - .env.demo
     environment:
-      - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_PROFILES_ACTIVE=prod
       - AWS_SQS_ENDPOINT=http://localstack:4566
       - USER_SERVICE_URL=http://user-service:8081
       - COURSE_SERVICE_URL=http://course-service:8082
@@ -157,27 +152,25 @@ services:
       course-service:
         condition: service_healthy
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
-  # API Gateway - 모든 요청의 진입점
+  # API Gateway - DockerHub 이미지
   api-gateway:
-    build:
-      context: ./app
-      dockerfile: backend/api-gateway/Dockerfile
-    container_name: unisync-acceptance-api-gateway
+    image: solidcitadel/unisync-api-gateway:latest
+    container_name: unisync-demo-api-gateway
     ports:
       - "8080:8080"
     env_file:
       - .env.common
-      - .env.acceptance
+      - .env.demo
     environment:
-      - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_PROFILES_ACTIVE=prod
       - USER_SERVICE_URL=http://user-service:8081
       - COURSE_SERVICE_URL=http://course-service:8082
       - SCHEDULE_SERVICE_URL=http://schedule-service:8083
@@ -190,14 +183,20 @@ services:
       schedule-service:
         condition: service_healthy
     networks:
-      - acceptance-network
+      - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  demo-mysql-data:
+    driver: local
+  demo-localstack-data:
+    driver: local
 
 networks:
-  acceptance-network:
+  demo-network:
     driver: bridge

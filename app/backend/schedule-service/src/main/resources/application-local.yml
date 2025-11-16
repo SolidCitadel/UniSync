@@ -1,0 +1,43 @@
+# application-local.yml - 로컬 개발용 프로파일
+# IDE에서 main()을 직접 실행할 때 사용
+# docker-compose up으로 띄운 인프라(MySQL, LocalStack)에 접속합니다.
+#
+# 환경변수:
+# - Gradle bootRun이 루트의 .env.local 파일을 로드하여 주입
+# - 모든 값은 플레이스홀더 사용 (하드코딩 금지)
+
+spring:
+  datasource:
+    # docker-compose.yml의 MySQL (호스트 포트 3307)
+    url: ${SCHEDULE_SERVICE_DATABASE_URL}
+    username: ${SCHEDULE_SERVICE_DB_USER}
+    password: ${SCHEDULE_SERVICE_DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update  # 개발 편의를 위한 자동 스키마 업데이트
+    show-sql: true
+
+# AWS Configuration (LocalStack)
+aws:
+  sqs:
+    endpoint: ${AWS_SQS_ENDPOINT}
+    region: ${AWS_REGION}
+    queues:
+      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
+      task-creation: ${SQS_TASK_CREATION_QUEUE}
+
+# External Service URLs (로컬 개발)
+services:
+  user-service:
+    url: http://localhost:8081
+  course-service:
+    url: http://localhost:8082
+
+# Logging (상세 로깅)
+logging:
+  level:
+    com.unisync: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

@@ -9,31 +9,50 @@
 - Schedule-Service: 8083
 
 ## API Gateway 라우팅
-API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
+API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
 
 ```
 # User-Service
-/api/v1/auth/**        → /auth/**
-/api/v1/users/**       → /users/**
-/api/v1/friends/**     → /friends/**
-/api/v1/groups/**      → /groups/**
+/api/auth/**        → /auth/**
+/api/users/**       → /users/**
+/api/credentials/** → /credentials/**
+/api/friends/**     → /friends/**
+/api/groups/**      → /groups/**
 
 # Course-Service
-/api/v1/courses/**     → /courses/**
-/api/v1/assignments/** → /assignments/**
-/api/v1/notices/**     → /notices/**
+/api/courses/**     → /courses/**
+/api/assignments/** → /assignments/**
+/api/enrollments/** → /enrollments/**
 
 # Schedule-Service
-/api/v1/schedules/**   → /schedules/**
-/api/v1/todos/**       → /todos/**
-/api/v1/categories/**  → /categories/**
+/api/schedules/**   → /schedules/**
+/api/todos/**       → /todos/**
+/api/categories/**  → /categories/**
 ```
 
-인증 예외 (JWT 불필요): `/api/v1/auth/register`, `/api/v1/auth/login`
+인증 예외 (JWT 불필요): `/api/auth/register`, `/api/auth/login`
 
 백엔드 서비스 엔드포인트는 환경변수로 주입 (로컬/Docker/ECS 환경별 상이).
 
 ## 환경변수 및 프로파일 관리
+
+### 환경변수 파일 구조
+
+```
+.env                    # docker-compose 공통 (커밋됨)
+.env.common             # 앱 컨테이너 기본값 (커밋됨)
+.env.local              # 비밀 (gitignore)
+.env.local.example      # 템플릿 (커밋됨)
+.env.acceptance         # acceptance 오버라이드 (커밋됨)
+.env.demo               # demo 오버라이드 (커밋됨)
+```
+
+**역할**:
+- **`.env`**: docker-compose.yml이 자동 로드. MySQL, LocalStack 등 인프라 설정
+- **`.env.common`**: acceptance/demo 컨테이너가 env_file로 로드. 공통 앱 설정 (SQS 큐 이름 등)
+- **`.env.local`**: **민감 정보 전용** (gitignore). Gradle이 로드하여 IDE 실행 시 주입
+- **`.env.acceptance`**: acceptance 테스트 특화 설정 (테스트 DB, 테스트 API 키)
+- **`.env.demo`**: 데모 환경 특화 설정 (DockerHub 이미지 실행용)
 
 ### Spring 프로파일 (application-*.yml)
 
@@ -47,19 +66,21 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
 2. **`application-local.yml`** (로컬 개발용)
    - IDE에서 main()을 직접 실행할 때 사용
    - `docker-compose up`으로 띄운 인프라(MySQL, LocalStack)에 localhost로 접속
-   - `ddl-auto: update`, 상세 SQL 로깅, 민감 정보 하드코딩
-   - **반드시 .gitignore에 추가됨** (.gitignore ✓)
+   - `ddl-auto: update`, 상세 SQL 로깅
+   - **모든 값은 플레이스홀더** (`${...}`) - 하드코딩 금지
+   - Gradle bootRun/test가 `.env.local`을 로드하여 환경변수 주입
+   - **커밋됨** ✓ (더 이상 gitignore 아님)
 
 3. **`application-acceptance.yml`** (인수 테스트용)
    - `docker-compose.acceptance.yml`로 실행되는 앱 전용
    - `ddl-auto: create-drop`, 테스트 독립성 보장
-   - 환경 변수로 설정 주입받음
+   - 환경 변수로 설정 주입받음 (.env.common + .env.acceptance)
    - 커밋됨 ✓
 
 4. **`application-prod.yml`** (운영용)
-   - `docker-compose.yml` (로컬 운영환경) 및 실제 ECS 배포 시 사용
+   - `docker-compose.demo.yml` 및 실제 ECS 배포 시 사용
    - `ddl-auto: validate`, `logging.level.root: INFO`, `shutdown: graceful`
-   - 환경 변수로 설정 주입받음
+   - 환경 변수로 설정 주입받음 (.env.common + .env.demo)
    - 커밋됨 ✓
 
 **테스트 프로파일** (`src/test/resources/`):
@@ -71,106 +92,199 @@ API Gateway는 `/api/v1` prefix 제거 후 백엔드 서비스로 전달:
 
 ### Docker Compose 파일
 
-1. **`docker-compose.yml`** (기본 로컬 운영 환경)
+1. **`docker-compose.yml`** (기본 - 인프라만)
    - `docker-compose up` 실행 시 사용
-   - 모든 서비스 정의 (LocalStack, MySQL, 백엔드 서비스들)
-   - `SPRING_PROFILES_ACTIVE=prod` 주입
-   - Docker 내부 네트워크용 엔드포인트 및 민감 정보를 환경 변수로 주입
+   - **인프라 서비스만 정의** (LocalStack, MySQL)
+   - **Spring 서비스는 IDE에서 직접 실행**
+   - `.env` 파일 자동 로드
    - 커밋됨 ✓
 
-2. **`docker-compose.override.yml`** (개인화 - 필요 시 사용)
+2. **`docker-compose.override.yml`** (개인화)
    - `docker-compose up` 시 자동으로 병합되어 기본 설정 덮어쓰기
-   - 개인용 포트 변경, 로컬 코드 볼륨 마운트 등에 사용 가능
-   - 현재는 제공되지 않으며, 필요 시 직접 생성
-   - **반드시 .gitignore에 추가됨** (.gitignore ✓)
+   - 개인용 포트 변경, LocalStack 추가 서비스 등에 사용 가능
+   - 현재는 `.example` 템플릿만 제공
+   - **gitignore됨** (.gitignore ✓)
 
 3. **`docker-compose.acceptance.yml`** (인수 테스트 환경)
-   - `docker-compose -f docker-compose.acceptance.yml up`으로 실행
+   - `docker-compose -f docker-compose.acceptance.yml up --build`로 실행
    - 자동화된 인수/E2E 테스트 환경
+   - Spring 서비스를 **빌드**하여 실행
    - `SPRING_PROFILES_ACTIVE=acceptance` 주입
-   - 테스트용 휘발성 DB (tmpfs 볼륨 권장)
+   - 휘발성 볼륨 (tmpfs) 사용
+   - env_file: `.env.common` + `.env.acceptance`
    - 커밋됨 ✓
 
-### 로컬 개발 환경 설정
+4. **`docker-compose.demo.yml`** (데모 환경)
+   - `docker-compose -f docker-compose.demo.yml up`로 실행
+   - 프론트엔드/인프라 담당자용 전체 시스템 데모
+   - Spring 서비스를 **DockerHub 이미지**로 실행 (빌드 불필요)
+   - `SPRING_PROFILES_ACTIVE=prod` 주입
+   - 영구 볼륨 사용 (demo-*)
+   - env_file: `.env.common` + `.env.demo`
+   - 커밋됨 ✓
 
-**구조**:
+## 로컬 개발 환경 설정
+
+### 구조
 ```
-루트/.env (gitignored)
-  ↓ (LocalStack 초기화 스크립트 자동 업데이트)
+루트/.env.local (gitignored, 민감 정보)
+  ↓ (Gradle dotenv 플러그인이 로드)
   ↓
-각 서비스/application-local.yml.example (커밋됨, 템플릿)
-  ↓ (수동 복사 또는 sync-local-config.py로 자동 생성)
+각 서비스/application-local.yml (커밋됨, 플레이스홀더만)
   ↓
-각 서비스/application-local.yml (gitignored, 실제 사용)
+Gradle bootRun/test가 환경변수 주입
   ↓
 IDE 서비스 실행 (Profile: local)
 ```
 
-**초기 설정** (신규 개발자):
+### 초기 설정 (신규 개발자)
 
-방법 1: 수동 설정
+**1단계: .env.local 파일 생성**
 ```bash
-# 1. 각 서비스별 application-local.yml 생성
-cd app/backend/user-service/src/main/resources
-cp application-local.yml.example application-local.yml
-# (course-service, schedule-service, api-gateway도 동일하게 반복)
+# 템플릿 복사
+cp .env.local.example .env.local
 
-# 2. 인프라 실행 (MySQL, LocalStack)
-docker-compose up -d mysql localstack
-
-# 3. .env 파일에서 생성된 값 확인 후 각 application-local.yml에 수동 입력
-# 4. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
+# 실제 값으로 수정 (ENCRYPTION_KEY, API 키 등)
+vi .env.local
 ```
 
-방법 2: 자동 동기화 (권장)
+**2단계: 인프라 실행**
 ```bash
-# 1. 인프라 실행 (MySQL, LocalStack)
-docker-compose up -d mysql localstack
+# MySQL, LocalStack 실행
+docker-compose up -d
 
-# 2. 환경변수 동기화 (application-local.yml 자동 생성/업데이트)
-python scripts/dev/sync-local-config.py
+# LocalStack 초기화 완료 확인 (Cognito 생성)
+docker-compose logs localstack | grep "Cognito User Pool created"
 
-# 3. IDE에서 Active Profile을 'local'로 설정 후 서비스 실행
+# .env 파일에서 생성된 Cognito 값 확인
+cat .env | grep COGNITO
+
+# .env.local에 Cognito 값 복사
+# COGNITO_USER_POOL_ID=ap-northeast-2_xxxxx
+# COGNITO_CLIENT_ID=xxxxx
 ```
 
-**동기화 스크립트** (`sync-local-config.py`):
-- `application-local.yml.example` → `application-local.yml` 복사 (없을 경우)
-- 루트 `.env` 값들을 각 서비스 `application-local.yml`에 자동 주입
-- Cognito User Pool ID/Client ID, MySQL 비밀번호, 암호화 키, SQS 큐 이름, API 키, Canvas Base URL
-- YAML 형식과 주석 유지
+**3단계: Gradle로 서비스 실행**
+```bash
+# user-service 실행
+cd app/backend/user-service
+./gradlew bootRun
+
+# 또는 IDE에서 Active Profile을 'local'로 설정 후 실행
+# IntelliJ: Run > Edit Configurations > Active profiles: local
+```
+
+### Gradle dotenv 플러그인
+
+모든 서비스의 `build.gradle.kts`에 dotenv 플러그인이 설정되어 있습니다:
+
+```kotlin
+plugins {
+    id("co.uzzu.dotenv.gradle") version "4.0.0"
+}
+
+env {
+    val rootDir = projectDir.parentFile.parentFile.parentFile
+    dotEnvFile.set(file("$rootDir/.env.local"))
+}
+
+tasks.withType<Test> {
+    environment(env.allVariables.get())
+}
+
+tasks.named<BootRun>("bootRun") {
+    environment(env.allVariables.get())
+}
+```
+
+**동작**:
+- `./gradlew bootRun` 또는 `./gradlew test` 실행 시 자동으로 `.env.local` 로드
+- 모든 환경변수를 Spring Boot에 주입
+- IDE에서도 Gradle을 통해 실행하면 동일하게 동작
 
 **주의**:
-- `application-local.yml`은 gitignored (커밋 안됨)
-- `application-local.yml.example`은 템플릿으로 커밋됨
-- LocalStack 재시작시 User Pool ID 변경될 수 있음 → `sync-local-config.py` 재실행
-- `.env` 파일도 gitignored (민감 정보 포함)
+- `.env.local` 파일이 없으면 환경변수가 주입되지 않아 실행 실패
+- LocalStack 재시작 시 Cognito User Pool ID 변경 → `.env.local` 업데이트 필요
+
+### 환경변수 로드 테스트
+
+각 서비스에 환경변수 로드 확인 테스트가 포함되어 있습니다:
+
+```bash
+# user-service 환경변수 로드 테스트
+cd app/backend/user-service
+./gradlew test --tests EnvironmentVariablesTest
+
+# 성공 시 출력:
+# [OK] 환경변수 로드 성공:
+#   - ENCRYPTION_KEY: ***
+#   - CANVAS_SYNC_API_KEY: ***
+#   - USER_SERVICE_DATABASE_URL: jdbc:mysql://localhost:3307/user_db...
+```
+
+## 환경별 실행 방법
+
+### 로컬 개발 (IDE)
+```bash
+# 1. 인프라 실행
+docker-compose up -d
+
+# 2. IDE에서 서비스 실행
+# Profile: local
+# Gradle이 .env.local을 자동 로드
+```
+
+### Acceptance 테스트
+```bash
+# 모든 서비스를 빌드하여 실행
+docker-compose -f docker-compose.acceptance.yml up --build
+
+# 정리 (볼륨 포함)
+docker-compose -f docker-compose.acceptance.yml down -v
+```
+
+### Demo (전체 시스템)
+```bash
+# DockerHub 이미지로 실행 (빌드 불필요)
+docker-compose -f docker-compose.demo.yml up
+
+# 정리
+docker-compose -f docker-compose.demo.yml down
+```
 
 ## DDD 구조 예시
 
 ### User Service
 ```
-com.unisync.user/
+com.unisync.userservice/
 ├── auth/                   # 인증 도메인
 │   ├── controller/         # AuthController
 │   ├── service/            # AuthService, CognitoService
 │   ├── dto/                # SignUpRequest, SignInRequest, AuthResponse
 │   └── exception/
-├── profile/                # 프로필 도메인
 ├── credentials/            # Canvas 토큰 관리 도메인
+│   ├── controller/
+│   ├── service/
+│   └── dto/
 └── common/
-    ├── entity/             # User
-    ├── repository/         # UserRepository
-    └── config/             # AwsCognitoConfig
+    ├── entity/             # User, Credential
+    ├── repository/         # UserRepository, CredentialRepository
+    ├── config/             # AwsCognitoConfig, EncryptionConfig
+    └── exception/          # GlobalExceptionHandler
 ```
 
 ### Course Service
 ```
-com.unisync.course/
+com.unisync.courseservice/
 ├── course/                 # 과목 도메인
 │   ├── controller/
 │   ├── service/
 │   └── dto/
 ├── assignment/             # 과제 도메인
+│   ├── controller/
+│   ├── service/
+│   └── dto/
+├── enrollment/             # 수강 도메인
 │   ├── controller/
 │   ├── service/
 │   └── dto/
@@ -182,7 +296,7 @@ com.unisync.course/
 
 ### Schedule Service
 ```
-com.unisync.schedule/
+com.unisync.scheduleservice/
 ├── schedule/               # 일정 도메인
 │   ├── controller/
 │   ├── service/
@@ -211,7 +325,7 @@ com.unisync.schedule/
 cd app/backend/course-service
 ./gradlew test
 
-# 모든 서비스 테스트
+# 모든 서비스 테스트 (루트에서)
 ./gradlew test
 ```
 
@@ -236,3 +350,25 @@ bash scripts/test/test-e2e.sh
 ```
 
 자세한 내용: [tests/README.md](../../tests/README.md)
+
+## 주요 변경사항
+
+### 이전 vs 현재
+
+**이전 구조 (삭제됨)**:
+- `application-local.yml` gitignore
+- `application-local.yml.example` 템플릿
+- `scripts/dev/sync-local-config.py` 동기화 스크립트
+- `.env` 파일 gitignore
+
+**현재 구조**:
+- `application-local.yml` 커밋 (플레이스홀더만)
+- `.env.local` gitignore (민감 정보)
+- Gradle dotenv 플러그인으로 자동 환경변수 주입
+- `.env` 파일 커밋 (docker-compose 공통 설정)
+
+**장점**:
+- 환경변수 관리 통합 (`.env.local` 한 곳에서 관리)
+- sync 스크립트 불필요
+- Gradle bootRun/test 모두 동일한 환경변수 사용
+- application-local.yml 템플릿 불필요 (커밋되므로)
