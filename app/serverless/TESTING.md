@@ -340,4 +340,4 @@ awslocal sqs get-queue-attributes \
 
 ### 프로젝트 문서
 - [README.md](./README.md) - 전체 개요
-- `.env.example` - 환경 변수 설정 예시
+- `../../.env.local.example` - 환경 변수 설정 예시

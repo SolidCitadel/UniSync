@@ -308,10 +308,10 @@ awslocal events put-targets \
 
 ### 환경 변수 설정
 
-`.env.example`을 복사하여 `.env.local`로 저장하고 값을 입력하세요:
+`.env.local.example`을 복사하여 `.env.local`로 저장하고 값을 입력하세요:
 
 ```bash
-cp ../../.env.example ../../.env.local
+cp ../../.env.local.example ../../.env.local
 ```
 
 ---
