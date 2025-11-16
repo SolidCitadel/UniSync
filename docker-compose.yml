@@ -7,7 +7,8 @@
 # - docker-compose.override.yml로 개인화 가능 (.gitignore)
 #
 # 환경변수:
-# - .env 파일 자동 로드
+# - .env 파일 자동 로드 (비밀 없는 기본값)
+# - .env.local 파일 env_file로 로드 (로컬 종속 비밀)
 
 services:
   # ==========================================
@@ -18,6 +19,8 @@ services:
   localstack:
     image: localstack/localstack-pro
     container_name: unisync-localstack
+    env_file:
+      - .env.local  # 로컬 종속 비밀 (LOCALSTACK_AUTH_TOKEN 등)
     ports:
       - "4566:4566"
       - "4510-4559:4510-4559"
@@ -34,7 +37,7 @@ services:
       - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
       - USER_SERVICE_URL=http://host.docker.internal:8081
     volumes:
-      - ".:/workspace"  # 프로젝트 루트 마운트 (스크립트가 .env 파일 업데이트 가능)
+      - ".:/workspace"  # 프로젝트 루트 마운트 (스크립트가 .env.local 파일 업데이트 가능)
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"

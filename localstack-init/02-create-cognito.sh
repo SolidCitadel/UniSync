@@ -8,7 +8,7 @@ echo "========================================="
 REGION="ap-northeast-2"
 POOL_NAME="unisync-user-pool"
 CLIENT_NAME="unisync-app-client"
-ENV_FILE="/workspace/.env"
+ENV_LOCAL_FILE="/workspace/.env.local"
 
 # 기존 User Pool 확인
 echo "기존 User Pool 확인 중..."
@@ -85,19 +85,20 @@ else
   echo "✓ User Pool Client 생성 완료: $CLIENT_ID"
 fi
 
-# .env 파일 업데이트 (Docker Compose용)
+# .env.local 파일 업데이트 (로컬 종속 비밀)
 echo ""
-echo ".env 파일 업데이트 중..."
+echo ".env.local 파일 업데이트 중..."
 
-if [ -f "$ENV_FILE" ]; then
+if [ -f "$ENV_LOCAL_FILE" ]; then
   # COGNITO_USER_POOL_ID 업데이트
-  sed -i "s|^COGNITO_USER_POOL_ID=.*|COGNITO_USER_POOL_ID=$USER_POOL_ID|" $ENV_FILE
+  sed -i "s|^COGNITO_USER_POOL_ID=.*|COGNITO_USER_POOL_ID=$USER_POOL_ID|" $ENV_LOCAL_FILE
   # COGNITO_CLIENT_ID 업데이트
-  sed -i "s|^COGNITO_CLIENT_ID=.*|COGNITO_CLIENT_ID=$CLIENT_ID|" $ENV_FILE
+  sed -i "s|^COGNITO_CLIENT_ID=.*|COGNITO_CLIENT_ID=$CLIENT_ID|" $ENV_LOCAL_FILE
 
-  echo "✓ .env 파일 업데이트 완료: $ENV_FILE"
+  echo "✓ .env.local 파일 업데이트 완료: $ENV_LOCAL_FILE"
 else
-  echo "⚠ .env 파일을 찾을 수 없습니다: $ENV_FILE"
+  echo "⚠ .env.local 파일을 찾을 수 없습니다: $ENV_LOCAL_FILE"
+  echo "  cp .env.local.example .env.local 실행 후 다시 시도하세요."
 fi
 
 # 정보 출력
@@ -109,9 +110,10 @@ echo "User Pool ID: $USER_POOL_ID"
 echo "Client ID: $CLIENT_ID"
 echo "Region: $REGION"
 echo ""
-echo ".env 파일이 업데이트되었습니다."
+echo ".env.local 파일이 업데이트되었습니다."
 echo ""
 echo "IDE에서 로컬 개발을 시작하려면:"
-echo "  1. python scripts/dev/sync-local-config.py 실행"
-echo "  2. IDE에서 서비스 실행 (Active Profile: local)"
+echo "  1. Gradle을 통해 서비스 실행 (자동으로 .env.local 로드)"
+echo "     cd app/backend/user-service && ./gradlew bootRun"
+echo "  2. 또는 IDE에서 Active Profile: local로 설정 후 실행"
 echo "========================================="
