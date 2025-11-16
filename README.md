@@ -40,9 +40,10 @@ UniSync/
 ├── localstack-init/            # LocalStack 자동 초기화 (컨테이너 시작 시)
 ├── mysql-init/                 # MySQL 자동 초기화 (컨테이너 시작 시)
 ├── docker-compose.yml          # 개발 환경 (인프라만)
-├── docker-compose-app.yml      # 전체 애플리케이션 실행
-├── docker-compose.test.yml     # 통합 테스트 환경
-└── .env.example                # 환경 변수 템플릿
+├── docker-compose.acceptance.yml  # 인수 테스트 환경
+├── docker-compose.demo.yml     # 데모 환경
+├── .env                        # docker-compose 공통 설정 (커밋됨)
+└── .env.local.example          # 로컬 비밀 템플릿 (gitignore)
 ```
 
 ## 기술 스택
@@ -77,64 +78,40 @@ docker-compose logs -f localstack
 # "Cognito 설정 완료!" 메시지가 보일 때까지 대기
 ```
 
-### 3. LocalStack 출력값 확인
+### 3. 로컬 환경변수 파일 생성
 
-LocalStack이 초기화되면 자동으로 `.localstack-outputs.yml` 파일이 생성됩니다:
-
-```bash
-# 생성된 값 확인
-cat .localstack-outputs.yml
-```
-
-출력 예시:
-```yaml
-# LocalStack에서 자동 생성된 값들
-# 이 값들을 각 서비스의 application-local.yml에 복사하세요
-
-# AWS Cognito 설정
-aws:
-  region: ap-northeast-2
-  cognito:
-    user-pool-id: ap-northeast-2_xxxxx
-    client-id: xxxxxxxxx
-    region: ap-northeast-2
-    endpoint: http://localhost:4566
-```
-
-### 4. 서비스별 로컬 설정 파일 생성
-
-각 Spring Boot 서비스마다 `application-local.yml` 파일을 생성합니다:
+`.env.local.example`을 복사하여 `.env.local`을 생성합니다:
 
 ```bash
-# User Service
-cd app/backend/user-service/src/main/resources
-cp application-local.yml.example application-local.yml
-
-# Course Service
-cd app/backend/course-service/src/main/resources
-cp application-local.yml.example application-local.yml
-
-# Schedule Service
-cd app/backend/schedule-service/src/main/resources
-cp application-local.yml.example application-local.yml
+# .env.local 템플릿 복사
+cp .env.local.example .env.local
 ```
 
-**각 서비스의 `application-local.yml`에 `.localstack-outputs.yml`의 값 복사**:
+**LocalStack이 초기화되면 자동으로 `.env.local` 파일의 Cognito 값이 업데이트됩니다**:
 
-```yaml
-# application-local.yml 편집
-# .localstack-outputs.yml의 cognito 설정을 복사
-aws:
-  cognito:
-    user-pool-id: ap-northeast-2_xxxxx  # .localstack-outputs.yml에서 복사
-    client-id: xxxxxxxxx                # .localstack-outputs.yml에서 복사
+```bash
+# LocalStack 초기화 완료 확인
+docker-compose logs localstack | grep "Cognito 설정 완료"
+
+# .env.local에 자동 업데이트된 Cognito 값 확인
+cat .env.local | grep COGNITO
 ```
+
+**필요한 비밀 값 입력**:
+
+`.env.local` 파일을 열어 다음 값들을 입력하세요:
+- `LOCALSTACK_AUTH_TOKEN`: LocalStack Pro 라이선스 토큰
+- `JWT_SECRET`: JWT 서명 키
+- `ENCRYPTION_KEY`: AES-256 암호화 키 (`openssl rand -base64 32`로 생성)
+- `CANVAS_API_TOKEN`: Canvas LMS API 토큰
+- `CANVAS_SYNC_API_KEY`: Canvas Sync Lambda 호출용 API 키
 
 **참고**:
-- `application-local.yml`은 `.gitignore`에 포함되어 커밋되지 않습니다
-- 다른 LocalStack 설정(SQS endpoint 등)은 이미 올바르게 설정되어 있습니다
+- `.env.local`은 gitignore되어 커밋되지 않습니다
+- `application-local.yml`은 플레이스홀더만 포함하며 커밋됩니다
+- Gradle이 `.env.local`을 자동으로 로드하여 환경변수를 주입합니다
 
-### 5. IDE에서 Active Profile 설정
+### 4. IDE에서 Active Profile 설정
 
 각 서비스를 IDE에서 실행하려면 Active Profile을 `local`로 설정해야 합니다:
 
@@ -144,7 +121,7 @@ aws:
 **VS Code**:
 - `launch.json` → `"spring.profiles.active": "local"`
 
-### 6. 서비스 상태 확인
+### 5. 서비스 상태 확인
 
 ```bash
 # 컨테이너 상태 확인
@@ -157,7 +134,7 @@ docker exec -it unisync-mysql mysql -uroot -proot_password -e "SHOW DATABASES;"
 aws --endpoint-url=http://localhost:4566 sqs list-queues
 ```
 
-### 7-A. Spring Boot 서비스 실행 (개별)
+### 6-A. Spring Boot 서비스 실행 (개별)
 
 각 서비스를 별도 터미널에서 실행:
 
@@ -175,7 +152,7 @@ cd app/backend/schedule-service
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-### 7-B. 전체 애플리케이션 실행 (Docker Compose)
+### 6-B. 전체 애플리케이션 실행 (Docker Compose)
 
 모든 서비스를 컨테이너로 한 번에 실행:
 
