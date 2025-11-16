@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "3.5.7"
     id("io.spring.dependency-management") version "1.1.7"
+    id("co.uzzu.dotenv.gradle") version "4.0.0"
 }
 
 group = "com.unisync"
@@ -25,6 +26,12 @@ repositories {
 
 extra["awsSdkVersion"] = "2.29.45"
 extra["springCloudAwsVersion"] = "3.2.1"
+
+// dotenv 플러그인 설정 - 루트 디렉토리의 .env.local 파일 사용
+env {
+    val rootDir = projectDir.parentFile.parentFile.parentFile
+    dotEnvFile.set(file("$rootDir/.env.local"))
+}
 
 dependencies {
     // Shared Common Module
@@ -69,30 +76,11 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 
-    // .env 파일에서 환경변수 로드 (프로젝트 루트의 .env)
-    val dotenvFile = file("../../../.env")
-    if (dotenvFile.exists()) {
-        dotenvFile.readLines().forEach { line ->
-            val trimmed = line.trim()
-            if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
-                val parts = trimmed.split("=", limit = 2)
-                if (parts.size == 2) {
-                    val key = parts[0].trim()
-                    // 값에서 inline 주석 제거 (# 이후 제거)
-                    val rawValue = parts[1].trim()
-                    val value = if (rawValue.contains("#")) {
-                        rawValue.substringBefore("#").trim()
-                    } else {
-                        rawValue
-                    }
-                    environment(key, value)
-                }
-            }
-        }
-    }
-
-    // 시스템 환경변수도 전달 (시스템 환경변수가 .env보다 우선)
-    environment(System.getenv())
+    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
+    environment(env.allVariables.get())
 }
 
-fun org.gradle.kotlin.dsl.KotlinBuildScript.implementation(string: String) {}
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
+    environment(env.allVariables.get())
+}

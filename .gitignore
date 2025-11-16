@@ -56,7 +56,8 @@ build/
 gradle.properties
 
 ### Environment Variables ###
-.env
+# .env는 docker-compose 공통 설정으로 커밋됨
+# .env.local만 gitignore (민감 정보)
 .env.local
 .env.*.local
 .localstack-outputs.yml
@@ -65,10 +66,8 @@ gradle.properties
 test-results/
 
 ### Application Config ###
-# Note: application-*.yml profile files should be committed
-# Only ignore truly sensitive local overrides
-application-local.yml
-application-local.properties
+# Note: application-*.yml은 모두 커밋됨 (플레이스홀더만 사용)
+# 더 이상 application-local.yml을 gitignore하지 않음
 
 ### VS Code ###
 .vscode/

@@ -1,0 +1,49 @@
+# application-local.yml - 로컬 개발용 프로파일
+# IDE에서 main()을 직접 실행할 때 사용
+# docker-compose up으로 띄운 인프라(LocalStack)에 접속합니다.
+#
+# 환경변수:
+# - Gradle bootRun이 루트의 .env.local 파일을 로드하여 주입
+# - 모든 값은 플레이스홀더 사용 (하드코딩 금지)
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        # User Service 라우팅
+        - id: user-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/users/**, /api/credentials/**, /api/auth/**
+          filters:
+            - StripPrefix=1
+
+        # Course Service 라우팅
+        - id: course-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/courses/**, /api/assignments/**, /api/enrollments/**
+          filters:
+            - StripPrefix=1
+
+        # Schedule Service 라우팅
+        - id: schedule-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/schedules/**, /api/todos/**, /api/categories/**
+          filters:
+            - StripPrefix=1
+
+# AWS Cognito Configuration (LocalStack)
+aws:
+  cognito:
+    user-pool-id: ${COGNITO_USER_POOL_ID}
+    client-id: ${COGNITO_CLIENT_ID}
+    region: ${COGNITO_REGION}
+    endpoint: http://localhost:4566
+
+# Logging (상세 로깅)
+logging:
+  level:
+    com.unisync: DEBUG
+    org.springframework.cloud.gateway: DEBUG
