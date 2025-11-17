@@ -53,14 +53,12 @@ build/
 !**/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
-gradle.properties
 
 ### Environment Variables ###
 # .env는 docker-compose 공통 설정으로 커밋됨
 # .env.local만 gitignore (민감 정보)
 .env.local
 .env.*.local
-.localstack-outputs.yml
 
 # Test results
 test-results/
@@ -80,7 +78,6 @@ Thumbs.db
 ehthumbs.db
 
 ### Docker ###
-docker-compose.override.yml
 .docker/
 
 ### LocalStack ###
