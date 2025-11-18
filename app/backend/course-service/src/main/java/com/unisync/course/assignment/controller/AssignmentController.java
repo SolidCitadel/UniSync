@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
  * Assignment REST API Controller
  */
 @RestController
-@RequestMapping("/api/assignments")
+@RequestMapping("/v1/assignments")
 @RequiredArgsConstructor
 public class AssignmentController {
 

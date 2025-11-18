@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
  * 이 컨트롤러는 이미 인증된 사용자의 헤더를 받아서 처리하므로, JWT 검증을 다시 하지 않습니다.
  */
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/v1/users")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "사용자 API", description = "API Gateway를 거쳐서 들어오는 사용자 관련 API")
