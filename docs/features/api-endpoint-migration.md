@@ -1,7 +1,31 @@
 # API Endpoint Migration Plan: Internal API 분리
 
 **작성일**: 2025-11-18
+**완료일**: 2025-11-18
+**상태**: ✅ **완료**
 **목표**: 외부 API(`/v1/*`)와 내부 API(`/internal/v1/*`) 명확하게 분리
+
+## 완료 요약
+
+- ✅ Backend Services 업데이트 (16개 파일)
+  - User-Service: 5개 컨트롤러 업데이트, 1개 내부 컨트롤러 추가, 1개 DTO 추가
+  - Course-Service: 2개 컨트롤러 업데이트 (AssignmentController 버그 수정 포함)
+  - Schedule-Service: 3개 컨트롤러 업데이트
+
+- ✅ API Gateway 업데이트
+  - URL rewrite 규칙 변경 (`/api` prefix만 제거)
+  - `/api/internal/**` 차단 추가 (403 Forbidden)
+
+- ✅ Lambda 업데이트
+  - canvas-sync-lambda: 내부 API 경로 사용
+
+- ✅ 테스트 업데이트 (10개 파일)
+  - Java 통합 테스트: 5개
+  - Python E2E 테스트: 1개
+
+- ✅ 문서 업데이트
+  - system-architecture.md: API 설계 섹션 전면 개편
+  - app/backend/CLAUDE.md: API Gateway 라우팅 규칙 업데이트
 
 ---
 
