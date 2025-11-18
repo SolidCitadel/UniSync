@@ -253,8 +253,8 @@ def lambda_handler(event, context):
 
 
 def get_canvas_token(cognito_sub: str) -> str:
-    """Call User-Service API to retrieve Canvas token (decrypted) by cognitoSub"""
-    url = f"{USER_SERVICE_URL}/credentials/canvas/by-cognito-sub/{cognito_sub}"
+    """Call User-Service Internal API to retrieve Canvas token (decrypted) by cognitoSub"""
+    url = f"{USER_SERVICE_URL}/internal/v1/credentials/canvas/by-cognito-sub/{cognito_sub}"
     headers = {
         'X-Api-Key': os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
     }

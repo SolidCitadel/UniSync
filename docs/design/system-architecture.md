@@ -323,48 +323,75 @@ CREATE TABLE categories (
 
 ## 3. API 설계
 
+### 3.0 API 엔드포인트 구조
+
+**외부 API (프론트엔드용)**:
+- 클라이언트에서 `/api/v1/*` 경로로 요청
+- API Gateway가 JWT 인증 후 `/api` prefix 제거하여 백엔드로 전달
+- 백엔드는 `/v1/*` 경로로 수신
+
+**내부 API (서비스 간 통신용)**:
+- Lambda 등 내부 서비스가 백엔드에 직접 `/internal/v1/*` 경로로 요청
+- API Gateway를 거치지 않음
+- X-Api-Key 헤더로 인증
+- `/api/internal/**` 경로는 API Gateway에서 403 Forbidden 차단
+
+**예시**:
+```
+# 외부 API (프론트엔드)
+클라이언트 → API Gateway → 백엔드
+/api/v1/users/me  →  /v1/users/me
+
+# 내부 API (서비스 간 직접 호출)
+Lambda → 백엔드
+/internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}
+```
+
 ### 3.1 User-Service API
 
-#### 인증 및 회원
-- `POST /api/users/register` - 회원가입
-- `POST /api/users/login` - 로그인
-- `GET /api/users/profile` - 프로필 조회
-- `PUT /api/users/profile` - 프로필 수정
-- `DELETE /api/users/account` - 계정 삭제
+#### 인증 및 회원 (외부 API)
+- `POST /api/v1/auth/signup` - 회원가입
+- `POST /api/v1/auth/signin` - 로그인
+- `GET /api/v1/users/me` - 내 프로필 조회
+- `PUT /api/v1/users/me` - 프로필 수정
+- `DELETE /api/v1/users/me` - 계정 삭제
 
-#### 외부 계정 연동
-- `POST /api/users/credentials/canvas` - Canvas API 토큰 저장
-  - Request Body: `{ "canvasToken": "string", "canvasUrl": "https://canvas.example.com" }`
-- `POST /api/users/credentials/google` - Google 계정 연동 (OAuth2)
-- `POST /api/users/credentials/todoist` - Todoist 계정 연동 (OAuth2)
-- `GET /api/users/credentials` - 연동된 계정 목록
-- `DELETE /api/users/credentials/{provider}` - 계정 연동 해제
+#### 외부 계정 연동 (외부 API)
+- `POST /api/v1/credentials/canvas` - Canvas API 토큰 저장
+  - Request Body: `{ "canvasToken": "string" }`
+- `GET /api/v1/credentials/canvas` - Canvas 토큰 조회 (본인)
+- `DELETE /api/v1/credentials/canvas` - Canvas 토큰 삭제
+- `GET /api/v1/integrations/status` - 연동 상태 조회
+
+#### 내부 API (서비스 간 통신)
+- `GET /internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}` - Canvas 토큰 조회 (X-Api-Key)
+  - Lambda에서 사용자의 Canvas 토큰 조회 시 사용
+  - 응답: 복호화된 토큰 및 메타데이터
 
 ### 3.2 Course-Service API
 
-#### 수강 과목
-- `GET /api/courses` - 내 수강 과목 목록
-- `GET /api/courses/{courseId}` - 과목 상세 정보
-- `POST /api/courses/sync` - Canvas에서 과목 동기화
-- `GET /api/courses/{courseId}/students` - 과목 수강생 목록
+#### 수강 과목 (외부 API)
+- `GET /api/v1/courses` - 내 수강 과목 목록
+- `GET /api/v1/courses/{courseId}` - 과목 상세 정보
+- `POST /api/v1/courses/sync` - Canvas에서 과목 동기화
+- `GET /api/v1/courses/{courseId}/students` - 과목 수강생 목록
 
-### 3.3 Course-Service API
-
-#### 과제 관리
+#### 과제 관리 (외부 API)
 - `GET /api/v1/assignments` - 과제 목록 (필터링: 과목, 마감일, 상태)
 - `GET /api/v1/assignments/{assignmentId}` - 과제 상세
+- `GET /api/v1/assignments/canvas/{canvasAssignmentId}` - Canvas ID로 과제 조회
 
-#### 동기화
+#### 동기화 (외부 API)
 - `POST /api/v1/sync/canvas/trigger` - Canvas 수동 동기화 트리거
 - `GET /api/v1/sync/status` - 동기화 상태 조회
 
-#### 공지사항
+#### 공지사항 (외부 API)
 - `GET /api/v1/notices` - 공지사항 목록
 - `GET /api/v1/notices/{noticeId}` - 공지 상세
 
-### 3.4 Schedule-Service API
+### 3.3 Schedule-Service API
 
-#### 일정(Schedule) 관리
+#### 일정(Schedule) 관리 (외부 API)
 - `GET /api/v1/schedules` - 일정 목록 (날짜 범위, 카테고리, 그룹 필터)
 - `POST /api/v1/schedules` - 일정 생성
 - `PUT /api/v1/schedules/{scheduleId}` - 일정 수정
@@ -372,7 +399,7 @@ CREATE TABLE categories (
 - `PATCH /api/v1/schedules/{scheduleId}/status` - 일정 상태 변경
 - `POST /api/v1/schedules/{scheduleId}/convert-to-todo` - 일정→할일 변환
 
-#### 할일(Todo) 관리
+#### 할일(Todo) 관리 (외부 API)
 - `GET /api/v1/todos` - 할일 목록 (날짜 범위, 카테고리, 그룹, 상태, 우선순위 필터)
 - `POST /api/v1/todos` - 할일 생성
 - `PUT /api/v1/todos/{todoId}` - 할일 수정
@@ -382,7 +409,7 @@ CREATE TABLE categories (
 - `GET /api/v1/todos/{todoId}/subtasks` - 서브태스크 목록
 - `POST /api/v1/todos/{todoId}/subtasks` - 서브태스크 생성
 
-#### 카테고리 관리
+#### 카테고리 관리 (외부 API)
 - `GET /api/v1/categories` - 카테고리 목록 (개인 + 내가 속한 그룹 카테고리)
   - Query Params: `groupId` (선택)
 - `POST /api/v1/categories` - 카테고리 생성
@@ -390,7 +417,7 @@ CREATE TABLE categories (
 - `PUT /api/v1/categories/{categoryId}` - 카테고리 수정
 - `DELETE /api/v1/categories/{categoryId}` - 카테고리 삭제
 
-#### 공강 찾기
+#### 공강 찾기 (외부 API)
 - `POST /api/v1/schedules/find-free-slots` - 여러 사용자 공강 시간 계산
   - Request Body: `{ userIds: [1, 2, 3], startDate, endDate, minDuration }`
   - Response: 겹치지 않는 시간대 목록
@@ -401,9 +428,19 @@ CREATE TABLE categories (
 ## 4. 서비스 간 통신
 
 ### 4.1 동기 통신 (REST API)
+
+#### 외부 API (클라이언트 → 백엔드)
 - API Gateway를 통한 클라이언트 요청은 동기 처리
-- 서비스 간 직접 호출은 최소화
-- 필요 시 Service Discovery (Spring Cloud) 또는 ALB 활용
+- JWT 인증 후 `/api` prefix 제거하여 백엔드로 전달
+- 백엔드는 `/v1/*` 경로로 요청 수신
+
+#### 내부 API (서비스 간 직접 통신)
+- Lambda 등 내부 서비스는 백엔드에 직접 `/internal/v1/*` 경로로 호출
+- API Gateway를 거치지 않음
+- X-Api-Key 헤더로 인증
+- 예시:
+  - Canvas-Sync-Lambda → User-Service: `/internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}`
+  - 복호화된 Canvas 토큰 및 메타데이터 반환
 
 ### 4.2 비동기 통신 (Event-Driven)
 

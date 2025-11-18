@@ -10,6 +10,7 @@ import com.unisync.user.common.repository.UserRepository;
 import com.unisync.user.common.service.SqsPublisher;
 import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.credentials.dto.CanvasTokenResponse;
+import com.unisync.user.credentials.dto.InternalCanvasTokenResponse;
 import com.unisync.user.credentials.dto.RegisterCanvasTokenRequest;
 import com.unisync.user.credentials.dto.RegisterCanvasTokenResponse;
 import com.unisync.user.credentials.exception.CanvasTokenNotFoundException;
@@ -148,6 +149,33 @@ public class CredentialsService {
         log.info("Canvas token deleted successfully for cognitoSub: {}", cognitoSub);
 
         // TODO: Leader 변경 로직 (Course-Service 호출)
+    }
+
+    /**
+     * Canvas 토큰을 조회합니다 (내부 API 전용 - Lambda/서비스 간 호출용).
+     * 복호화된 토큰과 추가 메타데이터(externalUserId, externalUsername)를 반환합니다.
+     *
+     * @param cognitoSub Cognito 사용자 ID
+     * @return 내부 API용 Canvas 토큰 응답 (복호화된 토큰 + 메타데이터)
+     */
+    @Transactional(readOnly = true)
+    public InternalCanvasTokenResponse getCanvasTokenForInternalApi(String cognitoSub) {
+        log.info("[Internal API] Retrieving Canvas token for cognitoSub: {}", cognitoSub);
+
+        Credentials credentials = credentialsRepository
+                .findByCognitoSubAndProvider(cognitoSub, CredentialProvider.CANVAS)
+                .orElseThrow(() -> new CanvasTokenNotFoundException(
+                        "Canvas token not found for cognitoSub: " + cognitoSub));
+
+        // 복호화
+        String decryptedToken = encryptionService.decrypt(credentials.getEncryptedToken());
+
+        return InternalCanvasTokenResponse.builder()
+                .canvasToken(decryptedToken)
+                .lastValidatedAt(credentials.getLastValidatedAt())
+                .externalUserId(credentials.getExternalUserId())
+                .externalUsername(credentials.getExternalUsername())
+                .build();
     }
 
     /**
