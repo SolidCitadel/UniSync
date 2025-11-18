@@ -52,7 +52,7 @@ Canvas 과제 감지
 
 ## 데이터 모델
 
-자세한 데이터 모델은 [일정_및_할일_관리_설계.md](../../../일정_및_할일_관리_설계.md) 참고
+자세한 데이터 모델은 [schedule-management.md](../../../docs/features/schedule-management.md) 참고
 
 ### Schedules (일정)
 | 필드 | 타입 | 설명 |
@@ -385,6 +385,6 @@ GET /categories?groupId=5
 
 ## 참고 문서
 
-- [일정_및_할일_관리_설계.md](../../../일정_및_할일_관리_설계.md) - 상세 설계 및 데이터 모델
-- [설계서.md](../../../설계서.md) - 전체 시스템 아키텍처
+- [schedule-management.md](../../../docs/features/schedule-management.md) - 상세 설계 및 데이터 모델
+- [system-architecture.md](../../../docs/design/system-architecture.md) - 전체 시스템 아키텍처
 - [CLAUDE.md](../../../CLAUDE.md) - 프로젝트 개요 및 가이드
