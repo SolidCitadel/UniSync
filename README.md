@@ -315,11 +315,19 @@ cd /etc/localstack/init/ready.d
 ./01-create-queues.sh
 ```
 
-## 참고 문서
+## 문서
 
-- [기획서](./기획.md) - 문제 정의, 핵심 기능, 사용자 시나리오
-- [설계서](./설계서.md) - 상세 아키텍처, API 설계, DB 스키마
-- [CLAUDE.md](./CLAUDE.md) - Claude Code 작업 가이드
+프로젝트의 모든 설계 문서는 `docs/` 디렉토리에 체계적으로 정리되어 있습니다.
+
+### 📖 주요 문서
+- **[docs/README.md](docs/README.md)** - 문서 구조 및 탐색 가이드
+- **[docs/requirements/product-spec.md](docs/requirements/product-spec.md)** - 프로젝트 기획서
+- **[docs/design/system-architecture.md](docs/design/system-architecture.md)** - 시스템 아키텍처
+- **[docs/features/](docs/features/)** - 기능별 상세 설계 및 구현 계획
+
+### 🔧 개발자 문서
+- **[CLAUDE.md](./CLAUDE.md)** - AI 어시스턴트 작업 가이드
+- **[tests/README.md](tests/README.md)** - 테스트 구조 및 실행 방법
 
 ## 라이선스
 

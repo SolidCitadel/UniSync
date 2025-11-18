@@ -97,5 +97,6 @@ com.unisync.{service}/
 - [Tests](tests/README.md) - 테스트 구조 및 실행 방법
 
 ## 참고 문서
-- [기획서](./기획.md) - 문제 정의, 핵심 기능, 사용자 시나리오
-- [설계서](./설계서.md) - 상세 아키텍처, API 설계, DB 스키마, 배포 전략
+- [프로젝트 기획서](docs/requirements/product-spec.md) - 문제 정의, 핵심 기능, 사용자 시나리오
+- [시스템 아키텍처](docs/design/system-architecture.md) - 상세 아키텍처, API 설계, DB 스키마, 배포 전략
+- [문서 구조](docs/README.md) - 모든 설계 문서 탐색 가이드

@@ -228,7 +228,7 @@ CREATE TABLE sync_status (
 - **할일(Todo)**: 기간 단위 작업 (칸반보드, 간트차트)
 - **그룹 참조**: `group_id`는 User-Service의 Groups 테이블을 FK로 참조
 
-자세한 데이터 모델 및 설계는 [일정_및_할일_관리_설계.md](./일정_및_할일_관리_설계.md) 참고
+자세한 데이터 모델 및 설계는 [schedule-management.md](../features/schedule-management.md) 참고
 
 #### Schedules (일정)
 ```sql
