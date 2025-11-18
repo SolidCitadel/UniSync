@@ -63,7 +63,7 @@
 - [x] LocalStack 데이터 영속성 (Named Volume)
 - [x] 테스트 자동화 스크립트 (test-e2e.sh, test-e2e.bat)
 
-### Phase 5: 남은 작업
+### Phase 5: Canvas 동기화 완료
 - [x] **Course 동기화 E2E 플로우 완성** ✅
   - User-Service: cognitoSub 기반 AuthResponse 반환
   - Lambda: 내부 API 경로 수정 (/credentials/...)
@@ -74,13 +74,24 @@
   - canvasCourseId 추가, submissionTypes/dueAt 포맷 변환
   - Course-Service: Assignment SQS 리스너 정상 동작
   - E2E 테스트 통과: Assignment 자동 동기화 (5개) → API 조회 성공
-- [ ] Schedule-Service 일정 통합 기능
-- [ ] Google Calendar 동기화 워크플로우
-- [ ] LLM Task 생성 자동화
+
+### Phase 6: Schedule 및 확장 기능 (진행 예정)
+- [ ] **Schedule-Service 일정 통합 기능**
+  - Schedules, Todos, Categories 엔티티 구현
+  - Canvas Assignment → Schedule 자동 생성
+  - SQS 리스너: assignment-events-queue 구독
+- [ ] **Google Calendar 동기화 워크플로우**
+  - Google OAuth2 인증 플로우
+  - Google Calendar API 연동
+  - 양방향 동기화
+- [ ] **LLM Task 생성 자동화**
+  - Assignment 설명 분석
+  - Todo/Subtask 자동 생성
+  - 제출물 자동 검증
 
 ---
 
-## 📊 현재 상태 (2025-11-07)
+## 📊 현재 상태 (2025-11-18)
 
 ### ✅ 구현 완료
 - **인증 시스템**: JWT 인증, 회원가입/로그인 API, cognitoSub 마이그레이션
@@ -124,11 +135,19 @@
   5. LocalStack 재시작하여 수정된 Lambda 배포
 - **결과**: 5개 Assignment 동기화 및 API 조회 성공 (1 passed in 19.23s)
 
-### 📍 다음 작업
-1. Schedule-Service 일정 통합 (Course/Assignment → Schedule 자동 생성)
-2. Google Calendar 동기화 워크플로우
-3. LLM Task 생성 자동화 (Assignment 분석 → Task/Subtask 생성)
-4. 제출물 자동 검증 (Submission 감지 → LLM 검증 → Task 상태 업데이트)
+### 📍 다음 작업 (Phase 6)
+1. **Schedule-Service 구현** (최우선)
+   - Schedules, Todos, Categories 엔티티 및 Repository
+   - Canvas Assignment → Schedule 자동 생성 로직
+   - SQS 리스너 구현
+   - 기본 CRUD API
+2. **Google Calendar 동기화 워크플로우**
+   - Google OAuth2 인증 플로우
+   - Google Calendar API 연동 Lambda
+   - 양방향 동기화 구현
+3. **LLM 기반 자동화**
+   - Assignment 설명 분석 → Todo/Subtask 생성
+   - 제출물 자동 검증 → Task 상태 업데이트
 
 ---
 
@@ -141,7 +160,13 @@
 
 ---
 
-## 📝 최근 업데이트 (2025-11-07)
+## 📝 최근 업데이트
+
+### 2025-11-18: 문서 구조 개선
+- docs/ 폴더 체계화 (adr, requirements, design, features, guides)
+- 문서 파일 영문명 변경 및 참조 링크 업데이트
+
+### 2025-11-07: Canvas 동기화 완료
 
 ### cognitoSub 마이그레이션 완료
 - **AuthResponse/AuthService**: userId → cognitoSub 변경
