@@ -72,7 +72,7 @@ class ScheduleControllerTest {
     void testNotFoundScheduleById() throws Exception {
         Long nonExistentId = 99999L;
 
-        mockMvc.perform(get("/schedules/{scheduleId}", nonExistentId)
+        mockMvc.perform(get("/v1/schedules/{scheduleId}", nonExistentId)
                         .header("X-Cognito-Sub", testCognitoSub))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("SCHEDULE_NOT_FOUND"))
@@ -92,7 +92,7 @@ class ScheduleControllerTest {
                 .categoryId(testCategory.getCategoryId())
                 .build();
 
-        mockMvc.perform(post("/schedules")
+        mockMvc.perform(post("/v1/schedules")
                         .header("X-Cognito-Sub", testCognitoSub)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -111,7 +111,7 @@ class ScheduleControllerTest {
                 .categoryId(testCategory.getCategoryId())
                 .build();
 
-        mockMvc.perform(post("/schedules")
+        mockMvc.perform(post("/v1/schedules")
                         .header("X-Cognito-Sub", testCognitoSub)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -132,7 +132,7 @@ class ScheduleControllerTest {
                 .categoryId(nonExistentCategoryId)
                 .build();
 
-        mockMvc.perform(post("/schedules")
+        mockMvc.perform(post("/v1/schedules")
                         .header("X-Cognito-Sub", testCognitoSub)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -152,7 +152,7 @@ class ScheduleControllerTest {
                 .categoryId(testCategory.getCategoryId())
                 .build();
 
-        mockMvc.perform(post("/schedules")
+        mockMvc.perform(post("/v1/schedules")
                         .header("X-Cognito-Sub", testCognitoSub)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -184,7 +184,7 @@ class ScheduleControllerTest {
                 .categoryId(testCategory.getCategoryId())
                 .build();
 
-        mockMvc.perform(put("/schedules/{scheduleId}", schedule.getScheduleId())
+        mockMvc.perform(put("/v1/schedules/{scheduleId}", schedule.getScheduleId())
                         .header("X-Cognito-Sub", testCognitoSub)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
