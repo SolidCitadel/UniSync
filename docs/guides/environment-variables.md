@@ -30,10 +30,11 @@ UniSync 프로젝트의 환경변수 레퍼런스 가이드입니다.
 | `COGNITO_USER_POOL_ID` | AWS Cognito User Pool ID | LocalStack 초기화 시 자동 생성 | `ap-northeast-2_abc123` |
 | `COGNITO_CLIENT_ID` | AWS Cognito Client ID | LocalStack 초기화 시 자동 생성 | `4f8n2k...` |
 
-### 외부 API
+### 외부 API 및 인프라
 
 | 변수 | 설명 | 발급처 | 예시 |
 |------|------|--------|------|
+| `LOCALSTACK_AUTH_TOKEN` | LocalStack Pro 라이선스 토큰 | [LocalStack Dashboard](https://app.localstack.cloud/) | `ls-xxxxx-...` |
 | `CANVAS_API_TOKEN` | Canvas LMS API 토큰 (테스트용) | Canvas → Settings → New Access Token | `1234~abcd...` |
 | `CANVAS_SYNC_API_KEY` | Canvas Sync Lambda 호출용 API 키 | 직접 생성 (UUID 권장) | `sync-api-key-...` |
 | `LLM_API_KEY` | LLM API 키 (OpenAI 등) | OpenAI Dashboard | `sk-proj-...` |
@@ -128,12 +129,13 @@ MYSQL_PASSWORD=unisync_password
 ```
 
 ### Acceptance (자동화 테스트)
-**파일**: `.env.common` + `.env.acceptance`
+**파일**: `.env.local` + `.env.common` + `.env.acceptance`
 **프로파일**: `acceptance`
 **특징**:
 - DDL: `create-drop` (테스트 독립성)
 - 휘발성 볼륨 (테스트 후 삭제)
 - 테스트용 API 키 사용
+- **로컬에서 실행**: `.env.local` 필요 (LocalStack 토큰)
 
 **`.env.acceptance` 오버라이드 예시**:
 ```bash
@@ -145,13 +147,26 @@ USER_DB_NAME=user_db_test
 COURSE_DB_NAME=course_db_test
 ```
 
+**실행**:
+```bash
+# .env.local이 있어야 함 (LOCALSTACK_AUTH_TOKEN)
+docker-compose -f docker-compose.acceptance.yml up --build
+```
+
 ### Demo (전체 시스템 데모)
-**파일**: `.env.common` + `.env.demo`
+**파일**: `.env.local` + `.env.common` + `.env.demo`
 **프로파일**: `prod`
 **특징**:
 - DDL: `validate` (운영 모드)
 - 영구 볼륨 사용
 - DockerHub 이미지 실행
+- **로컬에서 실행**: `.env.local` 필요 (LocalStack 토큰)
+
+**실행**:
+```bash
+# .env.local이 있어야 함 (LOCALSTACK_AUTH_TOKEN)
+docker-compose -f docker-compose.demo.yml up
+```
 
 ### Production (ECS)
 **파일**: Secrets Manager + 환경변수 주입

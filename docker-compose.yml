@@ -31,8 +31,6 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
       - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
-      - AWS_REGION=${AWS_REGION}
       - LOCALSTACK_ENDPOINT=http://localhost:4566
       - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
       - USER_SERVICE_URL=http://host.docker.internal:8081

@@ -114,7 +114,8 @@ API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
    - Spring 서비스를 **빌드**하여 실행
    - `SPRING_PROFILES_ACTIVE=acceptance` 주입
    - 휘발성 볼륨 (tmpfs) 사용
-   - env_file: `.env.common` + `.env.acceptance`
+   - env_file: `.env.local` (LocalStack 토큰) + `.env.common` + `.env.acceptance`
+   - **주의**: 로컬에서 실행 시 `.env.local` 필수 (LOCALSTACK_AUTH_TOKEN)
    - 커밋됨 ✓
 
 4. **`docker-compose.demo.yml`** (데모 환경)
@@ -123,7 +124,8 @@ API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
    - Spring 서비스를 **DockerHub 이미지**로 실행 (빌드 불필요)
    - `SPRING_PROFILES_ACTIVE=prod` 주입
    - 영구 볼륨 사용 (demo-*)
-   - env_file: `.env.common` + `.env.demo`
+   - env_file: `.env.local` (LocalStack 토큰) + `.env.common` + `.env.demo`
+   - **주의**: 로컬에서 실행 시 `.env.local` 필수 (LOCALSTACK_AUTH_TOKEN)
    - 커밋됨 ✓
 
 ## 로컬 개발 환경 설정
@@ -239,6 +241,9 @@ docker-compose up -d
 
 ### Acceptance 테스트
 ```bash
+# 사전 준비: .env.local 필요 (LOCALSTACK_AUTH_TOKEN)
+# cp .env.local.example .env.local (없는 경우)
+
 # 모든 서비스를 빌드하여 실행
 docker-compose -f docker-compose.acceptance.yml up --build
 
@@ -248,6 +253,9 @@ docker-compose -f docker-compose.acceptance.yml down -v
 
 ### Demo (전체 시스템)
 ```bash
+# 사전 준비: .env.local 필요 (LOCALSTACK_AUTH_TOKEN)
+# cp .env.local.example .env.local (없는 경우)
+
 # DockerHub 이미지로 실행 (빌드 불필요)
 docker-compose -f docker-compose.demo.yml up
 

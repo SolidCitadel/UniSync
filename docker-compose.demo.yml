@@ -22,6 +22,9 @@ services:
     container_name: unisync-demo-localstack
     ports:
       - "4566:4566"
+    env_file:
+      - .env.local  # 로컬 종속 비밀 (LOCALSTACK_AUTH_TOKEN 등)
+      - .env.demo
     environment:
       - SERVICES=sqs,stepfunctions,lambda,s3,secretsmanager,events,cognito-idp,elasticloadbalancingv2,ec2
       - DEBUG=1
@@ -29,12 +32,9 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
       - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
-      - AWS_REGION=${AWS_REGION}
       - LOCALSTACK_ENDPOINT=http://localhost:4566
       - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
       - USER_SERVICE_URL=http://user-service:8081
-      - CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
     volumes:
       - ".:/workspace"
       - "./localstack-init:/etc/localstack/init/ready.d"
