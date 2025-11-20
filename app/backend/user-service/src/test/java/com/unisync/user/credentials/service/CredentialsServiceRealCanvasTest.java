@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.*;
  * 환경변수 CANVAS_API_TOKEN이 설정되어 있을 때만 실행됩니다.
  */
 @SpringBootTest
-@ActiveProfiles("test")
 @Transactional
 class CredentialsServiceRealCanvasTest {
 

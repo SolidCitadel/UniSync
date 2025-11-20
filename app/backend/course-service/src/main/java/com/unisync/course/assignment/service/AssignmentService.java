@@ -2,22 +2,29 @@ package com.unisync.course.assignment.service;
 
 import com.unisync.shared.dto.sqs.AssignmentEventMessage;
 import com.unisync.course.assignment.dto.AssignmentResponse;
+import com.unisync.course.assignment.dto.AssignmentToScheduleEventDto;
 import com.unisync.course.assignment.exception.AssignmentNotFoundException;
+import com.unisync.course.assignment.publisher.AssignmentEventPublisher;
 import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
+import com.unisync.course.common.entity.Enrollment;
 import com.unisync.course.common.repository.AssignmentRepository;
 import com.unisync.course.common.repository.CourseRepository;
+import com.unisync.course.common.repository.EnrollmentRepository;
 import com.unisync.course.course.exception.CourseNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Assignment Service
  * Canvas-Sync-Lambda에서 발행한 Assignment 이벤트를 처리하여 DB 저장
+ * 저장 후 Schedule-Service로 변환 이벤트 발행
  */
 @Slf4j
 @Service
@@ -26,6 +33,8 @@ public class AssignmentService {
 
     private final AssignmentRepository assignmentRepository;
     private final CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final AssignmentEventPublisher assignmentEventPublisher;
 
     /**
      * Assignment 생성
@@ -59,6 +68,9 @@ public class AssignmentService {
 
         log.info("✅ Created assignment: id={}, canvasAssignmentId={}, title={}",
                  saved.getId(), saved.getCanvasAssignmentId(), saved.getTitle());
+
+        // 4. Schedule-Service로 변환 이벤트 발행 (모든 수강생에게)
+        publishAssignmentToScheduleEvents(saved, "ASSIGNMENT_CREATED");
     }
 
     /**
@@ -85,6 +97,9 @@ public class AssignmentService {
 
         log.info("✅ Updated assignment: id={}, canvasAssignmentId={}",
                  saved.getId(), saved.getCanvasAssignmentId());
+
+        // Schedule-Service로 변환 이벤트 발행 (모든 수강생에게)
+        publishAssignmentToScheduleEvents(saved, "ASSIGNMENT_UPDATED");
     }
 
     /**
@@ -114,5 +129,44 @@ public class AssignmentService {
                 .createdAt(assignment.getCreatedAt())
                 .updatedAt(assignment.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Schedule-Service로 Assignment → Schedule 변환 이벤트 발행
+     * 해당 과목을 수강하는 모든 사용자에게 이벤트 발행
+     */
+    private void publishAssignmentToScheduleEvents(Assignment assignment, String eventType) {
+        Course course = assignment.getCourse();
+
+        // 1. 과목을 수강하는 모든 사용자 조회
+        List<Enrollment> enrollments = enrollmentRepository.findAllByCourseId(course.getId());
+
+        if (enrollments.isEmpty()) {
+            log.warn("No enrollments found for course: courseId={}", course.getId());
+            return;
+        }
+
+        // 2. 각 수강생별로 이벤트 DTO 생성
+        List<AssignmentToScheduleEventDto> events = enrollments.stream()
+            .map(enrollment -> AssignmentToScheduleEventDto.builder()
+                .eventType(eventType)
+                .assignmentId(assignment.getId())
+                .cognitoSub(enrollment.getCognitoSub())
+                .canvasAssignmentId(assignment.getCanvasAssignmentId())
+                .canvasCourseId(course.getCanvasCourseId())
+                .title(assignment.getTitle())
+                .description(assignment.getDescription())
+                .dueAt(assignment.getDueAt())
+                .pointsPossible(assignment.getPointsPossible())
+                .courseId(course.getId())
+                .courseName(course.getName())
+                .build())
+            .collect(Collectors.toList());
+
+        // 3. SQS로 발행
+        assignmentEventPublisher.publishAssignmentEvents(events);
+
+        log.info("📤 Published {} assignment events to {} users: assignmentId={}, eventType={}",
+                events.size(), enrollments.size(), assignment.getId(), eventType);
     }
 }

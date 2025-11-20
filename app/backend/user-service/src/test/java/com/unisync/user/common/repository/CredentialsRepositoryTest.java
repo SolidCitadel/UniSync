@@ -15,7 +15,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@ActiveProfiles("test")
 @DisplayName("CredentialsRepository 테스트")
 class CredentialsRepositoryTest {
 

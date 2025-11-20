@@ -78,8 +78,8 @@ public class CredentialsService {
         log.info("Canvas token registered successfully for cognitoSub: {}, externalUserId: {}, loginId: {}",
                 cognitoSub, profile.getId(), profile.getLoginId());
 
-        // 4. SQS 이벤트 발행 (user-token-registered-queue)
-        publishUserTokenRegisteredEvent(cognitoSub, profile);
+        // Phase 1: 토큰 저장만 하고 종료 (수동 동기화 사용)
+        // SQS 이벤트 발행 제거 (기존: publishUserTokenRegisteredEvent)
 
         return RegisterCanvasTokenResponse.builder()
                 .success(true)
@@ -178,23 +178,24 @@ public class CredentialsService {
                 .build();
     }
 
-    /**
-     * SQS에 사용자 토큰 등록 이벤트를 발행합니다
-     *
-     * @param cognitoSub Cognito 사용자 ID
-     * @param profile Canvas 프로필 정보
-     */
-    private void publishUserTokenRegisteredEvent(String cognitoSub, CanvasApiClient.CanvasProfile profile) {
-        UserTokenRegisteredEvent event = UserTokenRegisteredEvent.builder()
-                .cognitoSub(cognitoSub)
-                .provider("CANVAS")
-                .registeredAt(LocalDateTime.now())
-                .externalUserId(String.valueOf(profile.getId()))
-                .externalUsername(profile.getLoginId())
-                .build();
-
-        sqsPublisher.publish(userTokenRegisteredQueue, event);
-
-        log.info("Published UserTokenRegisteredEvent to SQS for cognitoSub={}", cognitoSub);
-    }
+    // Phase 1: 수동 동기화로 인해 사용 안 함 (Phase 2에서 재활성화 가능)
+    // /**
+    //  * SQS에 사용자 토큰 등록 이벤트를 발행합니다
+    //  *
+    //  * @param cognitoSub Cognito 사용자 ID
+    //  * @param profile Canvas 프로필 정보
+    //  */
+    // private void publishUserTokenRegisteredEvent(String cognitoSub, CanvasApiClient.CanvasProfile profile) {
+    //     UserTokenRegisteredEvent event = UserTokenRegisteredEvent.builder()
+    //             .cognitoSub(cognitoSub)
+    //             .provider("CANVAS")
+    //             .registeredAt(LocalDateTime.now())
+    //             .externalUserId(String.valueOf(profile.getId()))
+    //             .externalUsername(profile.getLoginId())
+    //             .build();
+    //
+    //     sqsPublisher.publish(userTokenRegisteredQueue, event);
+    //
+    //     log.info("Published UserTokenRegisteredEvent to SQS for cognitoSub={}", cognitoSub);
+    // }
 }

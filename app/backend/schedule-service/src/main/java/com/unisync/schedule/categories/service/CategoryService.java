@@ -156,6 +156,36 @@ public class CategoryService {
     }
 
     /**
+     * Canvas 과제용 기본 카테고리 조회 또는 생성
+     * Assignment → Schedule 변환 시 사용
+     */
+    @Transactional
+    public Long getOrCreateCanvasCategory(String cognitoSub) {
+        String canvasCategoryName = "Canvas";
+
+        // 기존 Canvas 카테고리 조회
+        return categoryRepository.findByCognitoSubAndName(cognitoSub, canvasCategoryName)
+                .map(Category::getCategoryId)
+                .orElseGet(() -> {
+                    // Canvas 카테고리 없으면 생성
+                    Category canvasCategory = Category.builder()
+                            .cognitoSub(cognitoSub)
+                            .groupId(null)
+                            .name(canvasCategoryName)
+                            .color("#FF6B6B") // Canvas 빨강 계열
+                            .icon("📚")
+                            .isDefault(true) // Canvas 카테고리는 기본 카테고리
+                            .build();
+
+                    Category saved = categoryRepository.save(canvasCategory);
+                    log.info("✅ Created default Canvas category for user: cognitoSub={}, categoryId={}",
+                            cognitoSub, saved.getCategoryId());
+
+                    return saved.getCategoryId();
+                });
+    }
+
+    /**
      * 카테고리 소유권 검증
      */
     private void validateCategoryOwnership(Category category, String cognitoSub) {

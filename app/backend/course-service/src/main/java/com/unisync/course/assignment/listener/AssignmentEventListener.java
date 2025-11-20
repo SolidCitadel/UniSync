@@ -19,14 +19,14 @@ public class AssignmentEventListener {
     private final AssignmentService assignmentService;
 
     /**
-     * assignment-events-queue에서 메시지를 수신하여 Assignment 생성/수정
+     * lambda-to-courseservice-assignments 큐에서 메시지를 수신하여 Assignment 생성/수정
      *
      * @param message Canvas-Sync-Lambda가 발행한 Assignment 이벤트 메시지
      * @SqsListener 설정:
      *   - value: 큐 이름 (LocalStack에서는 큐 이름, AWS에서는 큐 URL 또는 이름)
      *   - deletionPolicy: 메시지 삭제 정책 (ON_SUCCESS: 정상 처리 후 자동 삭제)
      */
-    @SqsListener(value = "assignment-events-queue")
+    @SqsListener(value = "lambda-to-courseservice-assignments")
     public void receiveAssignmentEvent(AssignmentEventMessage message) {
         log.info("📥 Received assignment event: type={}, canvasAssignmentId={}, title={}",
                  message.getEventType(), message.getCanvasAssignmentId(), message.getTitle());

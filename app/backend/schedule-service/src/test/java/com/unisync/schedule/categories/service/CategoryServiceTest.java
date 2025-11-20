@@ -338,4 +338,57 @@ class CategoryServiceTest {
 
         then(categoryRepository).should(never()).save(any());
     }
+
+    @Test
+    @DisplayName("Canvas 카테고리 조회 또는 생성 - 기존 카테고리 존재")
+    void getOrCreateCanvasCategory_ExistingCategory() {
+        // given
+        Category canvasCategory = new Category();
+        canvasCategory.setCategoryId(200L);
+        canvasCategory.setCognitoSub(cognitoSub);
+        canvasCategory.setName("Canvas");
+        canvasCategory.setColor("#FF6B6B");
+        canvasCategory.setIcon("📚");
+        canvasCategory.setIsDefault(true);
+
+        given(categoryRepository.findByCognitoSubAndName(cognitoSub, "Canvas"))
+                .willReturn(Optional.of(canvasCategory));
+
+        // when
+        Long categoryId = categoryService.getOrCreateCanvasCategory(cognitoSub);
+
+        // then
+        assertThat(categoryId).isEqualTo(200L);
+        then(categoryRepository).should().findByCognitoSubAndName(cognitoSub, "Canvas");
+        then(categoryRepository).should(never()).save(any(Category.class));
+    }
+
+    @Test
+    @DisplayName("Canvas 카테고리 조회 또는 생성 - 새 카테고리 생성")
+    void getOrCreateCanvasCategory_CreateNewCategory() {
+        // given
+        given(categoryRepository.findByCognitoSubAndName(cognitoSub, "Canvas"))
+                .willReturn(Optional.empty());
+        given(categoryRepository.save(any(Category.class)))
+                .willAnswer(invocation -> {
+                    Category saved = invocation.getArgument(0);
+                    saved.setCategoryId(300L);
+                    return saved;
+                });
+
+        // when
+        Long categoryId = categoryService.getOrCreateCanvasCategory(cognitoSub);
+
+        // then
+        assertThat(categoryId).isEqualTo(300L);
+        then(categoryRepository).should().findByCognitoSubAndName(cognitoSub, "Canvas");
+        then(categoryRepository).should().save(argThat(category ->
+                category.getCognitoSub().equals(cognitoSub) &&
+                category.getName().equals("Canvas") &&
+                category.getColor().equals("#FF6B6B") &&
+                category.getIcon().equals("📚") &&
+                category.getIsDefault().equals(true) &&
+                category.getGroupId() == null
+        ));
+    }
 }
