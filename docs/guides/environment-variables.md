@@ -104,67 +104,109 @@ UniSync 프로젝트의 환경변수 레퍼런스 가이드입니다.
 
 ## 🌍 환경별 설정
 
+### 환경변수 파일 구조 개요
+
+| 파일 | 역할 | 커밋 여부 | 사용 환경 |
+|------|------|----------|----------|
+| `.env` | docker-compose 인프라 설정 (MySQL, LocalStack) | ✅ 커밋 | 모든 환경 |
+| `.env.common` | 컨테이너 공통 앱 설정 (Service URLs, SQS 큐 등) | ✅ 커밋 | compose 실행 시 |
+| `.env.local` | 로컬 개발 모든 설정 (비밀 + 로컬 전용 + 공통) | ❌ gitignore | IDE 직접 실행 + compose |
+| `.env.acceptance` | acceptance 테스트 특화 오버라이드 | ✅ 커밋 | acceptance 환경 |
+| `.env.demo` | 데모 환경 특화 오버라이드 | ✅ 커밋 | demo 환경 |
+
+**핵심 원칙:**
+- **IDE 직접 실행**: Gradle이 `.env.local`만 읽음 (모든 설정 포함)
+- **compose 실행**: `env_file: [.env.local, .env.common, .env.{acceptance|demo}]` 순서로 로드
+- `.env.local`에 `.env.common`의 모든 내용 포함 (로컬 실행 시 필요)
+
 ### Local (IDE 개발)
-**파일**: `.env.local`
+**파일**: `.env.local` (단독 사용)
 **프로파일**: `local`
 **특징**:
+- Spring 직접 실행 시 Gradle이 `.env.local`만 로드
 - MySQL, LocalStack: localhost로 접속
 - 모든 서비스: localhost 포트 (8080-8083)
 - 상세 로깅 활성화
 
-**필수 환경변수**:
+**`.env.local` 구성**:
 ```bash
-# 인증
+# ===== 비밀 정보 =====
+LOCALSTACK_AUTH_TOKEN=ls-xxxxx
+JWT_SECRET=xxx
 ENCRYPTION_KEY=xxx
-COGNITO_USER_POOL_ID=ap-northeast-2_xxx
-COGNITO_CLIENT_ID=xxx
-
-# 외부 API
 CANVAS_API_TOKEN=xxx
 CANVAS_SYNC_API_KEY=xxx
-SERVICE_AUTH_TOKEN=xxx
 
-# DB
-MYSQL_PASSWORD=unisync_password
+# Cognito (LocalStack이 자동 업데이트)
+COGNITO_USER_POOL_ID=ap-northeast-2_xxx
+COGNITO_CLIENT_ID=xxx
+COGNITO_REGION=ap-northeast-2
+
+# ===== 로컬 전용 오버라이드 =====
+COGNITO_ENDPOINT=http://localhost:4566
+USER_SERVICE_URL=http://localhost:8081
+COURSE_SERVICE_URL=http://localhost:8082
+SCHEDULE_SERVICE_URL=http://localhost:8083
+AWS_SQS_ENDPOINT=http://localhost:4566
+
+# 로컬 DB
+USER_SERVICE_DATABASE_URL=jdbc:mysql://localhost:3307/user_db?...
+# ... 나머지 DB URL들
+
+# ===== 공통 설정 (.env.common과 동일) =====
+SQS_USER_TOKEN_REGISTERED_QUEUE=user-token-registered-queue
+CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
+# ... 나머지 공통 설정들
 ```
 
 ### Acceptance (자동화 테스트)
-**파일**: `.env.local` + `.env.common` + `.env.acceptance`
+**파일**: `.env.local` → `.env.common` → `.env.acceptance` (순서대로 덮어쓰기)
 **프로파일**: `acceptance`
 **특징**:
 - DDL: `create-drop` (테스트 독립성)
 - 휘발성 볼륨 (테스트 후 삭제)
-- 테스트용 API 키 사용
-- **로컬에서 실행**: `.env.local` 필요 (LocalStack 토큰)
+- 컨테이너 네트워크 호스트명 사용 (`http://user-service:8081`)
+- **로컬에서 실행 시**: `.env.local` 필수 (LOCALSTACK_AUTH_TOKEN, COGNITO_* 등)
 
 **`.env.acceptance` 오버라이드 예시**:
 ```bash
-# 테스트용 짧은 타임아웃
-SQS_POLLING_WAIT_TIME=1
-
 # 테스트 DB 격리
-USER_DB_NAME=user_db_test
-COURSE_DB_NAME=course_db_test
+USER_SERVICE_DB_NAME=user_db_test
+USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db_test?...
+
+# 테스트용 더미 키
+ENCRYPTION_KEY=IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=
+JWT_SECRET=test-jwt-secret-key-for-acceptance-tests
 ```
 
 **실행**:
 ```bash
-# .env.local이 있어야 함 (LOCALSTACK_AUTH_TOKEN)
+# .env.local 필수 (LOCALSTACK_AUTH_TOKEN, COGNITO_* 등)
 docker-compose -f docker-compose.acceptance.yml up --build
 ```
 
 ### Demo (전체 시스템 데모)
-**파일**: `.env.local` + `.env.common` + `.env.demo`
+**파일**: `.env.local` → `.env.common` → `.env.demo` (순서대로 덮어쓰기)
 **프로파일**: `prod`
 **특징**:
 - DDL: `validate` (운영 모드)
 - 영구 볼륨 사용
 - DockerHub 이미지 실행
-- **로컬에서 실행**: `.env.local` 필요 (LocalStack 토큰)
+- **로컬에서 실행 시**: `.env.local` 필수
+
+**`.env.demo` 오버라이드 예시**:
+```bash
+# 데모용 DB (컨테이너 네트워크)
+USER_SERVICE_DATABASE_URL=jdbc:mysql://mysql:3306/user_db?...
+
+# 데모용 더미 키 (실제 값으로 교체 필요)
+ENCRYPTION_KEY=demo-base64-encoded-encryption-key-here
+JWT_SECRET=demo-jwt-secret-key-change-this
+```
 
 **실행**:
 ```bash
-# .env.local이 있어야 함 (LOCALSTACK_AUTH_TOKEN)
+# .env.local 필수 (LOCALSTACK_AUTH_TOKEN)
 docker-compose -f docker-compose.demo.yml up
 ```
 
