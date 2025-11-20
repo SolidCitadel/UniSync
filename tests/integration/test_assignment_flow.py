@@ -47,7 +47,7 @@ class TestAssignmentFlow:
         # Then: course-service API를 통해 Assignment 생성 확인
         max_wait = 60  # 최대 60초 대기 (SQS long polling 고려)
         assignment_created = False
-        api_url = f"http://localhost:8082/api/assignments/canvas/{message['canvasAssignmentId']}"
+        api_url = f"http://localhost:8082/v1/assignments/canvas/{message['canvasAssignmentId']}"
 
         for i in range(max_wait):
             try:

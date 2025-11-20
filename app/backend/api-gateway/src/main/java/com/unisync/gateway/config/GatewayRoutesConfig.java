@@ -6,6 +6,7 @@ import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 
 /**
  * API Gateway Routes Configuration
@@ -28,6 +29,13 @@ public class GatewayRoutesConfig {
     @Bean
     public RouteLocator customRoutes(RouteLocatorBuilder builder, JwtAuthenticationFilter jwtAuthFilter) {
         return builder.routes()
+                // Block internal APIs - 내부 API는 API Gateway를 통해 접근 불가
+                .route("block-internal-apis", r -> r
+                        .path("/api/internal/**")
+                        .filters(f -> f.setStatus(HttpStatus.FORBIDDEN))
+                        .uri("no://op")
+                )
+
                 // User Service (사용자/인증/소셜)
                 .route("user-service", r -> r
                         .path(
@@ -39,7 +47,7 @@ public class GatewayRoutesConfig {
                         )
                         .filters(f -> f
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
+                                .rewritePath("/api(?<segment>.*)", "$\\{segment}")
                         )
                         .uri(userServiceUrl)
                 )
@@ -55,7 +63,7 @@ public class GatewayRoutesConfig {
                         )
                         .filters(f -> f
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
+                                .rewritePath("/api(?<segment>.*)", "$\\{segment}")
                         )
                         .uri(courseServiceUrl)
                 )
@@ -69,7 +77,7 @@ public class GatewayRoutesConfig {
                         )
                         .filters(f -> f
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
+                                .rewritePath("/api(?<segment>.*)", "$\\{segment}")
                         )
                         .uri(scheduleServiceUrl)
                 )

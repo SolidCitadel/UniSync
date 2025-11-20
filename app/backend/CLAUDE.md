@@ -12,28 +12,65 @@
 - Schedule-Service: 8083
 
 ## API Gateway 라우팅
-API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
+
+### 외부 API (프론트엔드 → API Gateway → 백엔드)
+
+API Gateway는 `/api` prefix만 제거하여 백엔드 서비스로 전달:
 
 ```
 # User-Service
-/api/auth/**        → /auth/**
-/api/users/**       → /users/**
-/api/credentials/** → /credentials/**
-/api/friends/**     → /friends/**
-/api/groups/**      → /groups/**
+클라이언트: /api/v1/auth/**            → 백엔드: /v1/auth/**
+클라이언트: /api/v1/users/**           → 백엔드: /v1/users/**
+클라이언트: /api/v1/credentials/**     → 백엔드: /v1/credentials/**
+클라이언트: /api/v1/friends/**         → 백엔드: /v1/friends/**
+클라이언트: /api/v1/integrations/**    → 백엔드: /v1/integrations/**
 
 # Course-Service
-/api/courses/**     → /courses/**
-/api/assignments/** → /assignments/**
-/api/enrollments/** → /enrollments/**
+클라이언트: /api/v1/courses/**         → 백엔드: /v1/courses/**
+클라이언트: /api/v1/assignments/**     → 백엔드: /v1/assignments/**
+클라이언트: /api/v1/tasks/**           → 백엔드: /v1/tasks/**
+클라이언트: /api/v1/notices/**         → 백엔드: /v1/notices/**
+클라이언트: /api/v1/sync/**            → 백엔드: /v1/sync/**
 
 # Schedule-Service
-/api/schedules/**   → /schedules/**
-/api/todos/**       → /todos/**
-/api/categories/**  → /categories/**
+클라이언트: /api/v1/schedules/**       → 백엔드: /v1/schedules/**
+클라이언트: /api/v1/todos/**           → 백엔드: /v1/todos/**
+클라이언트: /api/v1/categories/**      → 백엔드: /v1/categories/**
 ```
 
-인증 예외 (JWT 불필요): `/api/auth/register`, `/api/auth/login`
+**인증 예외 (JWT 불필요)**: `/api/v1/auth/signup`, `/api/v1/auth/signin`
+
+### 내부 API (서비스 간 직접 통신)
+
+Lambda 등 내부 서비스는 백엔드에 직접 호출:
+
+```
+# User-Service 내부 API
+Lambda → 백엔드: /internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}
+  - 인증: X-Api-Key 헤더
+  - 용도: Canvas 토큰 조회 (복호화된 토큰 반환)
+```
+
+**API Gateway 차단**: `/api/internal/**` 경로는 403 Forbidden 응답
+
+### 라우팅 규칙
+
+GatewayRoutesConfig.java에서 정의:
+
+1. **내부 API 차단 (최우선)**
+   ```java
+   .route("block-internal-apis", r -> r
+       .path("/api/internal/**")
+       .filters(f -> f.setStatus(HttpStatus.FORBIDDEN))
+       .uri("no://op")
+   )
+   ```
+
+2. **URL Rewrite**
+   ```java
+   .rewritePath("/api(?<segment>.*)", "$\\{segment}")
+   // /api/v1/users/me → /v1/users/me
+   ```
 
 백엔드 서비스 엔드포인트는 환경변수로 주입 (로컬/Docker/ECS 환경별 상이).
 

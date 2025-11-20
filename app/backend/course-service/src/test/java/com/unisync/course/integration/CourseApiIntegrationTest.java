@@ -93,7 +93,7 @@ class CourseApiIntegrationTest {
         createEnrollment("test-cognito-sub-999", course3, true);
 
         // when: GET /courses with X-Cognito-Sub header
-        String response = mockMvc.perform(get("/courses")
+        String response = mockMvc.perform(get("/v1/courses")
                 .header("X-Cognito-Sub", cognitoSub))
             .andExpect(status().isOk())
             .andReturn()
@@ -114,7 +114,7 @@ class CourseApiIntegrationTest {
         Course course = createCourse(789L, "Spring Boot 고급", "CS301");
 
         // when: GET /courses/{courseId}
-        String response = mockMvc.perform(get("/courses/{courseId}", course.getId()))
+        String response = mockMvc.perform(get("/v1/courses/{courseId}", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -132,7 +132,7 @@ class CourseApiIntegrationTest {
     @DisplayName("존재하지 않는 Course 조회 시 404 반환")
     void testGetCourse_NotFound() throws Exception {
         // when: GET /courses/999999 (존재하지 않는 ID)
-        mockMvc.perform(get("/courses/{courseId}", 999999L))
+        mockMvc.perform(get("/v1/courses/{courseId}", 999999L))
             .andExpect(status().isNotFound());
     }
 
@@ -150,7 +150,7 @@ class CourseApiIntegrationTest {
         createAssignment(otherCourse, 2001L, "다른 과제", LocalDateTime.now());
 
         // when: GET /courses/{courseId}/assignments
-        String response = mockMvc.perform(get("/courses/{courseId}/assignments", course.getId()))
+        String response = mockMvc.perform(get("/v1/courses/{courseId}/assignments", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -170,7 +170,7 @@ class CourseApiIntegrationTest {
         Course course = createCourse(789L, "Spring Boot 고급", "CS301");
 
         // when: GET /courses/{courseId}/assignments
-        String response = mockMvc.perform(get("/courses/{courseId}/assignments", course.getId()))
+        String response = mockMvc.perform(get("/v1/courses/{courseId}/assignments", course.getId()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
