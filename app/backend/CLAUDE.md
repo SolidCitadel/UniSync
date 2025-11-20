@@ -42,20 +42,24 @@ API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
 ### 환경변수 파일 구조
 
 ```
-.env                    # docker-compose 공통 (커밋됨)
-.env.common             # 앱 컨테이너 기본값 (커밋됨)
-.env.local              # 비밀 (gitignore)
+.env                    # docker-compose 인프라 설정 (커밋됨)
+.env.common             # 앱 컨테이너 공통 설정 (커밋됨)
+.env.local              # 로컬 개발 전체 설정 (gitignore)
 .env.local.example      # 템플릿 (커밋됨)
 .env.acceptance         # acceptance 오버라이드 (커밋됨)
 .env.demo               # demo 오버라이드 (커밋됨)
 ```
 
 **역할**:
-- **`.env`**: docker-compose.yml이 자동 로드. MySQL, LocalStack 등 인프라 설정
-- **`.env.common`**: acceptance/demo 컨테이너가 env_file로 로드. 공통 앱 설정 (SQS 큐 이름 등)
-- **`.env.local`**: **민감 정보 전용** (gitignore). Gradle이 로드하여 IDE 실행 시 주입
-- **`.env.acceptance`**: acceptance 테스트 특화 설정 (테스트 DB, 테스트 API 키)
-- **`.env.demo`**: 데모 환경 특화 설정 (DockerHub 이미지 실행용)
+- **`.env`**: docker-compose.yml이 자동 로드. MySQL, LocalStack 등 인프라 설정 (컨테이너 구성용)
+- **`.env.common`**: docker-compose 실행 시 컨테이너에 주입되는 공통 앱 설정 (Service URLs, SQS 큐, Canvas URL 등)
+- **`.env.local`**: **Spring 직접 실행용 모든 설정** (gitignore). 비밀 정보 + 로컬 오버라이드 (localhost) + .env.common 전체 내용 포함
+- **`.env.acceptance`**: acceptance 테스트 특화 설정 (.env.common 오버라이드, 테스트 DB/더미 키)
+- **`.env.demo`**: 데모 환경 특화 설정 (.env.common 오버라이드, DockerHub 이미지 실행용)
+
+**핵심 원칙**:
+- **IDE 직접 실행**: `.env.local`만 읽음 (Gradle이 로드, 모든 설정 포함)
+- **compose 실행**: `.env.common` + `.env.{acceptance|demo}` 조합 (env_file로 주입)
 
 ### Spring 프로파일 (application-*.yml)
 
@@ -132,8 +136,8 @@ API Gateway는 `/api` prefix 제거 후 백엔드 서비스로 전달:
 
 ### 구조
 ```
-루트/.env.local (gitignored, 민감 정보)
-  ↓ (Gradle dotenv 플러그인이 로드)
+루트/.env.local (gitignore, 모든 로컬 설정 포함)
+  ↓ (Gradle이 java-dotenv 라이브러리로 로드)
   ↓
 각 서비스/application-local.yml (커밋됨, 플레이스홀더만)
   ↓
@@ -141,6 +145,11 @@ Gradle bootRun/test가 환경변수 주입
   ↓
 IDE 서비스 실행 (Profile: local)
 ```
+
+**특징**:
+- `.env.local`에 모든 설정 포함 (비밀 + 로컬 전용 + .env.common 내용)
+- Spring 직접 실행 시 `.env.local`만 읽으면 됨
+- compose 실행 시에는 `.env.common` + `.env.{acceptance|demo}`로 덮어씌워짐
 
 ### 초기 설정 (신규 개발자)
 
@@ -179,52 +188,91 @@ cd app/backend/user-service
 # IntelliJ: Run > Edit Configurations > Active profiles: local
 ```
 
-### Gradle dotenv 플러그인
+### Gradle 환경변수 로딩 (java-dotenv)
 
-모든 서비스의 `build.gradle.kts`에 dotenv 플러그인이 설정되어 있습니다:
+모든 서비스의 `build.gradle.kts`에 java-dotenv 라이브러리가 설정되어 있습니다:
 
 ```kotlin
-plugins {
-    id("co.uzzu.dotenv.gradle") version "4.0.0"
+import io.github.cdimascio.dotenv.Dotenv
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("io.github.cdimascio:java-dotenv:5.2.2")
+    }
 }
 
-env {
-    val rootDir = projectDir.parentFile.parentFile.parentFile
-    dotEnvFile.set(file("$rootDir/.env.local"))
-}
+// 루트 디렉토리 찾기
+val rootDir = projectDir.parentFile.parentFile.parentFile
+
+// .env.local 로드 (모든 설정 포함)
+val localEnv = Dotenv.configure()
+    .directory(rootDir.absolutePath)
+    .filename(".env.local")
+    .ignoreIfMissing()
+    .load()
+
+val envMap = localEnv.entries().associate { it.key to it.value }
 
 tasks.withType<Test> {
-    environment(env.allVariables.get())
+    useJUnitPlatform()
+    environment(envMap)
 }
 
 tasks.named<BootRun>("bootRun") {
-    environment(env.allVariables.get())
+    environment(envMap)
 }
 ```
 
 **동작**:
-- `./gradlew bootRun` 또는 `./gradlew test` 실행 시 자동으로 `.env.local` 로드
+- `./gradlew bootRun` 또는 `./gradlew test` 실행 시 `.env.local` 로드
+- `.env.local`에 모든 설정 포함 (비밀 정보 + 로컬 전용 + 공통 설정)
 - 모든 환경변수를 Spring Boot에 주입
 - IDE에서도 Gradle을 통해 실행하면 동일하게 동작
 
 **주의**:
-- `.env.local` 파일이 없으면 환경변수가 주입되지 않아 실행 실패
+- `.env.local` 파일이 없으면 실행 실패
+- `.env.local.example`을 복사하여 `.env.local` 생성 필요
 - LocalStack 재시작 시 Cognito User Pool ID 변경 → `.env.local` 업데이트 필요
 
-### 환경변수 로드 테스트
+### 환경변수 로드 확인
 
-각 서비스에 환경변수 로드 확인 테스트가 포함되어 있습니다:
+각 서비스에 환경변수 확인용 Gradle 태스크가 추가되어 있습니다:
 
 ```bash
-# user-service 환경변수 로드 테스트
+# user-service 환경변수 확인
 cd app/backend/user-service
-./gradlew test --tests EnvironmentVariablesTest
+./gradlew printEnv
 
-# 성공 시 출력:
-# [OK] 환경변수 로드 성공:
-#   - ENCRYPTION_KEY: ***
-#   - CANVAS_SYNC_API_KEY: ***
-#   - USER_SERVICE_DATABASE_URL: jdbc:mysql://localhost:3307/user_db...
+# 출력 예시:
+# === Loaded Environment Variables ===
+# Total variables loaded: 136
+#
+# From .env.local:
+#   - SQS_USER_TOKEN_REGISTERED_QUEUE: user-token-registered-queue
+#   - USER_SERVICE_URL: http://localhost:8081
+#   - CANVAS_API_BASE_URL: https://khcanvas.khu.ac.kr/api/v1
+#
+# Secrets (masked):
+#   - ENCRYPTION_KEY: ***SET***
+#   - JWT_SECRET: ***SET***
+```
+
+각 서비스별 확인 방법:
+```bash
+# Course Service
+cd app/backend/course-service
+./gradlew printEnv
+
+# Schedule Service
+cd app/backend/schedule-service
+./gradlew printEnv
+
+# API Gateway
+cd app/backend/api-gateway
+./gradlew printEnv
 ```
 
 ## 환경별 실행 방법
@@ -364,7 +412,27 @@ bash scripts/test/test-e2e.sh
 
 ## 주요 변경사항
 
-### 이전 vs 현재
+### 최신 변경 (2025-11-20)
+
+**환경변수 파일 역할 명확화**:
+- **`.env`**: docker-compose 인프라 설정 (MySQL, LocalStack 등)
+- **`.env.common`**: 컨테이너 공통 앱 설정 (Service URLs, SQS 큐, Canvas URL 등)
+- **`.env.local`**: Spring 직접 실행용 모든 설정 (비밀 + 로컬 전용 + .env.common 내용)
+- **`.env.acceptance`**: .env.common 오버라이드 (테스트 DB, 더미 키)
+- **`.env.demo`**: .env.common 오버라이드 (데모 환경)
+
+**핵심 원칙**:
+- **IDE 직접 실행**: `.env.local`만 읽음 (Gradle이 로드, 모든 설정 포함)
+- **compose 실행**: `.env.common` + `.env.{acceptance|demo}` 조합
+- `.env.local`에 .env.common의 모든 내용 포함 (중복이지만 로컬 실행 시 필요)
+
+**장점**:
+- 환경변수 파일 역할 명확화
+- Spring 직접 실행 시 .env.local만 있으면 됨
+- compose 실행 시 .env.common 기반으로 환경별 오버라이드
+- 민감 정보는 .env.local에만 존재 (gitignore)
+
+### 이전 변경사항
 
 **이전 구조 (삭제됨)**:
 - `application-local.yml` gitignore
@@ -375,11 +443,10 @@ bash scripts/test/test-e2e.sh
 **현재 구조**:
 - `application-local.yml` 커밋 (플레이스홀더만)
 - `.env.local` gitignore (민감 정보)
-- Gradle dotenv 플러그인으로 자동 환경변수 주입
 - `.env` 파일 커밋 (docker-compose 공통 설정)
 
 **장점**:
-- 환경변수 관리 통합 (`.env.local` 한 곳에서 관리)
+- 환경변수 관리 통합
 - sync 스크립트 불필요
 - Gradle bootRun/test 모두 동일한 환경변수 사용
 - application-local.yml 템플릿 불필요 (커밋되므로)

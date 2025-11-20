@@ -23,15 +23,13 @@ services:
       - "4566:4566"
     env_file:
       - .env.local  # 로컬 종속 비밀 (LOCALSTACK_AUTH_TOKEN 등)
+      - .env.common  # Lambda가 사용할 공통 설정 (CANVAS_API_BASE_URL, USER_SERVICE_URL 등)
       - .env.acceptance
     environment:
       - SERVICES=sqs,lambda,cognito-idp,iam
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
-      - CANVAS_API_BASE_URL=https://khcanvas.khu.ac.kr/api/v1
-      - LOCALSTACK_ENDPOINT=http://localhost:4566
-      - USER_SERVICE_URL=http://user-service:8081
     volumes:
       - ".:/workspace"
       - "./localstack-init:/etc/localstack/init/ready.d"
@@ -80,12 +78,11 @@ services:
     ports:
       - "8081:8081"
     env_file:
-      - .env.common
-      - .env.acceptance
+      - .env.local      # 비밀 (COGNITO_USER_POOL_ID 등)
+      - .env.common     # 공통 설정
+      - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
-      - AWS_SQS_ENDPOINT=http://localstack:4566
-      - COGNITO_ENDPOINT=http://localstack:4566
     depends_on:
       mysql:
         condition: service_healthy
@@ -109,12 +106,11 @@ services:
     ports:
       - "8082:8082"
     env_file:
-      - .env.common
-      - .env.acceptance
+      - .env.local      # 비밀 (COGNITO_USER_POOL_ID 등)
+      - .env.common     # 공통 설정
+      - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
-      - AWS_SQS_ENDPOINT=http://localstack:4566
-      - USER_SERVICE_URL=http://user-service:8081
     depends_on:
       mysql:
         condition: service_healthy
@@ -140,13 +136,11 @@ services:
     ports:
       - "8083:8083"
     env_file:
-      - .env.common
-      - .env.acceptance
+      - .env.local      # 비밀 (COGNITO_USER_POOL_ID 등)
+      - .env.common     # 공통 설정
+      - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
-      - AWS_SQS_ENDPOINT=http://localstack:4566
-      - USER_SERVICE_URL=http://user-service:8081
-      - COURSE_SERVICE_URL=http://course-service:8082
     depends_on:
       mysql:
         condition: service_healthy
@@ -174,14 +168,11 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env.common
-      - .env.acceptance
+      - .env.local      # 비밀 (COGNITO_USER_POOL_ID 등)
+      - .env.common     # 공통 설정
+      - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
-      - USER_SERVICE_URL=http://user-service:8081
-      - COURSE_SERVICE_URL=http://course-service:8082
-      - SCHEDULE_SERVICE_URL=http://schedule-service:8083
-      - COGNITO_ENDPOINT=http://localstack:4566
     depends_on:
       user-service:
         condition: service_healthy

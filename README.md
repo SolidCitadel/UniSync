@@ -107,7 +107,8 @@ cat .env.local | grep COGNITO
 - `CANVAS_SYNC_API_KEY`: Canvas Sync Lambda 호출용 API 키
 
 **참고**:
-- `.env.local`은 gitignore되어 커밋되지 않습니다
+- `.env.local`은 gitignore되어 커밋되지 않습니다 (비밀 정보 + 로컬 전용 설정 + 공통 설정 모두 포함)
+- `.env.common`은 컨테이너 실행 시 사용되는 공통 설정입니다 (커밋됨)
 - `application-local.yml`은 플레이스홀더만 포함하며 커밋됩니다
 - Gradle이 `.env.local`을 자동으로 로드하여 환경변수를 주입합니다
 

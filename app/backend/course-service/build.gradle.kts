@@ -1,8 +1,18 @@
+import io.github.cdimascio.dotenv.Dotenv
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("io.github.cdimascio:java-dotenv:5.2.2")
+    }
+}
+
 plugins {
     java
     id("org.springframework.boot") version "3.5.7"
     id("io.spring.dependency-management") version "1.1.7"
-    id("co.uzzu.dotenv.gradle") version "4.0.0"
 }
 
 group = "com.unisync"
@@ -67,14 +77,40 @@ dependencies {
     testImplementation("org.awaitility:awaitility:4.2.0")
 }
 
+// 루트 디렉토리 (course-service -> backend -> app -> UniSync)
+val rootDir = projectDir.parentFile.parentFile.parentFile
+
+// .env.local 로드 (모든 설정 포함: 비밀 + 로컬 전용 + 공통)
+val localEnv = Dotenv.configure()
+    .directory(rootDir.absolutePath)
+    .filename(".env.local")
+    .ignoreIfMissing()
+    .load()
+
+val envMap = localEnv.entries().associate { it.key to it.value }
+
 tasks.withType<Test> {
     useJUnitPlatform()
 
-    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
-    environment(env.allVariables())
+    // .env.local 환경변수 주입
+    environment(envMap)
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
-    // .env.local의 환경변수 주입 (dotenv 플러그인 사용)
-    environment(env.allVariables())
+    // .env.local 환경변수 주입
+    environment(envMap)
+}
+
+// 환경변수 확인용 태스크
+tasks.register("printEnv") {
+    doLast {
+        println("=== Loaded Environment Variables ===")
+        println("Total variables loaded: ${envMap.size}")
+        println("\nFrom .env.local:")
+        println("  - SQS_COURSE_ENROLLMENT_QUEUE: ${envMap["SQS_COURSE_ENROLLMENT_QUEUE"] ?: "NOT SET"}")
+        println("  - CANVAS_API_BASE_URL: ${envMap["CANVAS_API_BASE_URL"] ?: "NOT SET"}")
+        println("  - COURSE_SERVICE_DATABASE_URL: ${envMap["COURSE_SERVICE_DATABASE_URL"]?.take(30) ?: "NOT SET"}...")
+        println("\nSecrets (masked):")
+        println("  - ENCRYPTION_KEY: ${if (envMap["ENCRYPTION_KEY"] != null) "***SET***" else "NOT SET"}")
+    }
 }

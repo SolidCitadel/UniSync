@@ -28,7 +28,7 @@ unisync:
     key: IKhYmJOSJU6I9wLqNhfjr06vg6PeUsXLIRpwbcw3EF8=
   api-keys:
     canvas-sync-lambda: test-canvas-sync-key
-    llm-lambda: test-llm-key
+    # llm-lambda: test-llm-key  # LLM Lambda는 후순위 기능으로 미뤄짐
 
 canvas:
   base-url: https://khcanvas.khu.ac.kr  # 실제 Canvas API 테스트용
