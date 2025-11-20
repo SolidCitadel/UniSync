@@ -42,7 +42,7 @@
   - Course-Service: Canvas 학업 데이터
   - Schedule-Service: 시간 기반 일정 통합
 - **Serverless Sync Components**: Lambda
-  - Canvas-Sync-Lambda: Canvas API 동기화 (Phase 1: REST API 호출, Phase 2: EventBridge 자동화)
+  - Canvas-Sync-Lambda: Canvas API 동기화 ([상세 설계](../features/canvas-sync.md) - Phase 1: 수동 동기화, Phase 2: EventBridge 자동화)
   - Google-Calendar-Sync-Workflow: Google Calendar 동기화
 - **Data Layer**: MySQL (RDS) - 서비스별 DB 분리 (3개)
 - **Message Queue**: AWS SQS

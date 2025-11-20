@@ -4,14 +4,20 @@ Canvas LMS와 연동하여 자동으로 학업 일정을 동기화하고 AI로 �
 
 ## 프로젝트 현황
 
-- **Phase 1 완료**: ✅ 기본 인프라 및 서비스 구조
-- **Phase 2 진행 중**: 🚧 Canvas 동기화 및 SQS 이벤트 처리
+- **Phase 1 완료**: ✅ **Canvas 수동 동기화 (Manual Sync)**
+  - User-Service → Lambda 직접 호출 (AWS SDK)
+  - Lambda → Canvas API 조회
+  - Lambda → SQS 메시지 발행 (enrollments, assignments)
+  - Course-Service → SQS 메시지 consume하여 DB 저장
+  - 통합 테스트 완료 (Lambda 15/15, Spring 12/12, Integration 6 tests)
+- **Phase 2 계획**: EventBridge 자동 동기화
 - **최근 구현**:
   - API Gateway (Spring Cloud Gateway + JWT 인증 + Cognito 연동)
   - Canvas Sync Lambda 및 SQS 통합
+  - User-Service Canvas 동기화 엔드포인트 (POST /v1/sync/canvas)
   - Course-Service의 SQS 구독 기능
   - 공유 모듈(java-common, python-common)을 통한 DTO 표준화
-  - E2E 통합 테스트 환경 구축
+  - 통합 테스트 환경 구축 및 자동화
 
 ## 프로젝트 구조
 

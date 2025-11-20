@@ -24,13 +24,13 @@ API Gateway는 `/api` prefix만 제거하여 백엔드 서비스로 전달:
 클라이언트: /api/v1/credentials/**     → 백엔드: /v1/credentials/**
 클라이언트: /api/v1/friends/**         → 백엔드: /v1/friends/**
 클라이언트: /api/v1/integrations/**    → 백엔드: /v1/integrations/**
+클라이언트: /api/v1/sync/**            → 백엔드: /v1/sync/** (Canvas 동기화)
 
 # Course-Service
 클라이언트: /api/v1/courses/**         → 백엔드: /v1/courses/**
 클라이언트: /api/v1/assignments/**     → 백엔드: /v1/assignments/**
 클라이언트: /api/v1/tasks/**           → 백엔드: /v1/tasks/**
 클라이언트: /api/v1/notices/**         → 백엔드: /v1/notices/**
-클라이언트: /api/v1/sync/**            → 백엔드: /v1/sync/**
 
 # Schedule-Service
 클라이언트: /api/v1/schedules/**       → 백엔드: /v1/schedules/**
@@ -49,9 +49,30 @@ Lambda 등 내부 서비스는 백엔드에 직접 호출:
 Lambda → 백엔드: /internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}
   - 인증: X-Api-Key 헤더
   - 용도: Canvas 토큰 조회 (복호화된 토큰 반환)
+
+# User-Service → Lambda 통신 (Phase 1 Canvas 동기화)
+User-Service → Lambda: canvas-sync-lambda 함수 직접 호출 (AWS SDK)
+  - Payload: {"cognitoSub": "..."}
+  - 응답: {"statusCode": 200, "body": {"coursesCount": 5, ...}}
+  - Lambda → SQS: lambda-to-courseservice-enrollments, lambda-to-courseservice-assignments
 ```
 
 **API Gateway 차단**: `/api/internal/**` 경로는 403 Forbidden 응답
+
+### SQS 메시지 통신
+
+서비스 간 비동기 통신에 SQS를 사용합니다:
+
+```
+Lambda → SQS → Course-Service
+  - lambda-to-courseservice-enrollments
+  - lambda-to-courseservice-assignments
+
+Course-Service → SQS → Schedule-Service
+  - courseservice-to-scheduleservice-assignments
+```
+
+> **전체 SQS 아키텍처는 [docs/design/sqs-architecture.md](../../docs/design/sqs-architecture.md)를 참고하세요.**
 
 ### 라우팅 규칙
 

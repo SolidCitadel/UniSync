@@ -8,13 +8,11 @@ UniSync 프로젝트의 통합 테스트 모음입니다.
 tests/
 ├── api/                      # 외부 API 테스트
 │   └── test_canvas_api.py    # Canvas API 직접 호출 테스트
-├── integration/              # 서비스 간 통합 테스트
-│   ├── test_assignment_flow.py              # SQS → Service → DB 흐름
-│   ├── test_assignment_flow_with_lambda.py  # Lambda → SQS → Service
-│   └── test_lambda_integration.py           # LocalStack Lambda 배포/호출
-├── e2e/                      # End-to-End 테스트
-│   ├── test_canvas_sync_e2e.py             # Canvas 전체 동기화 플로우
-│   └── test_canvas_sync_with_jwt_e2e.py    # JWT 인증 포함 플로우
+├── integration/              # 서비스 간 통합 테스트 (✅ Phase 1 완료)
+│   ├── test_assignment_flow.py           # SQS → Service → DB 흐름
+│   ├── test_canvas_sync_integration.py   # Lambda → Canvas API → SQS → Service → DB (6 tests)
+│   └── test_lambda_integration.py        # LocalStack Lambda 배포/호출
+├── e2e/                      # End-to-End 테스트 (향후 추가 예정)
 ├── fixtures/                 # 테스트 데이터
 ├── requirements.txt          # 테스트 의존성
 └── README.md                 # 이 파일
@@ -110,16 +108,32 @@ docker-compose -f docker-compose.test.yml down -v
 - Course 없는 Assignment 생성 실패
 - 에러 핸들링 검증
 
-### test_assignment_flow_with_lambda.py (실제 Lambda 실행) ⭐
+### test_canvas_sync_integration.py (Phase 1 Canvas 동기화 통합 테스트) ⭐
 
-**1. test_lambda_canvas_to_db_flow**
-- **Lambda invoke** → 실제 Canvas API 호출 → SQS 발행 → course-service → DB
-- 전체 E2E 플로우 검증
-- **실제 Canvas 서버 사용**
+**1. test_canvas_sync_full_flow**
+- Lambda invoke (cognitoSub) → Canvas API → SQS 발행 → Course-Service → DB 저장
+- 전체 동기화 플로우 검증 (courses + assignments)
+- **실제 Canvas API 호출**
 
-**2. test_lambda_without_course_in_db**
-- DB에 Course 없을 때 Lambda 실행
-- Assignment 생성 안 됨 검증
+**2. test_sqs_message_format_enrollment**
+- Lambda가 발행한 enrollment 메시지 형식 검증
+- 필수 필드 확인 (cognitoSub, canvasCourseId, courseName 등)
+
+**3. test_sqs_message_format_assignment**
+- Lambda가 발행한 assignment 메시지 형식 검증
+- 필수 필드 확인 (eventType, canvasAssignmentId, title 등)
+
+**4. test_idempotency_duplicate_sync**
+- 동일한 Lambda를 두 번 호출했을 때 중복 데이터 생성 안 됨 검증
+- 멱등성 보장
+
+**5. test_lambda_without_canvas_token**
+- Canvas 토큰이 없는 사용자 시나리오
+- Lambda 에러 처리 검증
+
+**6. test_phase2_event_format_compatibility**
+- Phase 2 EventBridge 이벤트 형식 호환성 테스트
+- `{"detail": {"cognitoSub": "..."}}` 형식 지원 확인
 
 ## 테스트 환경
 
@@ -157,7 +171,9 @@ docker-compose up -d localstack
 
 - `wait_for_services`: 모든 서비스 준비 대기
 - `sqs_client`: SQS 클라이언트
-- `assignment_queue_url`: assignment-events-queue URL
+- `lambda_client`: Lambda 클라이언트 (Phase 1 Canvas 동기화)
+- `enrollment_queue_url`: lambda-to-courseservice-enrollments URL
+- `assignment_queue_url`: lambda-to-courseservice-assignments URL
 - `mysql_connection`: MySQL 연결
 - `clean_database`: 각 테스트 전후 DB 정리
 - `clean_sqs_queue`: 각 테스트 전후 SQS 큐 비우기
@@ -189,7 +205,11 @@ SELECT * FROM courses;
 ### SQS 메시지 확인
 
 ```bash
-awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/assignment-events-queue
+# Enrollment 메시지
+awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/lambda-to-courseservice-enrollments
+
+# Assignment 메시지
+awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/lambda-to-courseservice-assignments
 ```
 
 ## CI/CD 통합

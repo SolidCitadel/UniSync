@@ -4,20 +4,21 @@
 
 ## 핵심 워크플로우
 
-### Canvas 동기화 (Phase 1 구현)
+### Canvas 동기화 (✅ Phase 1 구현 완료)
 ```
-사용자 요청 (API 호출)
-  → Canvas-Sync-Lambda
-  → Canvas API 폴링 (Leader 토큰)
-  → 새 과제 감지
-     → SQS: assignment-events-queue
-     → Course-Service: Assignment 저장
-     → Schedule-Service:
-        - 일정(Schedule) 생성 (과제 마감일)
-        - 할일(Todo) 생성 (과제 기반)
-  → 제출 감지
-     → SQS: submission-events-queue
-     → Schedule-Service: 일정/할일 상태 업데이트
+사용자 동기화 버튼 클릭
+  → API Gateway → User-Service: POST /api/v1/sync/canvas
+  → User-Service: JWT에서 cognitoSub 추출
+  → User-Service → Canvas-Sync-Lambda: AWS SDK로 직접 호출 {"cognitoSub": "..."}
+  → Canvas-Sync-Lambda:
+     1. User-Service 내부 API로 Canvas 토큰 조회 (복호화된 토큰)
+     2. Canvas API 호출 (courses, assignments)
+     3. SQS 메시지 발행:
+        - lambda-to-courseservice-enrollments (과목 등록 정보)
+        - lambda-to-courseservice-assignments (과제 정보)
+     4. 동기 응답: {"statusCode": 200, "body": {"coursesCount": 5, "assignmentsCount": 23, ...}}
+  → Course-Service: SQS 메시지 consume하여 DB 저장 (비동기)
+  → User-Service: Lambda 응답을 클라이언트에 반환
 ```
 
 **Phase 2 (계획)**: EventBridge 스케줄러로 자동 호출
@@ -35,20 +36,36 @@ EventBridge
 
 ## SQS 메시지 스키마
 
-### assignment-events-queue
+> **전체 SQS 아키텍처 및 상세 스키마는 [docs/design/sqs-architecture.md](../../docs/design/sqs-architecture.md)를 참고하세요.**
+> 아래는 빠른 참조용 요약입니다.
+
+### lambda-to-courseservice-enrollments (Phase 1)
 ```json
 {
-  "eventType": "ASSIGNMENT_CREATED | ASSIGNMENT_UPDATED",
-  "canvasAssignmentId": 123456,
+  "cognitoSub": "abc-123-def-456",
   "canvasCourseId": 789,
-  "title": "중간고사 프로젝트",
-  "dueAt": "2025-11-15T23:59:59",
-  "pointsPossible": 100,
-  "submissionTypes": "online_upload"
+  "courseName": "데이터구조",
+  "courseCode": "CS201",
+  "enrollmentState": "active",
+  "canvasUserId": 12345
 }
 ```
 
-### submission-events-queue
+### lambda-to-courseservice-assignments (Phase 1)
+```json
+{
+  "eventType": "ASSIGNMENT_CREATED",
+  "canvasCourseId": 789,
+  "canvasAssignmentId": 123456,
+  "title": "중간고사 프로젝트",
+  "description": "프로젝트 설명...",
+  "dueAt": "2025-11-15T23:59:59Z",
+  "pointsPossible": 100.0,
+  "submissionTypes": ["online_upload"]
+}
+```
+
+### submission-events-queue (Phase 2 - 계획)
 ```json
 {
   "eventType": "SUBMISSION_CREATED | SUBMISSION_UPDATED",
@@ -71,14 +88,20 @@ EventBridge
 }
 ```
 
-공유 모듈 상세: [app/shared/README.md](../shared/README.md)
+**참고**:
+- 전체 SQS 아키텍처: [docs/design/sqs-architecture.md](../../docs/design/sqs-architecture.md)
+- DTO 사용법: [app/shared/README.md](../shared/README.md)
 
 ## Lambda 구조
 
-### canvas-sync-lambda
-- Canvas API 폴링 및 과제/제출 감지
-- SQS로 이벤트 발행
-- 테스트: `app/serverless/canvas-sync-lambda/tests/`
+### canvas-sync-lambda (✅ Phase 1 구현 완료)
+- **입력**: `{"cognitoSub": "..."}`(Phase 1) 또는 `{"detail": {"cognitoSub": "..."}}`(Phase 2)
+- **처리**:
+  1. User-Service 내부 API로 Canvas 토큰 조회 (X-Api-Key 인증)
+  2. Canvas API 호출 (courses, assignments)
+  3. SQS 메시지 발행 (enrollments, assignments)
+- **출력**: `{"statusCode": 200, "body": {"coursesCount": 5, "assignmentsCount": 23, "syncedAt": "..."}}`
+- **테스트**: `app/serverless/canvas-sync-lambda/tests/` (✅ 15/15 passed)
 
 ### llm-lambda (Phase 3 - 향후 구현)
 - 과제 설명 분석 (할일/서브태스크 생성)
@@ -98,12 +121,11 @@ bash scripts/test/test-unit.sh
 ### 통합 테스트
 Lambda 배포/호출: `tests/integration/`
 - `test_lambda_integration.py`: LocalStack Lambda 배포/호출
-- `test_assignment_flow_with_lambda.py`: SQS → Lambda → Service
+- `test_canvas_sync_integration.py`: ✅ Lambda → Canvas API → SQS → Course-Service → DB (6 tests)
 
 ### E2E 테스트
 전체 플로우: `tests/e2e/`
-- `test_canvas_sync_e2e.py`: Canvas API → Lambda → SQS → Service → DB
-- `test_canvas_sync_with_jwt_e2e.py`: JWT 인증 포함
+- Canvas 동기화 E2E 테스트 (향후 추가 예정)
 
 테스트 실행:
 ```bash

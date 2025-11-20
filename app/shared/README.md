@@ -1,6 +1,9 @@
 # UniSync Shared Modules
 
-서비스 간 공유하는 메시지 스키마와 DTO 정의
+서비스 간 공유하는 SQS 메시지 DTO 및 JSON Schema 정의
+
+> **전체 SQS 아키텍처는 [docs/design/sqs-architecture.md](../../docs/design/sqs-architecture.md)를 참고하세요.**
+> 이 문서는 DTO 사용법만 다룹니다.
 
 ## 디렉토리 구조
 
@@ -9,13 +12,19 @@ shared/
 ├── java-common/              # Java 공용 모듈
 │   ├── build.gradle.kts
 │   └── src/main/java/com/unisync/shared/dto/sqs/
-│       └── AssignmentEventMessage.java
+│       ├── EnrollmentEventMessage.java
+│       ├── AssignmentEventMessage.java
+│       └── AssignmentToScheduleMessage.java
 ├── python-common/            # Python 공용 모듈
 │   ├── setup.py
 │   └── unisync_shared/dto/
-│       └── assignment_event.py
-└── message-schemas/          # JSON Schema 정의 (선택)
-    └── assignment-events.schema.json
+│       ├── enrollment_event.py
+│       ├── assignment_event.py
+│       └── assignment_to_schedule.py
+└── message-schemas/          # JSON Schema 정의
+    ├── enrollment-events.schema.json
+    ├── assignment-events.schema.json
+    └── assignment-to-schedule.schema.json
 ```
 
 ## 사용 방법
@@ -81,34 +90,15 @@ def lambda_handler(event, context):
         print(f"Received: {message.event_type} for {message.canvas_assignment_id}")
 ```
 
-## 메시지 스키마 목록
+## SQS 큐 및 스키마 매핑 (빠른 참조)
 
-### 1. AssignmentEventMessage
+| DTO | Queue | Schema | 상태 |
+|-----|-------|--------|------|
+| EnrollmentEventMessage | lambda-to-courseservice-enrollments | enrollment-events.schema.json | ✅ Phase 1 |
+| AssignmentEventMessage | lambda-to-courseservice-assignments | assignment-events.schema.json | ✅ Phase 1 |
+| AssignmentToScheduleMessage | courseservice-to-scheduleservice-assignments | assignment-to-schedule.schema.json | 🚧 Phase 1 예정 |
 
-**Queue**: `assignment-events-queue`
-**Publisher**: Canvas-Sync-Lambda
-**Consumers**: course-service, schedule-service
-
-**스키마**:
-
-```json
-{
-  "eventType": "ASSIGNMENT_CREATED | ASSIGNMENT_UPDATED",
-  "canvasAssignmentId": 123456,
-  "canvasCourseId": 789,
-  "title": "중간고사 프로젝트",
-  "description": "Spring Boot로 REST API 구현",
-  "dueAt": "2025-11-15T23:59:59",
-  "pointsPossible": 100,
-  "submissionTypes": "online_upload",
-  "createdAt": "2025-11-02T10:00:00",
-  "updatedAt": "2025-11-02T10:00:00"
-}
-```
-
-**이벤트 타입**:
-- `ASSIGNMENT_CREATED`: 새로운 과제 생성
-- `ASSIGNMENT_UPDATED`: 기존 과제 수정
+> 자세한 메시지 스키마 및 Publisher/Consumer 관계는 [SQS Architecture](../../docs/design/sqs-architecture.md)를 참고하세요.
 
 ## 새로운 메시지 추가 시
 
@@ -134,5 +124,6 @@ def lambda_handler(event, context):
 
 ## 참고 문서
 
-- [설계서](../../설계서.md) - SQS 메시지 명세 전체
-- [CLAUDE.md](../../CLAUDE.md) - 프로젝트 개요 및 아키텍처
+- **[SQS Architecture](../../docs/design/sqs-architecture.md)** - 전체 SQS 설계 및 메시지 스키마
+- [System Architecture](../../docs/design/system-architecture.md) - 전체 시스템 구조
+- [CLAUDE.md](../../CLAUDE.md) - 프로젝트 개요

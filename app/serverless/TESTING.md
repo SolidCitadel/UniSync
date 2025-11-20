@@ -2,6 +2,8 @@
 
 Lambda 함수의 단위 테스트부터 통합 테스트까지 모든 테스트 방법을 설명합니다.
 
+> **전체 테스트 전략은 [docs/features/testing-strategy.md](../../docs/features/testing-strategy.md)를 참고하세요.**
+
 ## 빠른 시작
 
 환경 설정 및 실행 방법은 [README.md](./README.md#빠른-시작)를 참고하세요.
@@ -339,5 +341,7 @@ awslocal sqs get-queue-attributes \
 - [Canvas API 문서](https://canvas.instructure.com/doc/api/)
 
 ### 프로젝트 문서
+- **[테스트 전략](../../docs/features/testing-strategy.md)** - 전체 테스트 전략 및 계층 구조
 - [README.md](./README.md) - 전체 개요
+- [Canvas 동기화 설계](../../docs/features/canvas-sync.md) - Lambda 상세 설계
 - `../../.env.local.example` - 환경 변수 설정 예시

@@ -2,22 +2,16 @@
 
 Canvas LMS 동기화 및 AI 분석을 위한 서버리스 컴포넌트입니다.
 
-## 목차
-
-1. [빠른 시작](#빠른-시작)
-2. [프로젝트 구조](#프로젝트-구조)
-3. [Lambda 함수](#lambda-함수)
-4. [Step Functions 워크플로우](#step-functions-워크플로우)
-5. [로컬 개발 환경](#로컬-개발-환경)
-6. [테스트](#테스트)
-7. [배포](#배포)
-8. [환경 변수](#환경-변수)
+> **전체 서버리스 아키텍처는 다음 문서를 참고하세요:**
+> - [Canvas 동기화 설계](../../docs/features/canvas-sync.md) - Canvas Sync Lambda 상세 설계
+> - [SQS 아키텍처](../../docs/design/sqs-architecture.md) - 전체 SQS 큐 목록 및 메시지 스키마
+> - [시스템 아키텍처](../../docs/design/system-architecture.md) - 전체 워크플로우 및 데이터 흐름
 
 ---
 
 ## 빠른 시작
 
-### 1. 통합 테스트 런처 (가장 쉬움)
+### 통합 테스트 런처 (권장)
 
 ```bash
 # 1. venv 생성 및 활성화
@@ -35,14 +29,11 @@ python ../../scripts/test/test-all.py
 **대화형 메뉴**에서 원하는 테스트 선택:
 - 단위 테스트 / Canvas API / LocalStack 통합 / 모두 실행
 
-### 2. LocalStack에 배포 (선택사항)
+### LocalStack에 배포 (선택사항)
 
 ```bash
 # LocalStack 시작
 docker-compose up -d localstack
-
-# 인프라 초기화
-bash ../../scripts/infra/setup-localstack.sh
 
 # Lambda 배포
 bash ../../scripts/infra/deploy-lambda.sh local
@@ -62,150 +53,42 @@ serverless/
 │   ├── src/
 │   │   └── handler.py          # Lambda 핸들러
 │   ├── tests/
-│   │   └── test_handler.py     # 단위 테스트 (9개)
+│   │   └── test_canvas_handler.py     # 단위 테스트 (15개)
 │   └── requirements.txt
 │
-├── llm-lambda/                  # LLM 분석
+├── llm-lambda/                  # LLM 분석 (Phase 3 - 향후)
 │   ├── src/
 │   │   └── handler.py
 │   ├── tests/
-│   │   └── test_handler.py     # 단위 테스트 (12개)
 │   └── requirements.txt
 │
-├── step-functions/
-│   └── canvas-sync-workflow.json  # Step Functions 정의
+├── step-functions/              # Step Functions 정의 (Phase 2 - 향후)
+│   └── canvas-sync-workflow.json
 │
 ├── requirements-dev.txt         # 개발/테스트 의존성
 ├── README.md                    # 이 문서
-└── TESTING.md                   # 테스트 가이드
+├── TESTING.md                   # 테스트 가이드
+└── CLAUDE.md                    # 서버리스 아키텍처 참조
 ```
 
 ---
 
-## Lambda 함수
+## Lambda 함수 목록
 
-### 1. Canvas Sync Lambda
-
-**역할**:
-- Canvas API 호출 (과제, 공지, 제출물)
-- Leader의 Canvas 토큰 조회 (User-Service)
-- SQS로 이벤트 전송
-
-**트리거**: Step Functions
-
-**환경 변수**:
-```bash
-USER_SERVICE_URL=http://localhost:8081
-CANVAS_API_BASE_URL=https://canvas.instructure.com/api/v1
-SERVICE_AUTH_TOKEN=local-dev-token
-AWS_REGION=ap-northeast-2
-SQS_ENDPOINT=http://localhost:4566  # LocalStack
-```
-
-**Input 예시**:
-```json
-{
-  "courseId": 123,
-  "canvasCourseId": "canvas_456",
-  "leaderUserId": 5,
-  "lastSyncedAt": "2025-10-29T12:00:00Z"
-}
-```
-
-**Output 예시**:
-```json
-{
-  "statusCode": 200,
-  "body": {
-    "courseId": 123,
-    "assignmentsCount": 10,
-    "submissionsCount": 5,
-    "eventsSent": 15
-  }
-}
-```
-
-### 2. LLM Lambda
-
-**역할**:
-- 과제 설명 분석 → Task/Subtask 생성
-- 제출물 유효성 검증
-
-**트리거**: SQS (`assignment-events-queue`, `submission-events-queue`)
-
-**환경 변수**:
-```bash
-LLM_API_URL=https://api.openai.com/v1/chat/completions
-LLM_API_KEY=sk-...
-AWS_REGION=ap-northeast-2
-SQS_ENDPOINT=http://localhost:4566
-```
-
-**Input 예시** (SQS 이벤트):
-```json
-{
-  "Records": [
-    {
-      "body": "{\"eventType\":\"ASSIGNMENT_CREATED\",\"courseId\":123,...}"
-    }
-  ]
-}
-```
-
-**Output 예시**:
-```json
-{
-  "statusCode": 200,
-  "body": "LLM 처리 완료"
-}
-```
+| Lambda | 역할 | 트리거 | 상태 |
+|--------|------|--------|------|
+| canvas-sync-lambda | Canvas API 조회, SQS 메시지 발행 | User-Service (AWS SDK 직접 호출) | ✅ Phase 1 |
+| llm-lambda | 과제 분석, 서브태스크 생성 | SQS | 💡 Phase 3 향후 |
 
 ---
 
-## Step Functions 워크플로우
-
-### 실행 주기
-
-EventBridge로 **5분마다** 자동 실행
-
-### 워크플로우 흐름
-
-```
-EventBridge (5분마다)
-  ↓
-Step Functions: canvas-sync-workflow
-  ↓
-1. GetLeaderCourses
-   → Course-Service API: Leader 과목 목록 조회
-  ↓
-2. ProcessCourses (Map - 최대 5개 동시)
-   ├─ FetchCanvasData (Canvas Sync Lambda)
-   ├─ CheckNewAssignments
-   └─ UpdateSyncStatus
-  ↓
-3. CompleteSyncWorkflow
-```
-
-### 데이터 흐름
-
-```
-Canvas Sync Lambda
-  → SQS: assignment-events-queue
-  → LLM Lambda (트리거)
-  → LLM API (과제 분석)
-  → SQS: task-creation-queue
-  → Sync-Service (Tasks 저장)
-```
-
----
-
-## 로컬 개발 환경
+## 개발 환경 설정
 
 ### 요구사항
 
 - Python 3.11+
 - Docker & Docker Compose
-- LocalStack Pro (Step Functions 사용 시)
+- LocalStack (Lambda, SQS 에뮬레이션)
 
 ### 환경 설정
 
@@ -227,17 +110,11 @@ pip install -r requirements-dev.txt
 # 1. LocalStack 시작
 docker-compose up -d localstack
 
-# 2. 인프라 초기화 (SQS, IAM 역할)
-bash ../../scripts/infra/setup-localstack.sh
-
-# 3. Lambda 배포
+# 2. Lambda 배포
 bash ../../scripts/infra/deploy-lambda.sh local
 
-# 4. Step Functions 생성
-awslocal stepfunctions create-state-machine \
-  --name canvas-sync-workflow \
-  --definition file://step-functions/canvas-sync-workflow.json \
-  --role-arn arn:aws:iam::000000000000:role/stepfunctions-execution-role
+# 3. 배포 확인
+awslocal lambda list-functions
 ```
 
 ---
@@ -245,11 +122,34 @@ awslocal stepfunctions create-state-machine \
 ## 테스트
 
 ```bash
-# 통합 테스트 런처 사용
+# 통합 테스트 런처 사용 (권장)
 python ../../scripts/test/test-all.py
+
+# 또는 직접 실행
+cd canvas-sync-lambda
+pytest tests/ -v
 ```
 
 자세한 테스트 방법은 **[TESTING.md](./TESTING.md)**를 참고하세요.
+
+---
+
+## 필수 환경변수
+
+환경변수 전체 목록은 [app/serverless/CLAUDE.md](./CLAUDE.md)를 참고하세요.
+
+**Canvas Sync Lambda 주요 변수**:
+- `USER_SERVICE_URL` - User-Service API URL
+- `CANVAS_API_BASE_URL` - Canvas LMS URL
+- `CANVAS_SYNC_API_KEY` - 내부 API 인증 키
+- `AWS_REGION` - AWS 리전
+- `SQS_ENDPOINT` - SQS 엔드포인트 (LocalStack: http://localhost:4566)
+
+`.env.local.example`을 복사하여 `.env.local`로 저장하고 값을 입력하세요:
+
+```bash
+cp ../../.env.local.example ../../.env.local
+```
 
 ---
 
@@ -269,72 +169,16 @@ bash ../../scripts/infra/deploy-lambda.sh local
 bash ../../scripts/infra/deploy-lambda.sh production
 ```
 
-### EventBridge 스케줄링
-
-```bash
-# 5분마다 실행
-awslocal events put-rule \
-  --name canvas-sync-schedule \
-  --schedule-expression "rate(5 minutes)"
-
-# Step Functions 연결
-awslocal events put-targets \
-  --rule canvas-sync-schedule \
-  --targets "Id=1,Arn=arn:aws:states:...:stateMachine:canvas-sync-workflow"
-```
-
 ---
 
-## 환경 변수
+## 참고 문서
 
-### Canvas Sync Lambda
+**설계 문서**:
+- [Canvas 동기화 설계](../../docs/features/canvas-sync.md) - Lambda 상세 설계
+- [SQS 아키텍처](../../docs/design/sqs-architecture.md) - SQS 큐 및 메시지 스키마
+- [시스템 아키텍처](../../docs/design/system-architecture.md) - 전체 워크플로우
 
-| 변수 | 설명 | 예시 |
-|------|------|------|
-| `USER_SERVICE_URL` | User-Service API URL | `http://localhost:8081` |
-| `CANVAS_API_BASE_URL` | Canvas API Base URL | `https://canvas.instructure.com/api/v1` |
-| `SERVICE_AUTH_TOKEN` | 서비스 간 인증 토큰 | `local-dev-token` |
-| `AWS_REGION` | AWS 리전 | `ap-northeast-2` |
-| `SQS_ENDPOINT` | SQS 엔드포인트 (LocalStack) | `http://localhost:4566` |
-
-### LLM Lambda
-
-| 변수 | 설명 | 예시 |
-|------|------|------|
-| `LLM_API_URL` | LLM API URL | `https://api.openai.com/v1/chat/completions` |
-| `LLM_API_KEY` | LLM API Key | `sk-...` |
-| `AWS_REGION` | AWS 리전 | `ap-northeast-2` |
-| `SQS_ENDPOINT` | SQS 엔드포인트 (LocalStack) | `http://localhost:4566` |
-
-### 환경 변수 설정
-
-`.env.local.example`을 복사하여 `.env.local`로 저장하고 값을 입력하세요:
-
-```bash
-cp ../../.env.local.example ../../.env.local
-```
-
----
-
-## 보안
-
-### 서비스 간 인증
-
-- Lambda → User-Service: `X-Service-Token` 헤더 사용
-- User-Service는 서비스 토큰 검증 후 응답
-
-### 토큰 관리
-
-- **Canvas 토큰**: User-Service에 AES-256 암호화 저장
-- **LLM API Key**: AWS Secrets Manager (프로덕션)
-- **서비스 토큰**: 환경 변수 (로컬), Secrets Manager (프로덕션)
-
----
-
-## TODO
-
-- [ ] SAM/Terraform으로 IaC 구성
-- [ ] LLM API 비용 최적화 (캐싱)
-- [ ] Step Functions 재시도 전략 개선
-- [ ] 과목별 동기화 주기 커스터마이징
-- [ ] CI/CD 파이프라인 구축
+**개발 가이드**:
+- [TESTING.md](./TESTING.md) - 테스트 가이드
+- [CLAUDE.md](./CLAUDE.md) - 환경변수 및 워크플로우 참조
+- [Shared Modules](../shared/README.md) - DTO 사용법

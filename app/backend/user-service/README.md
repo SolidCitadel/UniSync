@@ -1,12 +1,46 @@
 # User Service
 
+사용자 인증 및 Canvas 토큰 관리 서비스입니다.
+
+> **상세 설계는 다음 문서를 참고하세요:**
+> - [시스템 아키텍처](../../../docs/design/system-architecture.md) - 전체 데이터 모델 및 API 설계
+> - [Canvas 동기화](../../../docs/features/canvas-sync.md) - Canvas 토큰 관리 및 암호화 전략
+
 ## 서비스 책임
 
 1. **사용자 인증** - AWS Cognito 기반 회원가입/로그인, JWT 발급
 2. **Canvas 토큰 관리** - Canvas API 토큰 AES-256 암호화 저장 및 조회
 3. **사용자 프로필** - 사용자 기본 정보 관리
+4. **Canvas 동기화** - POST /v1/sync/canvas 엔드포인트로 Lambda 직접 호출
 
-**포트**: 8081 | **API Gateway 라우팅**: `/api/v1/auth/**`, `/api/v1/users/**`
+**포트**: 8081
+
+**API Gateway 라우팅**:
+- `/api/v1/auth/**` - 인증
+- `/api/v1/users/**` - 사용자 프로필
+- `/api/v1/credentials/**` - Canvas 토큰
+- `/api/v1/sync/**` - Canvas 동기화
+
+---
+
+## 빠른 시작
+
+### 로컬 실행
+
+```bash
+cd app/backend/user-service
+./gradlew bootRun --args='--spring.profiles.active=local'
+```
+
+### 테스트
+
+```bash
+# 단위 테스트
+./gradlew test
+
+# 특정 테스트
+./gradlew test --tests CanvasSyncServiceTest
+```
 
 ---
 
@@ -17,138 +51,51 @@ com.unisync.user/
 ├── auth/              # 인증 (Cognito 회원가입/로그인)
 ├── user/              # 사용자 프로필
 ├── credentials/       # Canvas 토큰 관리 (등록/조회/삭제)
+├── sync/              # Canvas 동기화 (Lambda 호출)
 └── common/
     ├── entity/        # User, Credentials
     ├── repository/
-    ├── config/        # AwsCognitoConfig, EncryptionService
+    ├── config/        # AwsCognitoConfig, EncryptionService, AwsLambdaConfig
     └── exception/
 ```
 
 ---
 
-## 데이터 모델
+## 필수 환경변수
 
-### User
-| 필드 | 타입 | 제약조건 |
-|------|------|----------|
-| id | Long | PK |
-| email | String | UNIQUE, NOT NULL |
-| name | String | NOT NULL |
-| cognito_sub | String | UNIQUE, NOT NULL (Cognito User ID) |
-| is_active | Boolean | DEFAULT true |
+환경변수 전체 목록 및 설정 방법은 [app/backend/CLAUDE.md](../CLAUDE.md)를 참고하세요.
 
-### Credentials
-Canvas API 토큰을 **AES-256으로 암호화**하여 저장합니다.
-
-| 필드 | 타입 | 제약조건 |
-|------|------|----------|
-| id | Long | PK |
-| user_id | Long | FK → users.id |
-| provider | Enum | CANVAS, GOOGLE_CALENDAR |
-| encrypted_token | String | NOT NULL (AES-256 암호화) |
-| last_validated_at | LocalDateTime | nullable |
-
-**UNIQUE**: `(user_id, provider)`
-
----
-
-## 주요 비즈니스 로직
-
-### 1. Canvas 토큰 등록 (`CredentialsService`)
-
-**처리 흐름**:
-```
-1. Canvas API 호출하여 토큰 유효성 검증
-   GET https://canvas.instructure.com/api/v1/users/self
-   Authorization: Bearer {token}
-
-2. 검증 성공 시 AES-256-GCM으로 암호화
-   - 키: 환경변수 CANVAS_TOKEN_ENCRYPTION_KEY (32 bytes)
-   - IV: 랜덤 생성 (각 토큰마다)
-
-3. Credentials 테이블에 저장 (provider=CANVAS)
-```
-
-**실패 케이스**:
-- 토큰 무효: `InvalidCanvasTokenException`
-- 중복 등록: 기존 레코드 UPDATE
-
-**구현**: `app/backend/user-service/src/main/java/com/unisync/user/credentials/service/CredentialsService.java:1`
-
-### 2. Canvas 토큰 조회 (내부 API)
-
-Lambda/Service가 사용자의 Canvas 토큰을 조회할 때 사용합니다.
-
-**권한 검증**:
-- **사용자**: `X-User-Id` 헤더로 본인 확인
-- **내부 서비스**: `X-Api-Key` 헤더로 서비스 인증 (ServiceAuthValidator)
-
-**응답**: 복호화된 평문 토큰 반환
+**주요 변수**:
+- `AWS_COGNITO_USER_POOL_ID` - Cognito Pool ID
+- `AWS_COGNITO_CLIENT_ID` - Cognito Client ID
+- `CANVAS_API_BASE_URL` - Canvas LMS URL
+- `ENCRYPTION_KEY` - AES-256 암호화 키 (32 bytes, `openssl rand -base64 32`로 생성)
+- `CANVAS_SYNC_LAMBDA_FUNCTION_NAME` - Canvas Sync Lambda 함수명
+- `AWS_LAMBDA_ENDPOINT_URL` - Lambda 엔드포인트 (LocalStack: http://localstack:4566)
 
 ---
 
 ## 주요 API
 
-### POST `/api/v1/credentials/canvas` - Canvas 토큰 등록
-```http
-X-User-Id: 1
-{
-  "canvasToken": "1234~abcdefghijklmnopqrstuvwxyz"
-}
-```
+### 인증
+- `POST /api/v1/auth/signup` - 회원가입
+- `POST /api/v1/auth/signin` - 로그인 (JWT 발급)
 
-### GET `/api/v1/credentials/{userId}/canvas` - Canvas 토큰 조회
-```http
-X-Api-Key: service-internal-key
-```
+### Canvas 토큰
+- `POST /api/v1/credentials/canvas` - Canvas 토큰 등록
+- `GET /api/v1/credentials/canvas` - Canvas 토큰 조회 (본인)
 
-**Response**:
-```json
-{
-  "userId": 1,
-  "canvasToken": "1234~abcdefghijklmnopqrstuvwxyz",
-  "lastValidatedAt": "2025-11-05T10:30:00"
-}
-```
+### Canvas 동기화
+- `POST /api/v1/sync/canvas` - Canvas 수동 동기화 (Lambda 호출)
+
+**내부 API** (서비스 간 통신):
+- `GET /internal/v1/credentials/canvas/by-cognito-sub/{cognitoSub}` - Canvas 토큰 조회 (X-Api-Key 인증)
 
 ---
 
-## 외부 의존성
+## 참고 문서
 
-### 1. AWS Cognito
-- 회원가입: `SignUp`
-- 로그인: `InitiateAuth` → JWT 발급
-
-### 2. Canvas LMS API
-- 토큰 검증: `GET /api/v1/users/self`
-- Base URL: `CANVAS_BASE_URL` 환경변수
-
----
-
-## 필수 환경변수
-
-| 변수 | 설명 | 예시 |
-|------|------|------|
-| `AWS_COGNITO_USER_POOL_ID` | Cognito Pool ID | `ap-northeast-2_xxx` |
-| `AWS_COGNITO_CLIENT_ID` | Cognito Client ID | `1234567890abcd...` |
-| `CANVAS_BASE_URL` | Canvas LMS URL | `https://khcanvas.khu.ac.kr` |
-| `CANVAS_TOKEN_ENCRYPTION_KEY` | AES-256 키 (32 bytes) | `0123456789abcdef...` (64 hex chars) |
-
-**키 생성**:
-```bash
-openssl rand -hex 32
-```
-
----
-
-## 중요 제약사항
-
-### 절대 금지
-1. Canvas 토큰 평문 저장 - 반드시 AES-256 암호화
-2. 다른 사용자 Credentials 접근 - 권한 검증 필수
-3. 암호화 키 하드코딩 - 환경변수로만 관리
-
-### 핵심 원칙
-1. Canvas 토큰 등록 시 **반드시 Canvas API 호출하여 검증**
-2. 내부 API 호출 시 `X-Api-Key` 헤더 필수
-3. JWT `X-User-Id`와 요청 파라미터 `userId` 일치 여부 확인
+- [전체 시스템 아키텍처](../../../docs/design/system-architecture.md)
+- [Canvas 동기화 설계](../../../docs/features/canvas-sync.md)
+- [백엔드 환경변수 가이드](../CLAUDE.md)
+- [테스트 전략](../../../docs/features/testing-strategy.md)
