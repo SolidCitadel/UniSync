@@ -44,15 +44,33 @@ def lambda_client(localstack_endpoint: str):
 
 @pytest.fixture(scope="session")
 def assignment_queue_url(sqs_client) -> str:
-    """assignment-events-queue URL 조회/생성"""
+    """lambda-to-courseservice-assignments URL 조회/생성"""
     try:
         # 큐가 이미 있는지 확인
-        response = sqs_client.get_queue_url(QueueName='assignment-events-queue')
+        response = sqs_client.get_queue_url(QueueName='lambda-to-courseservice-assignments')
         return response['QueueUrl']
     except sqs_client.exceptions.QueueDoesNotExist:
         # 큐가 없으면 생성 (테스트용 짧은 visibility timeout)
         response = sqs_client.create_queue(
-            QueueName='assignment-events-queue',
+            QueueName='lambda-to-courseservice-assignments',
+            Attributes={
+                'VisibilityTimeout': '5'  # 5초로 설정 (빠른 재시도)
+            }
+        )
+        return response['QueueUrl']
+
+
+@pytest.fixture(scope="session")
+def enrollment_queue_url(sqs_client) -> str:
+    """lambda-to-courseservice-enrollments URL 조회/생성"""
+    try:
+        # 큐가 이미 있는지 확인
+        response = sqs_client.get_queue_url(QueueName='lambda-to-courseservice-enrollments')
+        return response['QueueUrl']
+    except sqs_client.exceptions.QueueDoesNotExist:
+        # 큐가 없으면 생성 (테스트용 짧은 visibility timeout)
+        response = sqs_client.create_queue(
+            QueueName='lambda-to-courseservice-enrollments',
             Attributes={
                 'VisibilityTimeout': '5'  # 5초로 설정 (빠른 재시도)
             }
@@ -168,12 +186,13 @@ def wait_for_services(lambda_client, sqs_client, assignment_queue_url):
     try:
         queues = sqs_client.list_queues()
         queue_urls = queues.get('QueueUrls', [])
-        required_queue = 'assignment-events-queue'
+        required_queues = ['lambda-to-courseservice-assignments', 'lambda-to-courseservice-enrollments']
 
-        if any(required_queue in url for url in queue_urls):
-            print(f"   [OK] SQS queue '{required_queue}' exists")
-        else:
-            raise RuntimeError(f"[ERROR] Required SQS queue '{required_queue}' not found")
+        for required_queue in required_queues:
+            if any(required_queue in url for url in queue_urls):
+                print(f"   [OK] SQS queue '{required_queue}' exists")
+            else:
+                raise RuntimeError(f"[ERROR] Required SQS queue '{required_queue}' not found")
     except Exception as e:
         raise RuntimeError(f"[ERROR] SQS validation failed: {e}")
 

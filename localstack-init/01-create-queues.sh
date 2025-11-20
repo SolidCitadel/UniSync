@@ -11,49 +11,37 @@ REGION="ap-northeast-2"
 # SQS 큐 생성
 echo "SQS 큐 생성 중..."
 
-# user-token-registered-queue: 사용자 Canvas 토큰 등록 이벤트 (UserService → Lambda)
+# Phase 1: Manual Sync (필요한 큐만 생성)
+
+# lambda-to-courseservice-enrollments: Lambda → Course-Service (Course 데이터 전달)
 awslocal sqs create-queue \
-  --queue-name user-token-registered-queue \
+  --queue-name lambda-to-courseservice-enrollments \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-# course-enrollment-queue: Course 등록 이벤트 (Lambda → CourseService)
+# lambda-to-courseservice-assignments: Lambda → Course-Service (Assignment 데이터 전달)
 awslocal sqs create-queue \
-  --queue-name course-enrollment-queue \
+  --queue-name lambda-to-courseservice-assignments \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-# assignment-sync-needed-queue: Assignment 동기화 요청 이벤트 (CourseService → Lambda)
+# courseservice-to-scheduleservice-assignments: Course-Service → Schedule-Service (Assignment → Schedule 변환)
 awslocal sqs create-queue \
-  --queue-name assignment-sync-needed-queue \
+  --queue-name courseservice-to-scheduleservice-assignments \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-# assignment-events-queue: 새 과제 감지 이벤트 (기존)
-awslocal sqs create-queue \
-  --queue-name assignment-events-queue \
-  --region $REGION \
-  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
-
-# submission-events-queue: 제출물 감지 이벤트 (기존)
-awslocal sqs create-queue \
-  --queue-name submission-events-queue \
-  --region $REGION \
-  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
-
-# task-creation-queue: LLM 분석 후 Task 생성 이벤트 (기존)
-awslocal sqs create-queue \
-  --queue-name task-creation-queue \
-  --region $REGION \
-  --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
-
-# DLQ (Dead Letter Queue) 생성
+# DLQ (Dead Letter Queue)
 awslocal sqs create-queue \
   --queue-name dlq-queue \
   --region $REGION \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=1209600
 
-echo "SQS 큐 생성 완료"
+echo "SQS 큐 생성 완료 (Phase 1: 4개)"
+
+# Phase 2/3: 향후 추가 예정
+# - submission-events-queue (제출물 감지)
+# - task-creation-queue (LLM 기반 Task 생성)
 
 # 생성된 큐 목록 출력
 echo ""

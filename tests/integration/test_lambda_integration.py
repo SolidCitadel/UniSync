@@ -122,18 +122,15 @@ def deploy_lambda_functions():
 
 
 def test_canvas_sync_lambda():
-    """Canvas Sync Lambda 테스트"""
+    """Canvas Sync Lambda 테스트 (Phase 1: Manual Sync)"""
     print_section("Step 4: Canvas Sync Lambda 호출 테스트")
 
     try:
         lambda_client = boto3.client('lambda', endpoint_url=LOCALSTACK_ENDPOINT, region_name=AWS_REGION)
 
-        # 테스트 이벤트
+        # 테스트 이벤트 (Phase 1 format)
         test_event = {
-            'courseId': 123,
-            'canvasCourseId': 'test_course_456',
-            'leaderUserId': 5,
-            'lastSyncedAt': '2025-10-29T12:00:00Z'
+            'cognitoSub': 'test-cognito-sub-123'
         }
 
         print(f"  📤 Lambda 호출 중...")
@@ -170,7 +167,7 @@ def test_canvas_sync_lambda():
         return None
 
 
-def check_sqs_messages(queue_name='assignment-events-queue'):
+def check_sqs_messages(queue_name='lambda-to-courseservice-assignments'):
     """SQS 큐의 메시지 확인"""
     print_section(f"Step 5: SQS 메시지 확인 ({queue_name})")
 
@@ -300,8 +297,10 @@ def main():
 
     # Step 4-6: Lambda 테스트
     canvas_result = test_canvas_sync_lambda()
-    check_sqs_messages('assignment-events-queue')
-    llm_result = test_llm_lambda()
+    check_sqs_messages('lambda-to-courseservice-assignments')
+    check_sqs_messages('lambda-to-courseservice-enrollments')
+    # Note: llm_result is Phase 3, not implemented yet
+    # llm_result = test_llm_lambda()
 
     # 결과 요약
     print_header("테스트 결과 요약")
@@ -309,7 +308,6 @@ def main():
     print(f"\n  ✅ LocalStack: 정상")
     print(f"  ✅ SQS 큐: 생성됨")
     print(f"  {'✅' if canvas_result and 'errorMessage' not in canvas_result else '⚠️ '} Canvas Sync Lambda: {'성공' if canvas_result and 'errorMessage' not in canvas_result else '에러 발생 (정상)'}")
-    print(f"  {'✅' if llm_result and 'errorMessage' not in llm_result else '⚠️ '} LLM Lambda: {'성공' if llm_result and 'errorMessage' not in llm_result else '에러 발생 (정상)'}")
 
     print(f"\n  💡 다음 단계:")
     print(f"     1. User-Service를 시작하세요 (cd app/backend/user-service && ./gradlew bootRun)")

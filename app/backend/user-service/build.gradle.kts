@@ -55,6 +55,9 @@ dependencies {
     // AWS SDK for SQS
     implementation("software.amazon.awssdk:sqs:${property("awsSdkVersion")}")
 
+    // AWS SDK for Lambda
+    implementation("software.amazon.awssdk:lambda:${property("awsSdkVersion")}")
+
     // Lombok
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
