@@ -1,0 +1,53 @@
+# ============================================
+# UniSync Git Attributes Configuration
+# ============================================
+#
+# 목적: Windows에서 CRLF 자동 변환 방지
+# - Shell 스크립트(.sh)는 반드시 LF 유지
+# - Docker/Linux 환경에서 실행되는 파일들도 LF 유지
+#
+# 참고:
+# - text eol=lf: 체크아웃/커밋 모두 LF로 강제
+# - text: Git 기본 줄바꿈 처리
+# - binary: 줄바꿈 변환 안함
+# ============================================
+
+# Default: 모든 텍스트 파일 LF 사용
+* text=auto eol=lf
+
+# Shell scripts (CRITICAL: Docker에서 실행되므로 반드시 LF)
+*.sh text eol=lf
+
+# Python files (Lambda 함수)
+*.py text eol=lf
+
+# YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Gradle wrapper script (Unix executable)
+gradlew text eol=lf
+
+# Docker & Config files
+Dockerfile* text eol=lf
+.env* text eol=lf
+.editorconfig text eol=lf
+
+# Source code
+*.java text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.gradle text eol=lf
+
+# Binary files (no conversion)
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
