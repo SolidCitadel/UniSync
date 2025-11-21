@@ -7,15 +7,18 @@
 ### ✅ 완료
 - 기본 인프라 및 서비스 구조
 - **API Gateway (Spring Cloud Gateway + JWT 인증 + Cognito 연동)**
+- **Internal API 분리 (/v1/* vs /internal/v1/*)** - 외부/내부 API 명확한 구분
+- **User-Service 인증 및 토큰 관리** - Cognito 통합, Canvas 토큰 암호화 저장
+- **Canvas Sync API 통합 (Phase 1: 수동 호출)** - POST /v1/sync/canvas 엔드포인트
 - Canvas Sync Lambda + SQS 통합
 - Course-Service의 SQS 구독 및 Assignment 처리
+- **Assignment → Schedule 자동 변환 (Phase 1)** - SQS 기반 비동기 처리
 - 공유 모듈 기반 DTO 표준화
 - E2E 통합 테스트 환경
 
 ### 🚧 진행 중
-- User-Service 인증 및 토큰 관리
-- Schedule-Service 일정 통합
-- Canvas Sync API 통합 (Phase 1: 수동 호출)
+- Schedule-Service 일정 통합 (기본 CRUD 및 카테고리 관리)
+- Assignment → Todo 자동 변환 (Phase 2)
 
 ## 1. 시스템 아키텍처
 

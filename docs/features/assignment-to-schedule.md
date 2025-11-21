@@ -6,7 +6,7 @@ Course-Service의 Canvas 과제를 Schedule-Service의 일정(Schedule) 및 할�
 
 | Phase | 설명 | 상태 |
 |-------|------|------|
-| Phase 1 | 기본 과제 → 일정 자동 변환 | 🚧 구현 예정 |
+| Phase 1 | 기본 과제 → 일정 자동 변환 | ✅ 구현 완료 |
 | Phase 2 | 과제 → 할일 자동 변환 (subtask 지원) | 📋 계획 |
 | Phase 3 | LLM 기반 스마트 분할 (과제 분석 → 서브태스크 자동 생성) | 💡 향후 |
 

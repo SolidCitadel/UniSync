@@ -19,6 +19,12 @@ UniSync 시스템의 테스트 아키텍처 및 전략 설계 문서입니다.
    - 테스트 피라미드: 빠르고 저렴한 테스트가 많고, 느리고 비싼 테스트는 적게
    - Unit Tests 80%, System Tests 20%
 
+4. **엄격한 검증 (Strict Validation) - Fail Fast, Fail Loud**
+   - **예상치 못한 모든 결과는 실패로 처리**: 테스트가 애매한 상황을 넘어가지 않음
+   - **검증 생략 금지**: 상정외 동작을 skip하거나 검증을 건너뛰지 않음
+   - **적극적 실패**: 모든 요청/응답/상태를 명시적으로 검증하여 숨겨진 버그 발견
+   - **명확한 의도**: 각 테스트는 정확히 무엇을 검증하는지 명시하고, 그 외는 실패
+
 ## 테스트 아키텍처
 
 ### 2-Tier 구조
@@ -324,6 +330,204 @@ def test_assignment_to_schedule_conversion():
     assert response.status_code == 200
     assert len(response.json()) == 1
 ```
+
+### 엄격한 검증 원칙 (Strict Validation)
+
+테스트는 예상치 못한 모든 상황을 **실패로 처리**해야 합니다. 애매한 상황을 넘어가지 않습니다.
+
+#### ❌ 나쁜 예: 검증 생략
+
+```python
+def test_create_schedule_bad():
+    response = requests.post(...)
+    # 상태 코드만 확인하고 응답 본문은 검증 안함
+    assert response.status_code == 201
+```
+
+**문제점**:
+- 응답 본문에 예상치 못한 필드가 있어도 통과
+- 데이터 타입이 잘못되어도 통과
+- 필수 필드가 누락되어도 통과
+
+#### ✅ 좋은 예: 모든 필드 명시적 검증
+
+```python
+def test_create_schedule_with_valid_data_returns_complete_response():
+    response = requests.post(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules",
+        headers={"X-Cognito-Sub": "test-user-123"},
+        json={
+            "title": "Test Schedule",
+            "startTime": "2025-01-01T10:00:00Z",
+            "endTime": "2025-01-01T11:00:00Z",
+            "source": "USER",
+            "categoryId": 1
+        }
+    )
+
+    # 1. 상태 코드 검증
+    assert response.status_code == 201
+
+    # 2. 응답 본문 존재 검증
+    data = response.json()
+    assert data is not None
+
+    # 3. 모든 필수 필드 존재 및 타입 검증
+    assert "id" in data
+    assert isinstance(data["id"], int)
+    assert data["id"] > 0
+
+    assert "title" in data
+    assert data["title"] == "Test Schedule"
+
+    assert "startTime" in data
+    assert data["startTime"] == "2025-01-01T10:00:00Z"
+
+    assert "endTime" in data
+    assert data["endTime"] == "2025-01-01T11:00:00Z"
+
+    assert "source" in data
+    assert data["source"] == "USER"
+
+    assert "categoryId" in data
+    assert data["categoryId"] == 1
+
+    # 4. 예상치 못한 필드 발견 시 실패
+    expected_fields = {"id", "title", "startTime", "endTime", "source", "categoryId", "createdAt", "updatedAt"}
+    actual_fields = set(data.keys())
+    unexpected_fields = actual_fields - expected_fields
+    assert len(unexpected_fields) == 0, f"Unexpected fields found: {unexpected_fields}"
+```
+
+#### ❌ 나쁜 예: 예외 상황 검증 생략
+
+```python
+def test_create_schedule_with_missing_field_bad():
+    response = requests.post(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules",
+        headers={"X-Cognito-Sub": "test-user"},
+        json={"title": "Test"}  # 필수 필드 누락
+    )
+    # 에러만 확인하고 구체적인 에러 메시지는 검증 안함
+    assert response.status_code == 400
+```
+
+**문제점**:
+- 에러 메시지가 명확한지 검증 안함
+- 어떤 필드가 누락되었는지 알려주는지 확인 안함
+- 에러 응답 형식이 일관적인지 검증 안함
+
+#### ✅ 좋은 예: 에러 응답도 엄격하게 검증
+
+```python
+def test_create_schedule_with_missing_start_time_returns_detailed_error():
+    response = requests.post(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules",
+        headers={"X-Cognito-Sub": "test-user"},
+        json={
+            "title": "Test",
+            # startTime 누락
+            "endTime": "2025-01-01T11:00:00Z",
+            "source": "USER",
+            "categoryId": 1
+        }
+    )
+
+    # 1. 에러 상태 코드 검증
+    assert response.status_code == 400
+
+    # 2. 에러 응답 형식 검증
+    error_data = response.json()
+    assert "error" in error_data
+    assert "message" in error_data
+    assert "field" in error_data
+
+    # 3. 에러 메시지 구체성 검증
+    assert error_data["field"] == "startTime"
+    assert "required" in error_data["message"].lower() or "missing" in error_data["message"].lower()
+
+    # 4. 예상치 못한 부작용 검증 (DB에 저장되지 않았는지)
+    all_schedules = requests.get(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules",
+        headers={"X-Cognito-Sub": "test-user"}
+    ).json()
+    assert len(all_schedules) == 0, "Failed request should not create any data"
+```
+
+#### ❌ 나쁜 예: 상태 변경 검증 생략
+
+```python
+def test_update_schedule_status_bad():
+    # 상태만 바꾸고 다른 필드는 변경 안되었는지 검증 안함
+    response = requests.patch(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules/1",
+        headers={"X-Cognito-Sub": "test-user"},
+        json={"status": "COMPLETED"}
+    )
+    assert response.status_code == 200
+```
+
+**문제점**:
+- 다른 필드가 실수로 변경되었는지 확인 안함
+- 상태 변경 히스토리가 남는지 확인 안함
+- 타임스탬프가 업데이트되는지 확인 안함
+
+#### ✅ 좋은 예: 변경 전후 상태 완전 검증
+
+```python
+def test_update_schedule_status_only_changes_status_field():
+    # Arrange: 초기 일정 생성
+    create_response = requests.post(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules",
+        headers={"X-Cognito-Sub": "test-user"},
+        json={
+            "title": "Original Title",
+            "startTime": "2025-01-01T10:00:00Z",
+            "endTime": "2025-01-01T11:00:00Z",
+            "source": "USER",
+            "categoryId": 1
+        }
+    )
+    schedule_id = create_response.json()["id"]
+    original_schedule = create_response.json()
+
+    # Act: 상태만 변경
+    update_response = requests.patch(
+        f"{SCHEDULE_SERVICE_URL}/v1/schedules/{schedule_id}",
+        headers={"X-Cognito-Sub": "test-user"},
+        json={"status": "COMPLETED"}
+    )
+
+    # Assert
+    assert update_response.status_code == 200
+    updated_schedule = update_response.json()
+
+    # 1. 상태만 변경되었는지 검증
+    assert updated_schedule["status"] == "COMPLETED"
+
+    # 2. 다른 필드는 그대로인지 검증
+    assert updated_schedule["title"] == original_schedule["title"]
+    assert updated_schedule["startTime"] == original_schedule["startTime"]
+    assert updated_schedule["endTime"] == original_schedule["endTime"]
+    assert updated_schedule["source"] == original_schedule["source"]
+    assert updated_schedule["categoryId"] == original_schedule["categoryId"]
+
+    # 3. updatedAt은 변경되었는지 검증
+    assert updated_schedule["updatedAt"] != original_schedule["updatedAt"]
+
+    # 4. createdAt은 그대로인지 검증
+    assert updated_schedule["createdAt"] == original_schedule["createdAt"]
+```
+
+#### 핵심 원칙 요약
+
+1. **모든 응답 필드 검증**: 상태 코드만 보지 말고 응답 본문 전체 검증
+2. **예상치 못한 필드 감지**: 추가 필드가 생기면 실패 (API 계약 위반)
+3. **에러 응답 구체성 검증**: 에러 메시지가 명확하고 actionable한지 확인
+4. **부작용 검증**: 실패한 요청이 DB에 흔적을 남기지 않는지 확인
+5. **불변성 검증**: 변경하지 않아야 할 필드가 유지되는지 확인
+6. **타입 검증**: 값뿐만 아니라 타입도 정확한지 확인
+7. **범위 검증**: 숫자/날짜 값이 합리적인 범위 내에 있는지 확인
 
 ## 점진적 테스트 실행 전략
 

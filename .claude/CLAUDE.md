@@ -91,9 +91,9 @@ com.unisync.{service}/
 - 도메인 특화 예외는 각 도메인, 공통 예외는 `common/exception`
 - Entity 직접 반환 금지, 각 도메인의 DTO만 사용
 
-## 모듈별 상세 문서
-- [Backend Services](app/backend/CLAUDE.md) - 백엔드 환경변수, 서비스 포트, API Gateway
-- [Serverless](app/serverless/CLAUDE.md) - 워크플로우, Lambda, SQS 메시지 스키마
+## 모듈별 가이드
+- [Backend Services](app/backend/README.md) - 개발 환경 설정, 서비스 포트, 실행 방법
+- [Serverless](app/serverless/README.md) - Lambda 구조, 로컬 테스트 방법
 - [Shared Modules](app/shared/README.md) - java-common, python-common DTO 표준화
 - [System Tests](system-tests/README.md) - 시스템 테스트 구조 및 실행 방법
 

@@ -2,7 +2,9 @@
 
 Canvas LMS 동기화 및 AI 분석을 위한 서버리스 컴포넌트입니다.
 
-> **전체 서버리스 아키텍처는 다음 문서를 참고하세요:**
+> **전체 프로젝트 개요는 [루트 README.md](../../README.md)를 참고하세요.**
+>
+> **서버리스 아키텍처 상세 문서:**
 > - [Canvas 동기화 설계](../../docs/features/canvas-sync.md) - Canvas Sync Lambda 상세 설계
 > - [SQS 아키텍처](../../docs/design/sqs-architecture.md) - 전체 SQS 큐 목록 및 메시지 스키마
 > - [시스템 아키텍처](../../docs/design/system-architecture.md) - 전체 워크플로우 및 데이터 흐름
@@ -67,8 +69,7 @@ serverless/
 │
 ├── requirements-dev.txt         # 개발/테스트 의존성
 ├── README.md                    # 이 문서
-├── TESTING.md                   # 테스트 가이드
-└── CLAUDE.md                    # 서버리스 아키텍처 참조
+└── TESTING.md                   # 테스트 가이드
 ```
 
 ---
@@ -136,7 +137,7 @@ pytest tests/ -v
 
 ## 필수 환경변수
 
-환경변수 전체 목록은 [app/serverless/CLAUDE.md](./CLAUDE.md)를 참고하세요.
+환경변수 관리 가이드는 [시스템 아키텍처](../../docs/design/system-architecture.md)를 참고하세요.
 
 **Canvas Sync Lambda 주요 변수**:
 - `USER_SERVICE_URL` - User-Service API URL
@@ -180,5 +181,5 @@ bash ../../scripts/infra/deploy-lambda.sh production
 
 **개발 가이드**:
 - [TESTING.md](./TESTING.md) - 테스트 가이드
-- [CLAUDE.md](./CLAUDE.md) - 환경변수 및 워크플로우 참조
 - [Shared Modules](../shared/README.md) - DTO 사용법
+- [프로젝트 전체 개요](../../README.md) - 워크플로우 및 설계 원칙

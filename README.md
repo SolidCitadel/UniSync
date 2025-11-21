@@ -1,301 +1,206 @@
-# UniSync - Canvas LMS 연동 학업 일정관리 서비스
+# UniSync
 
-Canvas LMS와 연동하여 자동으로 학업 일정을 동기화하고 AI로 분석하는 서비스입니다.
+> Canvas LMS 연동 학업 일정관리 서비스
 
-## 프로젝트 현황
+Canvas LMS의 과제와 일정을 자동으로 동기화하여 개인 캘린더와 통합 관리하는 서비스입니다.
 
-- **Phase 1 완료**: ✅ **Canvas 수동 동기화 (Manual Sync)**
-  - User-Service → Lambda 직접 호출 (AWS SDK)
-  - Lambda → Canvas API 조회
-  - Lambda → SQS 메시지 발행 (enrollments, assignments)
-  - Course-Service → SQS 메시지 consume하여 DB 저장
-  - 통합 테스트 완료 (Lambda 15/15, Spring 12/12, Integration 6 tests)
-- **Phase 2 계획**: EventBridge 자동 동기화
-- **최근 구현**:
-  - API Gateway (Spring Cloud Gateway + JWT 인증 + Cognito 연동)
-  - Canvas Sync Lambda 및 SQS 통합
-  - User-Service Canvas 동기화 엔드포인트 (POST /v1/sync/canvas)
-  - Course-Service의 SQS 구독 기능
-  - 공유 모듈(java-common, python-common)을 통한 DTO 표준화
-  - 통합 테스트 환경 구축 및 자동화
+## 📌 프로젝트 소개
 
-## 프로젝트 구조
+대학생들은 Canvas LMS, Google Calendar, 개인 일정 등 여러 플랫폼에서 학업 일정을 관리하며 다음과 같은 어려움을 겪습니다:
 
+- 과제 마감일을 놓치거나 중복 입력해야 함
+- Canvas와 개인 캘린더 간 수동 동기화 필요
+- 그룹 프로젝트에서 팀원 간 일정 공유 어려움
+
+**UniSync는 이러한 문제를 해결합니다**:
+- ✅ Canvas 과제를 자동으로 일정/할일로 변환
+- ✅ Google Calendar와 양방향 동기화
+- ✅ 그룹 프로젝트 일정 공유 및 협업
+- 🔮 (Phase 3) AI 기반 과제 분석 및 자동 서브태스크 생성
+
+## 🚀 주요 기능
+
+### ✅ Phase 1 (구현 완료)
+- **Canvas 수동 동기화**: 버튼 클릭으로 Canvas 과제를 즉시 동기화
+- **과목/과제 관리**: Canvas 수강 과목 및 과제 자동 저장
+- **일정/할일 통합**: 시간 단위 일정(Schedule)과 기간 단위 할일(Todo) 통합 관리
+- **JWT 인증**: AWS Cognito 기반 사용자 인증
+
+### 🔄 Phase 2 (계획)
+- **자동 동기화**: EventBridge 스케줄러로 주기적 자동 동기화
+- **Google Calendar 연동**: 양방향 동기화
+- **그룹 프로젝트**: 팀원 간 일정 공유 및 협업
+
+### 🤖 Phase 3 (선택)
+- **AI 기반 분석**: LLM이 과제를 분석하여 서브태스크 자동 생성
+- **제출물 검증**: 제출 파일 분석하여 완료 여부 자동 판단
+
+## 🏗️ 아키텍처
+
+```mermaid
+graph TB
+    Client[Frontend React]
+    Gateway[API Gateway<br/>JWT Auth + Swagger Aggregator]
+
+    User[User Service<br/>:8081]
+    Course[Course Service<br/>:8082]
+    Schedule[Schedule Service<br/>:8083]
+
+    SQS[AWS SQS]
+    CanvasLambda[Canvas Sync Lambda]
+    GoogleLambda[Google Calendar Sync Lambda]
+
+    Client -->|/api/*| Gateway
+    Gateway -->|/v1/users/*<br/>/v1/auth/*| User
+    Gateway -->|/v1/courses/*<br/>/v1/assignments/*| Course
+    Gateway -->|/v1/schedules/*<br/>/v1/todos/*| Schedule
+
+    User -->|Invoke| CanvasLambda
+    Course -.->|Subscribe| SQS
+    Schedule -.->|Subscribe| SQS
+
+    CanvasLambda -->|Publish| SQS
+    GoogleLambda -->|Publish| SQS
+
+    CanvasLambda -->|Fetch| CanvasAPI[Canvas LMS API]
+    GoogleLambda -->|Sync| GoogleAPI[Google Calendar API]
+
+    style Gateway fill:#ff9999
+    style SQS fill:#ffcc99
+    style CanvasLambda fill:#99ccff
+    style GoogleLambda fill:#99ccff
 ```
-UniSync/
-├── app/
-│   ├── backend/
-│   │   ├── api-gateway/        # API Gateway + JWT 인증 (8080)
-│   │   ├── user-service/       # 사용자/인증/소셜/그룹 (8081)
-│   │   ├── course-service/     # Canvas 학업 데이터 (8082)
-│   │   └── schedule-service/   # 일정(Schedule) + 할일(Todo) (8083)
-│   ├── serverless/
-│   │   ├── canvas-sync-lambda/ # Canvas API 호출
-│   │   ├── llm-lambda/         # LLM Task 생성/검증
-│   │   └── step-functions/     # Step Functions 정의
-│   └── shared/
-│       ├── java-common/        # Java 공용 DTO (SQS 메시지 등)
-│       ├── python-common/      # Python 공용 DTO
-│       └── message-schemas/    # JSON Schema 정의
-├── system-tests/               # 시스템 테스트 (docker-compose.acceptance.yml 기반)
-│   ├── infra/                  # 1단계: 인프라 검증
-│   ├── component/              # 2단계: 개별 서비스 API 검증
-│   ├── integration/            # 3단계: 서비스 간 연동 검증
-│   └── scenarios/              # 4단계: E2E 사용자 시나리오
-├── scripts/
-│   └── infra/                  # 인프라 관리 (Lambda 배포, SQS 재생성)
-├── localstack-init/            # LocalStack 자동 초기화 (컨테이너 시작 시)
-├── mysql-init/                 # MySQL 자동 초기화 (컨테이너 시작 시)
-├── docker-compose.yml          # 개발 환경 (인프라만)
-├── docker-compose.acceptance.yml  # 인수 테스트 환경
-├── docker-compose.demo.yml     # 데모 환경
-├── pyproject.toml              # Poetry 의존성 및 pytest 설정
-├── .env                        # docker-compose 공통 설정 (커밋됨)
-└── .env.local.example          # 로컬 비밀 템플릿 (gitignore)
-```
 
-## 기술 스택
+**기술 스택**:
+- **Backend**: Java 21, Spring Boot 3.5, Spring Cloud Gateway
+- **Auth**: AWS Cognito + JWT
+- **Database**: MySQL 8.0 (서비스별 DB 분리)
+- **Messaging**: AWS SQS (비동기 이벤트 처리)
+- **Serverless**: AWS Lambda, Step Functions
+- **Infra**: Docker + LocalStack (로컬 개발)
 
-### Backend
-- **Java 21** (LTS) + **Spring Boot 3.5.7**
-- **Gradle 8.5** + Kotlin DSL
-- **MySQL 8.0** + Spring Data JPA
-- **AWS Cognito** + JWT
-- **SpringDoc OpenAPI 3** (Swagger)
+## 🏃 빠른 시작
 
-### 인프라
-- **Docker** + LocalStack (로컬 AWS 환경)
-- **SQS** (메시징), **Step Functions** (워크플로우), **Lambda** (서버리스)
+### 사전 요구사항
+- Docker & Docker Compose
+- Java 21 (LTS)
+- Python 3.10+ + Poetry (테스트용)
 
-## 개발 환경 설정
-
-### 1. 사전 요구사항
-
-- **Docker & Docker Compose**
-- **Java 21** (LTS)
-- **Gradle 8.5 이상** (또는 Gradle Wrapper 사용)
-- **Python 3.8+** + **Poetry** (테스트 및 서버리스 개발용)
-  - Poetry 설치: [docs/guides/development-setup.md](docs/guides/development-setup.md#poetry-설치)
-  - 의존성 설치: `poetry install`
-
-### 2. Docker 컨테이너 시작 (최초 1회)
-
+### 1. 저장소 클론
 ```bash
-# 모든 인프라 서비스 시작 (LocalStack, MySQL)
-docker-compose up -d
-
-# 로그 확인 (LocalStack 초기화 완료 대기)
-docker-compose logs -f localstack
-# "Cognito 설정 완료!" 메시지가 보일 때까지 대기
+git clone https://github.com/your-org/UniSync.git
+cd UniSync
 ```
 
-### 3. 로컬 환경변수 파일 생성
-
-`.env.local.example`을 복사하여 `.env.local`을 생성합니다:
-
+### 2. 환경변수 설정
 ```bash
 # .env.local 템플릿 복사
 cp .env.local.example .env.local
+
+# .env.local 파일 편집하여 필요한 값 입력:
+# - LOCALSTACK_AUTH_TOKEN (LocalStack Pro)
+# - JWT_SECRET
+# - ENCRYPTION_KEY
+# - CANVAS_API_TOKEN
 ```
 
-**LocalStack이 초기화되면 자동으로 `.env.local` 파일의 Cognito 값이 업데이트됩니다**:
-
+### 3. 인프라 시작
 ```bash
-# LocalStack 초기화 완료 확인
-docker-compose logs localstack | grep "Cognito 설정 완료"
+# LocalStack, MySQL 등 인프라 시작
+docker-compose up -d
 
-# .env.local에 자동 업데이트된 Cognito 값 확인
-cat .env.local | grep COGNITO
+# LocalStack 초기화 완료 대기 (30초~1분)
+docker-compose logs -f localstack | grep "Cognito 설정 완료"
 ```
 
-**필요한 비밀 값 입력**:
+### 4. 백엔드 서비스 실행
 
-`.env.local` 파일을 열어 다음 값들을 입력하세요:
-- `LOCALSTACK_AUTH_TOKEN`: LocalStack Pro 라이선스 토큰
-- `JWT_SECRET`: JWT 서명 키
-- `ENCRYPTION_KEY`: AES-256 암호화 키 (`openssl rand -base64 32`로 생성)
-- `CANVAS_API_TOKEN`: Canvas LMS API 토큰
-- `CANVAS_SYNC_API_KEY`: Canvas Sync Lambda 호출용 API 키
-
-**참고**:
-- `.env.local`은 gitignore되어 커밋되지 않습니다 (비밀 정보 + 로컬 전용 설정 + 공통 설정 모두 포함)
-- `.env.common`은 컨테이너 실행 시 사용되는 공통 설정입니다 (커밋됨)
-- `application-local.yml`은 플레이스홀더만 포함하며 커밋됩니다
-- Gradle이 `.env.local`을 자동으로 로드하여 환경변수를 주입합니다
-
-### 4. IDE에서 Active Profile 설정
-
-각 서비스를 IDE에서 실행하려면 Active Profile을 `local`로 설정해야 합니다:
-
-**IntelliJ IDEA**:
-- Run/Debug Configurations → Active profiles: `local`
-
-**VS Code**:
-- `launch.json` → `"spring.profiles.active": "local"`
-
-### 5. 서비스 상태 확인
-
-```bash
-# 컨테이너 상태 확인
-docker-compose ps
-
-# MySQL 접속 확인
-docker exec -it unisync-mysql mysql -uroot -proot_password -e "SHOW DATABASES;"
-
-# LocalStack 확인
-aws --endpoint-url=http://localhost:4566 sqs list-queues
-```
-
-### 6-A. Spring Boot 서비스 실행 (개별)
-
-각 서비스를 별도 터미널에서 실행:
-
+**옵션 A: IDE에서 개별 실행**
 ```bash
 # User Service
 cd app/backend/user-service
 ./gradlew bootRun --args='--spring.profiles.active=local'
 
-# Course Service
-cd app/backend/course-service
-./gradlew bootRun --args='--spring.profiles.active=local'
-
-# Schedule Service
-cd app/backend/schedule-service
-./gradlew bootRun --args='--spring.profiles.active=local'
+# Course Service, Schedule Service도 동일하게 실행
 ```
 
-### 6-B. 인수 테스트 환경 실행 (Docker Compose)
-
-인프라와 모든 백엔드 서비스를 컨테이너로 한 번에 실행:
-
+**옵션 B: Docker Compose로 전체 실행**
 ```bash
-# 인수 테스트 환경 (인프라 + 백엔드 서비스)
+# 인수 테스트 환경 (인프라 + 백엔드)
 docker-compose -f docker-compose.acceptance.yml up -d --build
-
-# 로그 확인
-docker-compose -f docker-compose.acceptance.yml logs -f
-
-# 특정 서비스 로그만 확인
-docker-compose -f docker-compose.acceptance.yml logs -f course-service
-
-# 중지
-docker-compose -f docker-compose.acceptance.yml down
 ```
 
-**참고**: `docker-compose.acceptance.yml`은 각 서비스의 Dockerfile을 사용하여 컨테이너 이미지를 빌드하고, 시스템 테스트 실행에 필요한 전체 환경을 구성합니다.
+### 5. 서비스 확인
+- **API Gateway**: http://localhost:8080/api/v1/*
+- **Swagger UI (Aggregated)**: http://localhost:8080/swagger-ui.html
+  - 모든 백엔드 서비스의 API를 하나의 Swagger UI에서 확인 가능
+- User Service Swagger: http://localhost:8081/swagger-ui.html
+- Course Service Swagger: http://localhost:8082/swagger-ui.html
+- Schedule Service Swagger: http://localhost:8083/swagger-ui.html
 
-## 서비스 엔드포인트
+## 📚 개발 가이드
 
-| 서비스 | 포트 | 엔드포인트/문서 |
-|--------|------|------------|
-| **API Gateway** | 8080 | http://localhost:8080/api/v1/* |
-| User Service | 8081 | http://localhost:8081/swagger-ui.html |
-| Course Service | 8082 | http://localhost:8082/swagger-ui.html |
-| Schedule Service | 8083 | http://localhost:8083/swagger-ui.html |
-| MySQL | 3306 | - |
-| LocalStack | 4566 | - |
+### 백엔드 개발
+- **[app/backend/README.md](app/backend/README.md)** - 환경 설정, 서비스 포트, 실행 방법
 
-**참고**: 직접 서비스 포트로 테스트 가능하지만 JWT 인증이 필요합니다
+### 서버리스 개발
+- **[app/serverless/README.md](app/serverless/README.md)** - Lambda 개발, 로컬 테스트 방법
 
-## 인프라 서비스
-
-### LocalStack (AWS 에뮬레이션)
-
-LocalStack은 다음 AWS 서비스를 로컬에서 제공합니다:
-
-- **SQS**: 서비스 간 비동기 메시징
-- **Step Functions**: 동기화 워크플로우
-- **Lambda**: LLM 분석 함수
-- **S3**: 파일 저장소
-- **EventBridge**: 스케줄링
-
+### 테스트
 ```bash
-# SQS 큐 목록 확인
-aws --endpoint-url=http://localhost:4566 sqs list-queues
-
-# SQS 메시지 전송 테스트
-aws --endpoint-url=http://localhost:4566 sqs send-message \
-  --queue-url http://localhost:4566/000000000000/assignment-events-queue \
-  --message-body '{"eventType":"ASSIGNMENT_CREATED","assignmentId":"test123"}'
-
-# S3 버킷 목록 확인
-aws --endpoint-url=http://localhost:4566 s3 ls
-```
-
-### MySQL
-
-각 마이크로서비스는 독립적인 데이터베이스를 사용합니다:
-
-- `user_db`: 사용자/인증/소셜/그룹 (Users, Credentials, Friendships, Groups, Group_Members)
-- `course_db`: Canvas 학업 데이터 (Courses, Enrollments, Assignments, Notices, Sync_Status)
-- `schedule_db`: 일정 및 할일 (Schedules, Todos, Categories)
-
-```bash
-# MySQL 접속
-docker exec -it unisync-mysql mysql -uunisync -punisync_password
-
-# 특정 데이터베이스 접속
-docker exec -it unisync-mysql mysql -uunisync -punisync_password -D user_db
-```
-
-## 테스트
-
-### 단위 테스트
-
-```bash
-# 모든 서비스 단위 테스트
+# 단위 테스트
 ./gradlew test
 
-# 특정 서비스 테스트
-cd app/backend/user-service
-./gradlew test
-
-# 특정 테스트 클래스 실행
-./gradlew test --tests UserServiceTest
-
-# Serverless 함수 테스트 (Python + Poetry)
-poetry run pytest app/serverless/canvas-sync-lambda/tests/
-poetry run pytest app/serverless/llm-lambda/tests/
-```
-
-### E2E 통합 테스트
-
-전체 워크플로우를 테스트하는 통합 테스트:
-
-```bash
-# 시스템 테스트 실행 (권장)
+# 시스템 테스트 (E2E)
 poetry run pytest system-tests/ -v
-
-# 특정 단계만 실행
-poetry run pytest system-tests/infra/ -v          # 인프라 검증
-poetry run pytest system-tests/integration/ -v    # 통합 테스트
-poetry run pytest system-tests/scenarios/ -v      # E2E 시나리오
 ```
 
-**통합 테스트 시나리오**:
-- Canvas API → Lambda → SQS → Course-Service → DB
-- Assignment 생성/수정/중복 처리
-- SQS 메시지 처리 검증
+자세한 내용: [system-tests/README.md](system-tests/README.md)
 
-자세한 내용은 [system-tests/README.md](system-tests/README.md)를 참고하세요.
+## 📖 문서
 
-## 종료 및 정리
+프로젝트의 모든 설계 문서는 `docs/` 디렉토리에 체계적으로 정리되어 있습니다.
 
-```bash
-# 모든 컨테이너 중지
-docker-compose down
+### 요구사항 및 기획
+- **[docs/requirements/product-spec.md](docs/requirements/product-spec.md)** - 프로젝트 기획서, 문제 정의, 핵심 기능
 
-# 컨테이너 및 볼륨 삭제 (데이터 초기화)
-docker-compose down -v
+### 설계 문서
+- **[docs/design/system-architecture.md](docs/design/system-architecture.md)** - 시스템 아키텍처, API 설계, DB 스키마
+- **[docs/design/sqs-architecture.md](docs/design/sqs-architecture.md)** - SQS 큐 목록, 메시지 스키마, 재시도 전략
+- **[docs/design/testing-strategy.md](docs/design/testing-strategy.md)** - 테스트 전략, Unit/System Tests
 
-# 특정 서비스만 재시작
-docker-compose restart mysql
-```
+### 기능별 상세 설계
+- **[docs/features/canvas-sync.md](docs/features/canvas-sync.md)** - Canvas 동기화 상세 설계 (✅ Phase 1 완료)
+- **[docs/features/assignment-to-schedule.md](docs/features/assignment-to-schedule.md)** - 과제 → 일정 변환 로직
 
-## 문제 해결
+### 전체 문서 구조
+- **[docs/README.md](docs/README.md)** - 모든 설계 문서 탐색 가이드
+
+## 🤝 기여하기
+
+### 브랜치 전략
+- `main`: 안정 버전
+- `develop`: 개발 중인 기능들
+- `feature/*`: 새 기능 개발
+- `fix/*`: 버그 수정
+
+### Pull Request 가이드
+1. Issue 생성 또는 기존 Issue 확인
+2. 브랜치 생성: `feature/your-feature-name`
+3. 코드 작성 및 테스트 추가
+4. PR 생성 (템플릿 참고)
+5. 코드 리뷰 후 머지
+
+### 코딩 컨벤션
+- **DDD 패키지 구조**: 도메인 단위 패키지 (Layer-based 구조 사용 안함)
+- **Entity 직접 반환 금지**: 모든 API는 DTO 반환
+- **테스트 필수**: Unit Tests (80%) + System Tests (20%)
+
+자세한 내용은 [docs/guides/contributing.md](docs/guides/contributing.md)를 참고하세요.
+
+## 🔍 트러블슈팅
 
 ### LocalStack이 시작되지 않는 경우
-
 ```bash
 # LocalStack 로그 확인
 docker-compose logs localstack
@@ -305,41 +210,36 @@ docker-compose restart localstack
 ```
 
 ### MySQL 연결 실패
-
 ```bash
 # MySQL 헬스체크 확인
 docker-compose ps mysql
 
 # MySQL 로그 확인
 docker-compose logs mysql
-
-# 포트 충돌 확인 (Windows)
-netstat -ano | findstr :3306
 ```
 
-### SQS 큐가 생성되지 않은 경우
-
+### 환경변수가 로드되지 않는 경우
 ```bash
-# 초기화 스크립트 수동 실행
-docker exec -it unisync-localstack bash
-cd /etc/localstack/init/ready.d
-./01-create-queues.sh
+# 각 서비스의 환경변수 확인
+cd app/backend/user-service
+./gradlew printEnv
 ```
 
-## 문서
+## 📊 프로젝트 현황
 
-프로젝트의 모든 설계 문서는 `docs/` 디렉토리에 체계적으로 정리되어 있습니다.
+- ✅ **Phase 1 완료**: Canvas 수동 동기화
+  - User-Service → Lambda 직접 호출 (AWS SDK)
+  - Lambda → Canvas API 조회
+  - Lambda → SQS 메시지 발행
+  - Course-Service → SQS 메시지 consume하여 DB 저장
+  - **테스트**: Lambda 15/15, Spring Unit 156개, System 86개 PASS
+- 🔄 **Phase 2 계획**: EventBridge 자동 동기화
+- 🤖 **Phase 3 선택**: LLM 기반 자동화 (시간 여유 시)
 
-### 📖 주요 문서
-- **[docs/README.md](docs/README.md)** - 문서 구조 및 탐색 가이드
-- **[docs/requirements/product-spec.md](docs/requirements/product-spec.md)** - 프로젝트 기획서
-- **[docs/design/system-architecture.md](docs/design/system-architecture.md)** - 시스템 아키텍처
-- **[docs/features/](docs/features/)** - 기능별 상세 설계 및 구현 계획
-
-### 🔧 개발자 문서
-- **[CLAUDE.md](./CLAUDE.md)** - AI 어시스턴트 작업 가이드
-- **[system-tests/README.md](system-tests/README.md)** - 시스템 테스트 구조 및 실행 방법
-
-## 라이선스
+## 📄 라이선스
 
 MIT License
+
+Copyright (c) 2025 UniSync Team
+
+자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
