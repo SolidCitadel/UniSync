@@ -45,11 +45,13 @@ canvas:
 # Swagger/OpenAPI
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: alpha
+  server:
+    url: /api  # API Gateway 기준 prefix
 
 # Actuator 설정
 management:

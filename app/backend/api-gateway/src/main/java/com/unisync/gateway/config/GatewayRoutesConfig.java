@@ -29,6 +29,24 @@ public class GatewayRoutesConfig {
     @Bean
     public RouteLocator customRoutes(RouteLocatorBuilder builder, JwtAuthenticationFilter jwtAuthFilter) {
         return builder.routes()
+                // ========== Swagger API Docs 라우팅 (JWT 인증 제외) ==========
+                .route("user-service-api-docs", r -> r
+                        .path("/v3/api-docs/user-service")
+                        .filters(f -> f.rewritePath("/v3/api-docs/user-service", "/v3/api-docs"))
+                        .uri(userServiceUrl)
+                )
+                .route("course-service-api-docs", r -> r
+                        .path("/v3/api-docs/course-service")
+                        .filters(f -> f.rewritePath("/v3/api-docs/course-service", "/v3/api-docs"))
+                        .uri(courseServiceUrl)
+                )
+                .route("schedule-service-api-docs", r -> r
+                        .path("/v3/api-docs/schedule-service")
+                        .filters(f -> f.rewritePath("/v3/api-docs/schedule-service", "/v3/api-docs"))
+                        .uri(scheduleServiceUrl)
+                )
+
+                // ========== 일반 API 라우팅 ==========
                 // Block internal APIs - 내부 API는 API Gateway를 통해 접근 불가
                 .route("block-internal-apis", r -> r
                         .path("/api/internal/**")

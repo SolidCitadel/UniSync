@@ -50,6 +50,28 @@ jwt:
   exclude-paths:
     - /api/v1/auth/**  # 인증 API (회원가입, 로그인)
     - /actuator/**      # 헬스체크
+    - /swagger-ui/**    # Swagger UI 정적 리소스
+    - /swagger-ui.html  # Swagger UI 메인
+    - /v3/api-docs/**   # OpenAPI 스펙
+    - /webjars/**       # Swagger UI 웹자르
+
+# SpringDoc OpenAPI - Swagger Aggregation
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: User Service
+        url: /v3/api-docs/user-service
+      - name: Course Service
+        url: /v3/api-docs/course-service
+      - name: Schedule Service
+        url: /v3/api-docs/schedule-service
+    urls-primary-name: User Service
+  api-docs:
+    enabled: true
+  webjars:
+    prefix: /webjars
 
 # Actuator 설정
 management:

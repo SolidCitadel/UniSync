@@ -59,6 +59,9 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
+    // SpringDoc OpenAPI - Swagger Aggregation (WebFlux 기반)
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.4")
+
     // Test Dependencies
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.cloud:spring-cloud-starter-contract-stub-runner")

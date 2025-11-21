@@ -15,6 +15,7 @@ UniSync 프로젝트의 모든 문서를 담고 있습니다.
 - [system-architecture.md](design/system-architecture.md) - 전체 시스템 아키텍처, 데이터 모델, API 설계
 - [sqs-architecture.md](design/sqs-architecture.md) - **SQS 메시지 아키텍처 (큐 목록, 메시지 스키마, 재시도 전략)**
 - [testing-strategy.md](design/testing-strategy.md) - **테스트 전략 및 아키텍처 (계층 구조, 환경 구성, CI/CD)**
+- [api-documentation.md](design/api-documentation.md) - **API 문서화 (Swagger Aggregation, OpenAPI 설정)**
 
 ### ⚙️ [features/](features/)
 **기능별 상세 명세 (도메인 주도 문서화)**
