@@ -70,14 +70,13 @@ public class GatewayRoutesConfig {
                         .uri(userServiceUrl)
                 )
 
-                // Course Service (Canvas 학업 데이터: 과목/과제/Task/공지/동기화)
+                // Course Service (Canvas 학업 데이터: 과목/과제/Task/공지)
                 .route("course-service", r -> r
                         .path(
                             "/api/v1/courses/**",
                             "/api/v1/assignments/**",
                             "/api/v1/tasks/**",
-                            "/api/v1/notices/**",
-                            "/api/v1/sync/**"
+                            "/api/v1/notices/**"
                         )
                         .filters(f -> f
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationFilter.Config()))

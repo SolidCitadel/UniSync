@@ -82,10 +82,19 @@ class TestFullUserJourney:
         print(f"  ✅ Canvas 연동 확인: {canvas_username}")
 
         # ============================================================
-        # STEP 4: 자동 동기화 대기 (Assignment → Schedule 변환)
+        # STEP 4: 수동 동기화 실행 (Phase 1: Manual Sync)
         # ============================================================
-        print("\n[STEP 4/7] 자동 동기화 대기 (Assignment → Schedule 변환)")
-        print("  [플로우] Lambda → Course-Service → SQS → Schedule-Service")
+        print("\n[STEP 4/7] 수동 동기화 실행 (Assignment → Schedule 변환)")
+        print("  [플로우] POST /integrations/canvas/sync → Lambda → Course-Service → SQS → Schedule-Service")
+
+        # 수동 동기화 API 호출
+        sync_response = requests.post(
+            f"{gateway_url}/api/v1/integrations/canvas/sync",
+            headers=headers,
+            timeout=30
+        )
+        assert sync_response.status_code in [200, 202], f"동기화 호출 실패: {sync_response.status_code} - {sync_response.text}"
+        print(f"  ✅ 동기화 요청 완료: {sync_response.status_code}")
 
         # Courses 동기화 대기
         courses = self._wait_for_courses(gateway_url, headers)

@@ -1,10 +1,9 @@
-# docker-compose.yml - 기본 인프라 환경
+# docker-compose.yml - 개발용 인프라 환경
 # Usage: docker-compose up
 #
 # 용도:
 # - 로컬 개발 시 필요한 인프라 서비스 (MySQL, LocalStack) 제공
 # - Spring Boot 서비스는 IDE에서 직접 실행
-# - docker-compose.override.yml로 개인화 가능 (.gitignore)
 #
 # 환경변수:
 # - .env 파일 자동 로드 (비밀 없는 기본값)

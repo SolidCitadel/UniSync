@@ -23,8 +23,7 @@ API Gateway는 `/api` prefix만 제거하여 백엔드 서비스로 전달:
 클라이언트: /api/v1/users/**           → 백엔드: /v1/users/**
 클라이언트: /api/v1/credentials/**     → 백엔드: /v1/credentials/**
 클라이언트: /api/v1/friends/**         → 백엔드: /v1/friends/**
-클라이언트: /api/v1/integrations/**    → 백엔드: /v1/integrations/**
-클라이언트: /api/v1/sync/**            → 백엔드: /v1/sync/** (Canvas 동기화)
+클라이언트: /api/v1/integrations/**    → 백엔드: /v1/integrations/** (상태 조회 + Canvas 동기화)
 
 # Course-Service
 클라이언트: /api/v1/courses/**         → 백엔드: /v1/courses/**
@@ -157,20 +156,14 @@ GatewayRoutesConfig.java에서 정의:
 
 ### Docker Compose 파일
 
-1. **`docker-compose.yml`** (기본 - 인프라만)
+1. **`docker-compose.yml`** (개발용 - 인프라만)
    - `docker-compose up` 실행 시 사용
    - **인프라 서비스만 정의** (LocalStack, MySQL)
    - **Spring 서비스는 IDE에서 직접 실행**
    - `.env` 파일 자동 로드
    - 커밋됨 ✓
 
-2. **`docker-compose.override.yml`** (개인화)
-   - `docker-compose up` 시 자동으로 병합되어 기본 설정 덮어쓰기
-   - 개인용 포트 변경, LocalStack 추가 서비스 등에 사용 가능
-   - 현재는 `.example` 템플릿만 제공
-   - **gitignore됨** (.gitignore ✓)
-
-3. **`docker-compose.acceptance.yml`** (인수 테스트 환경)
+2. **`docker-compose.acceptance.yml`** (인수 테스트 환경)
    - `docker-compose -f docker-compose.acceptance.yml up --build`로 실행
    - 자동화된 인수/E2E 테스트 환경
    - Spring 서비스를 **빌드**하여 실행
@@ -180,7 +173,7 @@ GatewayRoutesConfig.java에서 정의:
    - **주의**: 로컬에서 실행 시 `.env.local` 필수 (LOCALSTACK_AUTH_TOKEN)
    - 커밋됨 ✓
 
-4. **`docker-compose.demo.yml`** (데모 환경)
+3. **`docker-compose.demo.yml`** (데모 환경)
    - `docker-compose -f docker-compose.demo.yml up`로 실행
    - 프론트엔드/인프라 담당자용 전체 시스템 데모
    - Spring 서비스를 **DockerHub 이미지**로 실행 (빌드 불필요)

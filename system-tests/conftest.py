@@ -333,12 +333,13 @@ def canvas_token():
     return token
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def test_user_credentials():
-    """E2E 테스트용 사용자 자격 증명"""
-    timestamp = int(time.time())
+    """E2E 테스트용 사용자 자격 증명 - 각 테스트마다 고유"""
+    import uuid
+    unique_id = uuid.uuid4().hex[:8]
     return {
-        "email": f"e2e-test-{timestamp}@unisync.com",
+        "email": f"e2e-test-{unique_id}@unisync.com",
         "password": "TestPassword123!",
         "name": "E2E Test User"
     }

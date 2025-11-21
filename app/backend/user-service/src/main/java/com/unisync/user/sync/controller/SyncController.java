@@ -1,6 +1,5 @@
 package com.unisync.user.sync.controller;
 
-import com.unisync.user.common.util.JwtUtil;
 import com.unisync.user.sync.dto.CanvasSyncResponse;
 import com.unisync.user.sync.service.CanvasSyncService;
 import lombok.RequiredArgsConstructor;
@@ -14,32 +13,27 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/v1/sync")
+@RequestMapping("/v1/integrations/canvas")
 @RequiredArgsConstructor
 public class SyncController {
 
     private final CanvasSyncService canvasSyncService;
-    private final JwtUtil jwtUtil;
 
     /**
      * Canvas 수동 동기화 시작
      *
-     * POST /v1/sync/canvas
-     * Authorization: Bearer {JWT}
+     * POST /v1/integrations/canvas/sync
+     * X-Cognito-Sub: API Gateway에서 JWT 검증 후 전달
      *
-     * @param authorization JWT Bearer 토큰
+     * @param cognitoSub Cognito 사용자 ID (X-Cognito-Sub 헤더)
      * @return 동기화 시작 결과 (즉시 응답)
      */
-    @PostMapping("/canvas")
+    @PostMapping("/sync")
     public ResponseEntity<CanvasSyncResponse> syncCanvas(
-            @RequestHeader("Authorization") String authorization
+            @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
-        log.info("POST /v1/sync/canvas - Canvas manual sync requested");
-
-        // JWT에서 cognitoSub 추출
-        String cognitoSub = jwtUtil.extractCognitoSub(authorization);
-
-        log.debug("Extracted cognitoSub from JWT: {}", cognitoSub);
+        log.info("POST /v1/integrations/canvas/sync - Canvas manual sync requested");
+        log.debug("Cognito sub from header: {}", cognitoSub);
 
         // Canvas 동기화 시작 (Lambda 호출)
         CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub);

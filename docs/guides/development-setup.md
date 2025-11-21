@@ -107,12 +107,15 @@ cp .env.local.example .env
 ### 4. 인프라 실행
 
 ```bash
-# LocalStack, MySQL 등 실행
-docker-compose -f docker-compose.acceptance.yml up -d
+# 개발용 인프라 실행 (LocalStack, MySQL)
+docker-compose up -d
 
 # 서비스 준비 대기 (약 1-2분)
-docker-compose -f docker-compose.acceptance.yml logs -f
+docker-compose logs -f localstack
+# "Cognito 설정 완료!" 메시지가 보일 때까지 대기
 ```
+
+**참고**: Spring Boot 서비스는 IDE에서 직접 실행합니다.
 
 ---
 
