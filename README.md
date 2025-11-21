@@ -38,38 +38,45 @@ Canvas LMS의 과제와 일정을 자동으로 동기화하여 개인 캘린더�
 ## 🏗️ 아키텍처
 
 ```mermaid
-graph TB
-    Client[Frontend React]
-    Gateway[API Gateway<br/>JWT Auth + Swagger Aggregator]
+flowchart LR
+    Client[React Client]
+    Gateway[API Gateway<br/>:8080]
 
     User[User Service<br/>:8081]
     Course[Course Service<br/>:8082]
     Schedule[Schedule Service<br/>:8083]
 
-    SQS[AWS SQS]
-    CanvasLambda[Canvas Sync Lambda]
-    GoogleLambda[Google Calendar Sync Lambda]
+    SQS[(SQS)]
+    Canvas[[Canvas Sync<br/>Lambda]]
+    Google[[Google Sync<br/>Lambda]]
 
-    Client -->|/api/*| Gateway
-    Gateway -->|/v1/users/*<br/>/v1/auth/*| User
-    Gateway -->|/v1/courses/*<br/>/v1/assignments/*| Course
-    Gateway -->|/v1/schedules/*<br/>/v1/todos/*| Schedule
+    CanvasAPI[Canvas LMS]
+    GoogleAPI[Google Calendar]
 
-    User -->|Invoke| CanvasLambda
-    Course -.->|Subscribe| SQS
-    Schedule -.->|Subscribe| SQS
+    Client --> Gateway
+    Gateway --> User & Course & Schedule
 
-    CanvasLambda -->|Publish| SQS
-    GoogleLambda -->|Publish| SQS
+    User --> Canvas
+    Canvas --> SQS
+    Google --> SQS
 
-    CanvasLambda -->|Fetch| CanvasAPI[Canvas LMS API]
-    GoogleLambda -->|Sync| GoogleAPI[Google Calendar API]
+    SQS -.-> Course & Schedule
 
-    style Gateway fill:#ff9999
-    style SQS fill:#ffcc99
-    style CanvasLambda fill:#99ccff
-    style GoogleLambda fill:#99ccff
+    Canvas --> CanvasAPI
+    Google --> GoogleAPI
+
+    style Gateway fill:#ffe6e6,stroke:#ff6666,stroke-width:3px,color:#000
+    style SQS fill:#fff4e6,stroke:#ffaa00,stroke-width:2px,color:#000
+    style Canvas fill:#e6f2ff,stroke:#4da6ff,stroke-width:2px,color:#000
+    style Google fill:#e6f2ff,stroke:#4da6ff,stroke-width:2px,color:#000
 ```
+
+**레이어 구조**:
+- **Frontend**: React 클라이언트
+- **API Gateway** (:8080): JWT 인증 + Swagger Aggregation
+- **Backend Services**: User (:8081), Course (:8082), Schedule (:8083)
+- **Serverless**: Canvas/Google Sync Lambda
+- **Message Queue**: AWS SQS (비동기 이벤트 처리)
 
 **기술 스택**:
 - **Backend**: Java 21, Spring Boot 3.5, Spring Cloud Gateway
