@@ -37,17 +37,19 @@ UniSync/
 │       ├── java-common/        # Java 공용 DTO (SQS 메시지 등)
 │       ├── python-common/      # Python 공용 DTO
 │       └── message-schemas/    # JSON Schema 정의
-├── tests/
-│   ├── integration/            # E2E 통합 테스트
-│   └── fixtures/               # 테스트 데이터
+├── system-tests/               # 시스템 테스트 (docker-compose.acceptance.yml 기반)
+│   ├── infra/                  # 1단계: 인프라 검증
+│   ├── component/              # 2단계: 개별 서비스 API 검증
+│   ├── integration/            # 3단계: 서비스 간 연동 검증
+│   └── scenarios/              # 4단계: E2E 사용자 시나리오
 ├── scripts/
-│   ├── infra/                  # 인프라 관리 (Lambda 배포, SQS 재생성)
-│   └── run-integration-tests.sh  # E2E 통합 테스트 실행
+│   └── infra/                  # 인프라 관리 (Lambda 배포, SQS 재생성)
 ├── localstack-init/            # LocalStack 자동 초기화 (컨테이너 시작 시)
 ├── mysql-init/                 # MySQL 자동 초기화 (컨테이너 시작 시)
 ├── docker-compose.yml          # 개발 환경 (인프라만)
 ├── docker-compose.acceptance.yml  # 인수 테스트 환경
 ├── docker-compose.demo.yml     # 데모 환경
+├── pyproject.toml              # Poetry 의존성 및 pytest 설정
 ├── .env                        # docker-compose 공통 설정 (커밋됨)
 └── .env.local.example          # 로컬 비밀 템플릿 (gitignore)
 ```
@@ -72,6 +74,9 @@ UniSync/
 - **Docker & Docker Compose**
 - **Java 21** (LTS)
 - **Gradle 8.5 이상** (또는 Gradle Wrapper 사용)
+- **Python 3.8+** + **Poetry** (테스트 및 서버리스 개발용)
+  - Poetry 설치: [docs/guides/development-setup.md](docs/guides/development-setup.md#poetry-설치)
+  - 의존성 설치: `poetry install`
 
 ### 2. Docker 컨테이너 시작 (최초 1회)
 
@@ -159,25 +164,25 @@ cd app/backend/schedule-service
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-### 6-B. 전체 애플리케이션 실행 (Docker Compose)
+### 6-B. 인수 테스트 환경 실행 (Docker Compose)
 
-모든 서비스를 컨테이너로 한 번에 실행:
+인프라와 모든 백엔드 서비스를 컨테이너로 한 번에 실행:
 
 ```bash
-# 전체 빌드 및 실행 (인프라 + 백엔드 서비스)
-docker-compose -f docker-compose.app.yml up -d --build
+# 인수 테스트 환경 (인프라 + 백엔드 서비스)
+docker-compose -f docker-compose.acceptance.yml up -d --build
 
 # 로그 확인
-docker-compose -f docker-compose.app.yml logs -f
+docker-compose -f docker-compose.acceptance.yml logs -f
 
 # 특정 서비스 로그만 확인
-docker-compose -f docker-compose.app.yml logs -f course-service
+docker-compose -f docker-compose.acceptance.yml logs -f course-service
 
 # 중지
-docker-compose -f docker-compose.app.yml down
+docker-compose -f docker-compose.acceptance.yml down
 ```
 
-**참고**: `docker-compose-app.yml`은 각 서비스의 Dockerfile을 사용하여 컨테이너 이미지를 빌드하고 실행합니다.
+**참고**: `docker-compose.acceptance.yml`은 각 서비스의 Dockerfile을 사용하여 컨테이너 이미지를 빌드하고, 시스템 테스트 실행에 필요한 전체 환경을 구성합니다.
 
 ## 서비스 엔드포인트
 
@@ -248,10 +253,9 @@ cd app/backend/user-service
 # 특정 테스트 클래스 실행
 ./gradlew test --tests UserServiceTest
 
-# Serverless 함수 테스트 (Python)
-cd app/serverless
-python -m pytest canvas-sync-lambda/tests/
-python -m pytest llm-lambda/tests/
+# Serverless 함수 테스트 (Python + Poetry)
+poetry run pytest app/serverless/canvas-sync-lambda/tests/
+poetry run pytest app/serverless/llm-lambda/tests/
 ```
 
 ### E2E 통합 테스트
@@ -259,13 +263,13 @@ python -m pytest llm-lambda/tests/
 전체 워크플로우를 테스트하는 통합 테스트:
 
 ```bash
-# 자동화된 통합 테스트 실행 (권장)
-./scripts/run-integration-tests.sh
+# 시스템 테스트 실행 (권장)
+poetry run pytest system-tests/ -v
 
-# 수동 실행
-docker-compose -f docker-compose.test.yml up -d
-python -m pytest tests/integration/ -v
-docker-compose -f docker-compose.test.yml down -v
+# 특정 단계만 실행
+poetry run pytest system-tests/infra/ -v          # 인프라 검증
+poetry run pytest system-tests/integration/ -v    # 통합 테스트
+poetry run pytest system-tests/scenarios/ -v      # E2E 시나리오
 ```
 
 **통합 테스트 시나리오**:
@@ -273,7 +277,7 @@ docker-compose -f docker-compose.test.yml down -v
 - Assignment 생성/수정/중복 처리
 - SQS 메시지 처리 검증
 
-자세한 내용은 [tests/README.md](tests/README.md)를 참고하세요.
+자세한 내용은 [system-tests/README.md](system-tests/README.md)를 참고하세요.
 
 ## 종료 및 정리
 
@@ -334,7 +338,7 @@ cd /etc/localstack/init/ready.d
 
 ### 🔧 개발자 문서
 - **[CLAUDE.md](./CLAUDE.md)** - AI 어시스턴트 작업 가이드
-- **[tests/README.md](tests/README.md)** - 테스트 구조 및 실행 방법
+- **[system-tests/README.md](system-tests/README.md)** - 시스템 테스트 구조 및 실행 방법
 
 ## 라이선스
 

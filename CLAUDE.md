@@ -95,12 +95,12 @@ com.unisync.{service}/
 - [Backend Services](app/backend/CLAUDE.md) - 백엔드 환경변수, 서비스 포트, API Gateway
 - [Serverless](app/serverless/CLAUDE.md) - 워크플로우, Lambda, SQS 메시지 스키마
 - [Shared Modules](app/shared/README.md) - java-common, python-common DTO 표준화
-- [Tests](tests/README.md) - 테스트 구조 및 실행 방법
+- [System Tests](system-tests/README.md) - 시스템 테스트 구조 및 실행 방법
 
 ## 참고 문서
 - [프로젝트 기획서](docs/requirements/product-spec.md) - 문제 정의, 핵심 기능, 사용자 시나리오
 - [시스템 아키텍처](docs/design/system-architecture.md) - 상세 아키텍처, API 설계, DB 스키마, 배포 전략
 - **[SQS 아키텍처](docs/design/sqs-architecture.md) - SQS 큐 목록, 메시지 스키마, 재시도 전략**
 - [Canvas 동기화](docs/features/canvas-sync.md) - Canvas LMS 연동 상세 설계 (✅ Phase 1 완료)
-- [과제 → 일정 변환](docs/features/assignment-to-schedule.md) - 과제를 일정/할일로 자동 변환 (🚧 Phase 1 구현 예정)
+- [과제 → 일정 변환](docs/features/assignment-to-schedule.md) - 과제를 일정/할일로 자동 변환 (✅ Phase 1 구현 완료)
 - [문서 구조](docs/README.md) - 모든 설계 문서 탐색 가이드

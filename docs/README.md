@@ -98,6 +98,6 @@ UniSync 프로젝트의 모든 문서를 담고 있습니다.
 ## 🔗 관련 문서
 
 - [CLAUDE.md](../CLAUDE.md) - AI 어시스턴트를 위한 프로젝트 컨텍스트
-- [tests/README.md](../tests/README.md) - 테스트 구조 및 실행 방법
+- [system-tests/README.md](../system-tests/README.md) - 시스템 테스트 구조 및 실행 방법
 - [app/backend/CLAUDE.md](../app/backend/CLAUDE.md) - 백엔드 서비스 구조
 - [app/serverless/CLAUDE.md](../app/serverless/CLAUDE.md) - 서버리스 구조

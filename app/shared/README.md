@@ -96,7 +96,7 @@ def lambda_handler(event, context):
 |-----|-------|--------|------|
 | EnrollmentEventMessage | lambda-to-courseservice-enrollments | enrollment-events.schema.json | ✅ Phase 1 |
 | AssignmentEventMessage | lambda-to-courseservice-assignments | assignment-events.schema.json | ✅ Phase 1 |
-| AssignmentToScheduleMessage | courseservice-to-scheduleservice-assignments | assignment-to-schedule.schema.json | 🚧 Phase 1 예정 |
+| AssignmentToScheduleMessage | courseservice-to-scheduleservice-assignments | assignment-to-schedule.schema.json | ✅ Phase 1 |
 
 > 자세한 메시지 스키마 및 Publisher/Consumer 관계는 [SQS Architecture](../../docs/design/sqs-architecture.md)를 참고하세요.
 
