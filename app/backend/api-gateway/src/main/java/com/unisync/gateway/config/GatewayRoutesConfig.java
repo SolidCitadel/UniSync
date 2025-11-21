@@ -54,13 +54,12 @@ public class GatewayRoutesConfig {
                         .uri("no://op")
                 )
 
-                // User Service (사용자/인증/소셜)
+                // User Service (사용자/인증/소셜/연동)
                 .route("user-service", r -> r
                         .path(
                             "/api/v1/auth/**",
                             "/api/v1/users/**",
                             "/api/v1/friends/**",
-                            "/api/v1/credentials/**",
                             "/api/v1/integrations/**"
                         )
                         .filters(f -> f

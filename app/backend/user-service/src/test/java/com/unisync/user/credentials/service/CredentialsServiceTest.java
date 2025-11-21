@@ -63,7 +63,8 @@ class CredentialsServiceTest {
         canvasToken = "test-canvas-token";
         encryptedToken = "encrypted-test-token";
 
-        ReflectionTestUtils.setField(credentialsService, "userTokenRegisteredQueue", "user-token-registered-queue");
+        // Phase 1: userTokenRegisteredQueue 필드 제거됨 (수동 동기화 사용)
+        // ReflectionTestUtils.setField(credentialsService, "userTokenRegisteredQueue", "user-token-registered-queue");
 
         canvasProfile = CanvasApiClient.CanvasProfile.builder()
                 .id(12345L)

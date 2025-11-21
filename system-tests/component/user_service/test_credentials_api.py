@@ -16,7 +16,7 @@ class TestCredentialsApi:
         Canvas 토큰 등록 API
 
         Given: 유효한 JWT 토큰과 Canvas API 토큰
-        When: POST /api/v1/credentials/canvas 호출
+        When: POST /api/v1/integrations/canvas/credentials 호출
         Then: 200 OK, success=true
         """
         gateway_url = service_urls.get("gateway", "http://localhost:8080")
@@ -29,7 +29,7 @@ class TestCredentialsApi:
 
         print(f"\n[TEST] Canvas 토큰 등록 API")
         response = requests.post(
-            f"{gateway_url}/api/v1/credentials/canvas",
+            f"{gateway_url}/api/v1/integrations/canvas/credentials",
             headers=headers,
             json={"canvasToken": canvas_token},
             timeout=10
@@ -84,7 +84,7 @@ class TestCredentialsApi:
         Canvas 토큰 삭제 API
 
         Given: Canvas 토큰이 등록된 사용자
-        When: DELETE /api/v1/credentials/canvas 호출
+        When: DELETE /api/v1/integrations/canvas/credentials 호출
         Then: 204 No Content
         """
         gateway_url = service_urls.get("gateway", "http://localhost:8080")
@@ -98,7 +98,7 @@ class TestCredentialsApi:
         # 먼저 토큰 등록
         print(f"\n[TEST] Canvas 토큰 삭제 API (사전 준비: 토큰 등록)")
         requests.post(
-            f"{gateway_url}/api/v1/credentials/canvas",
+            f"{gateway_url}/api/v1/integrations/canvas/credentials",
             headers=headers,
             json={"canvasToken": canvas_token},
             timeout=10
@@ -106,7 +106,7 @@ class TestCredentialsApi:
 
         # 토큰 삭제
         response = requests.delete(
-            f"{gateway_url}/api/v1/credentials/canvas",
+            f"{gateway_url}/api/v1/integrations/canvas/credentials",
             headers=headers,
             timeout=5
         )

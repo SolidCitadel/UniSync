@@ -260,26 +260,7 @@ class GatewayRoutingTest {
         assertThat(request.getPath()).isEqualTo("/v1/courses/456");
     }
 
-    // ==================== Course Service - Sync 경로 테스트 ====================
-
-    @Test
-    @DisplayName("Course Service: /api/v1/sync/status → /sync/status 경로 재작성")
-    void testSyncPathRewrite() throws InterruptedException {
-        // Given: /api/v1/sync/**는 course-service로 라우팅됨
-        courseService.enqueue(new MockResponse()
-                .setResponseCode(200)
-                .setBody("{\"status\":\"synced\"}"));
-
-        // When
-        webClient.get()
-                .uri("/api/v1/sync/status")
-                .exchange()
-                .expectStatus().isOk();
-
-        // Then
-        RecordedRequest request = courseService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/v1/sync/status");
-    }
+    // Note: /api/v1/sync/** 경로는 제거됨 (user-service의 /api/v1/integrations/canvas/sync로 통합)
 
     // ==================== Schedule Service 테스트 ====================
 

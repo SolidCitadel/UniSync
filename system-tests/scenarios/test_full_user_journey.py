@@ -51,7 +51,7 @@ class TestFullUserJourney:
         # ============================================================
         print("\n[STEP 2/7] Canvas 토큰 등록")
         register_response = requests.post(
-            f"{gateway_url}/api/v1/credentials/canvas",
+            f"{gateway_url}/api/v1/integrations/canvas/credentials",
             headers=headers,
             json={"canvasToken": canvas_token},
             timeout=10
