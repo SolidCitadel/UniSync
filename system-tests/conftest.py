@@ -326,11 +326,11 @@ def test_course(mysql_connection, clean_database):
 
 @pytest.fixture(scope="session")
 def canvas_token():
-    """실제 Canvas API 토큰 (환경변수에서 로드)"""
-    token = os.environ.get("CANVAS_API_TOKEN")
-    if not token:
-        pytest.skip("CANVAS_API_TOKEN not set in environment")
-    return token
+    """실제 Canvas API 토큰 (환경변수에서 로드)
+
+    Note: 토큰이 없으면 None 반환. 테스트에서 명시적으로 검증해야 함.
+    """
+    return os.environ.get("CANVAS_API_TOKEN")
 
 
 @pytest.fixture(scope="function")

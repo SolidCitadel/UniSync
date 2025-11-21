@@ -25,7 +25,6 @@ UniSync 프로젝트의 모든 문서를 담고 있습니다.
 - [schedule-management.md](features/schedule-management.md) - 일정 및 할일 관리 기능 설계
 - [google-calendar-integration.md](features/google-calendar-integration.md) - Google Calendar 연동 구현 계획
 - [api-endpoint-migration.md](features/api-endpoint-migration.md) - API 엔드포인트 마이그레이션
-- [acceptance-test.md](features/acceptance-test.md) - E2E 통합 테스트 및 개발 현황
 
 ### 📝 [adr/](adr/)
 **Architecture Decision Records (아키텍처 결정 기록)**

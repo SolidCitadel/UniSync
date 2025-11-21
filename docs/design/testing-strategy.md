@@ -253,18 +253,21 @@ def pytest_collection_modifyitems(items):
 
 ### 실행 방법
 
+> **중요**: 모든 pytest 명령어는 `poetry run`을 통해 실행합니다.
+> 의존성 설치: `poetry install` (루트 디렉토리에서)
+
 ```bash
 # 전체 실행 (순서 보장: infra → component → integration → scenarios)
-pytest system-tests/
+poetry run pytest system-tests/
 
 # 개별 단계만 실행
-pytest system-tests/infra/
-pytest system-tests/component/
-pytest system-tests/integration/
-pytest system-tests/scenarios/
+poetry run pytest system-tests/infra/
+poetry run pytest system-tests/component/
+poetry run pytest system-tests/integration/
+poetry run pytest system-tests/scenarios/
 
 # 특정 통합 테스트만 실행
-pytest system-tests/integration/course_to_schedule/
+poetry run pytest system-tests/integration/course_to_schedule/
 ```
 
 ## 테스트 데이터 관리
@@ -351,21 +354,29 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+      - name: Install dependencies
+        run: poetry install
       - name: Run Java Unit Tests
         run: ./gradlew test
       - name: Run Lambda Unit Tests
-        run: pytest app/serverless/lambdas/*/tests/
+        run: poetry run pytest app/serverless/canvas-sync-lambda/tests/
 
   system-tests:
     runs-on: ubuntu-latest
     needs: unit-tests
     steps:
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+      - name: Install dependencies
+        run: poetry install
       - name: Start Acceptance Environment
         run: docker-compose -f docker-compose.acceptance.yml up -d
       - name: Wait for services
-        run: sleep 30
+        run: sleep 60
       - name: Run System Tests
-        run: pytest system-tests/
+        run: poetry run pytest system-tests/ -v
 ```
 
 ## 배포 전 필수 조건
@@ -375,8 +386,71 @@ jobs:
 - ✅ 모든 System Tests 통과 (infra → component → integration → scenarios)
 - ✅ 코드 리뷰 승인 (1명 이상)
 
+---
+
+## 테스트 커버리지 현황
+
+### Unit Tests (총 156개)
+
+| 서비스 | 테스트 수 | 위치 |
+|--------|---------|------|
+| User-Service | 30 | `app/backend/user-service/src/test/` |
+| Course-Service | 39 | `app/backend/course-service/src/test/` |
+| Schedule-Service | 87 | `app/backend/schedule-service/src/test/` |
+
+### System Tests (총 86개)
+
+| 단계 | 테스트 수 | 주요 검증 항목 |
+|------|---------|---------------|
+| **infra/** | 10 | LocalStack, SQS 큐, Lambda, MySQL, 서비스 Health |
+| **component/** | 54 | JWT 인증, Canvas 토큰 CRUD, 전체 API CRUD |
+| **integration/** | 15 | User→Lambda, Lambda→Course, Course→Schedule 연동 |
+| **scenarios/** | 5 | 전체 사용자 여정, Todo 관리, 카테고리 관리 E2E |
+
+### Component Tests 상세
+
+| 서비스 | 테스트 파일 | 테스트 수 | 검증 항목 |
+|--------|------------|----------|----------|
+| API Gateway | `test_auth.py` | 7 | JWT 인증, 공개 엔드포인트, 내부 API 차단 |
+| Course-Service | `test_course_api.py` | 3 | 과목/과제 조회 |
+| Course-Service | `test_sync_api.py` | 6 | Canvas 동기화 트리거, 토큰 검증 |
+| Schedule-Service | `test_schedule_api.py` | 5 | 일정 기본 API |
+| Schedule-Service | `test_schedule_crud.py` | 8 | 일정 CRUD 완전 검증 |
+| Schedule-Service | `test_category_crud.py` | 6 | 카테고리 CRUD 완전 검증 |
+| Schedule-Service | `test_todo_api.py` | 11 | Todo CRUD, 상태/진행률 변경, 서브태스크 |
+| User-Service | `test_credentials_api.py` | 3 | Canvas 토큰 등록/조회/삭제 |
+| User-Service | `test_profile_api.py` | 5 | 사용자 프로필, 연동 상태 조회 |
+
+### Integration Tests 상세
+
+| 폴더 | 테스트 파일 | 테스트 수 | 검증 항목 |
+|------|------------|----------|----------|
+| `user_to_lambda/` | `test_canvas_sync_trigger.py` | 3 | User-Service → Lambda 호출, 에러 처리 |
+| `lambda_to_course/` | `test_canvas_sync.py` | 5 | Lambda → SQS → Course-Service 전체 플로우 |
+| `lambda_to_course/` | `test_assignment_event_flow.py` | 4 | 과제 이벤트 CRUD 플로우 |
+| `course_to_schedule/` | `test_assignment_to_schedule.py` | 5 | Course-Service → Schedule-Service 연동 |
+
+### Scenario Tests 상세
+
+| 테스트 파일 | 시나리오 | 검증 항목 |
+|------------|---------|----------|
+| `test_full_user_journey.py` | 전체 사용자 여정 | 회원가입 → Canvas 연동 → 동기화 → 일정 확인 |
+| `test_todo_journey.py` | Todo 관리 | 카테고리 생성 → Todo/서브태스크 생성 → 진행률/상태 관리 → 정리 |
+| `test_category_management.py` | 카테고리 관리 | 다중 카테고리 생성 → 일정/할일 분류 → 색상 커스터마이징 |
+
+### 총 테스트 현황
+
+| 구분 | 테스트 수 |
+|------|---------|
+| Unit Tests | 156 |
+| System Tests | 86 |
+| **Total** | **242** |
+
+---
+
 ## 참고 문서
 
 - **시스템 아키텍처**: [docs/design/system-architecture.md](./system-architecture.md)
 - **SQS 아키텍처**: [docs/design/sqs-architecture.md](./sqs-architecture.md)
 - **Canvas 동기화**: [docs/features/canvas-sync.md](../features/canvas-sync.md)
+- **시스템 테스트 실행**: [system-tests/README.md](../../system-tests/README.md)

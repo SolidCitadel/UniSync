@@ -158,6 +158,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-456"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         first_count = len([s for s in schedules if s.get('sourceId') == 'canvas-assignment-11111-test-user-456'])
 
@@ -179,6 +181,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-456"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         second_count = len([s for s in schedules if s.get('sourceId') == 'canvas-assignment-11111-test-user-456'])
 
@@ -231,6 +235,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-789"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         initial_schedule = next(
             (s for s in schedules if s.get('sourceId') == 'canvas-assignment-44444-test-user-789'),
@@ -272,6 +278,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-789"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
 
         matching_schedules = [s for s in schedules if s.get('sourceId') == 'canvas-assignment-44444-test-user-789']
@@ -328,6 +336,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-999"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         initial_count = len([s for s in schedules if s.get('sourceId') == 'canvas-assignment-66666-test-user-999'])
 
@@ -363,6 +373,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-999"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         final_count = len([s for s in schedules if s.get('sourceId') == 'canvas-assignment-66666-test-user-999'])
 
@@ -412,6 +424,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-category"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         canvas_schedules = [s for s in schedules if s.get('source') == 'CANVAS']
 
@@ -450,6 +464,8 @@ class TestAssignmentToScheduleIntegration:
             headers={"X-Cognito-Sub": "test-user-category"},
             timeout=5
         )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
         schedules = response.json()
         canvas_schedules = [s for s in schedules if s.get('source') == 'CANVAS']
 

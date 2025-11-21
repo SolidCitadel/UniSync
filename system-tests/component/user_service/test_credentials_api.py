@@ -97,12 +97,14 @@ class TestCredentialsApi:
 
         # 먼저 토큰 등록
         print(f"\n[TEST] Canvas 토큰 삭제 API (사전 준비: 토큰 등록)")
-        requests.post(
+        register_response = requests.post(
             f"{gateway_url}/api/v1/integrations/canvas/credentials",
             headers=headers,
             json={"canvasToken": canvas_token},
             timeout=10
         )
+        assert register_response.status_code == 200, \
+            f"Canvas 토큰 등록 실패: {register_response.status_code} - {register_response.text}"
 
         # 토큰 삭제
         response = requests.delete(
@@ -122,6 +124,8 @@ class TestCredentialsApi:
             headers=headers,
             timeout=5
         )
+        assert status_response.status_code == 200, \
+            f"상태 조회 실패: {status_response.status_code}"
 
         status_data = status_response.json()
         if status_data.get("canvas"):

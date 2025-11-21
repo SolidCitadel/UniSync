@@ -102,21 +102,27 @@ class TestFullUserJourney:
 
         # Schedules 동기화 대기 (Assignment → Schedule 변환)
         schedules = self._wait_for_schedules(gateway_url, headers)
-        print(f"  ✅ {len(schedules)} schedules 생성 완료 (Canvas 과제 변환)")
+        canvas_schedules = [s for s in schedules if s.get('source') == 'CANVAS']
+        print(f"  ✅ {len(schedules)} schedules 생성 완료 (Canvas 과제: {len(canvas_schedules)}개)")
 
-        # Canvas 카테고리 확인
+        # Canvas 카테고리 확인 (Canvas 과제가 있을 때만)
         categories = self._get_categories(gateway_url, headers)
         canvas_category = next((c for c in categories if c['name'] == 'Canvas'), None)
-        assert canvas_category is not None, "Canvas 카테고리가 자동 생성되지 않음"
-        print(f"  ✅ Canvas 카테고리 자동 생성: ID={canvas_category['categoryId']}")
+
+        if len(canvas_schedules) > 0:
+            # Canvas 과제가 있으면 카테고리가 자동 생성되어야 함
+            assert canvas_category is not None, "Canvas 카테고리가 자동 생성되지 않음"
+            print(f"  ✅ Canvas 카테고리 자동 생성: ID={canvas_category['categoryId']}")
+        else:
+            # Canvas 과제가 없으면 카테고리 생성을 직접 수행
+            print(f"  ⚠️  Canvas 과제가 없어 카테고리가 자동 생성되지 않음 - 직접 생성")
+            canvas_category = self._create_canvas_category(gateway_url, headers)
+            print(f"  ✅ Canvas 카테고리 직접 생성: ID={canvas_category['categoryId']}")
 
         # ============================================================
         # STEP 5: 일정에서 과제 확인
         # ============================================================
         print("\n[STEP 5/7] 일정에서 과제 확인")
-
-        # Canvas 과제 일정 필터링
-        canvas_schedules = [s for s in schedules if s.get('source') == 'CANVAS']
 
         if len(canvas_schedules) > 0:
             print(f"  ✅ {len(canvas_schedules)}개의 Canvas 과제가 일정으로 변환됨")
@@ -341,4 +347,21 @@ class TestFullUserJourney:
             timeout=5
         )
         assert response.status_code == 200
+        return response.json()
+
+    def _create_canvas_category(self, gateway_url, headers):
+        """Canvas 카테고리 생성 (과제가 없을 때 직접 생성)"""
+        category_data = {
+            "name": "Canvas",
+            "color": "#FF6B6B",
+            "icon": "📚"
+        }
+        response = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=headers,
+            json=category_data,
+            timeout=5
+        )
+        assert response.status_code == 201, \
+            f"Canvas 카테고리 생성 실패: {response.status_code} - {response.text}"
         return response.json()

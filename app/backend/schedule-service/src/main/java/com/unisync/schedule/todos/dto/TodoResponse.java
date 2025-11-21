@@ -1,6 +1,8 @@
 package com.unisync.schedule.todos.dto;
 
 import com.unisync.schedule.common.entity.Todo;
+import com.unisync.schedule.common.entity.Todo.TodoPriority;
+import com.unisync.schedule.common.entity.Todo.TodoStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,11 +43,11 @@ public class TodoResponse {
     @Schema(description = "마감 날짜", example = "2025-04-15")
     private LocalDate dueDate;
 
-    @Schema(description = "할일 상태", example = "TODO", allowableValues = {"TODO", "IN_PROGRESS", "DONE"})
-    private String status;
+    @Schema(description = "할일 상태", example = "TODO")
+    private TodoStatus status;
 
-    @Schema(description = "우선순위", example = "MEDIUM", allowableValues = {"LOW", "MEDIUM", "HIGH"})
-    private String priority;
+    @Schema(description = "우선순위", example = "MEDIUM")
+    private TodoPriority priority;
 
     @Schema(description = "진행률 (0-100)", example = "50")
     private Integer progressPercentage;
@@ -75,8 +77,8 @@ public class TodoResponse {
                 .description(todo.getDescription())
                 .startDate(todo.getStartDate())
                 .dueDate(todo.getDueDate())
-                .status(todo.getStatus().name())
-                .priority(todo.getPriority().name())
+                .status(todo.getStatus())
+                .priority(todo.getPriority())
                 .progressPercentage(todo.getProgressPercentage())
                 .parentTodoId(todo.getParentTodoId())
                 .scheduleId(todo.getScheduleId())

@@ -54,17 +54,25 @@ public class CanvasSyncService {
 
             InvokeResponse invokeResponse = lambdaClient.invoke(invokeRequest);
 
-            // 3. 응답 파싱
+            // 3. Lambda 실행 에러 확인 (예외 발생 시)
             String responsePayload = invokeResponse.payload().asUtf8String();
             log.debug("Lambda response: {}", responsePayload);
 
+            if (invokeResponse.functionError() != null) {
+                log.error("Lambda execution error: {}", responsePayload);
+                throw new CanvasSyncException(
+                        "Lambda execution failed: " + responsePayload
+                );
+            }
+
+            // 4. 응답 파싱
             LambdaResponse lambdaResponse = objectMapper.readValue(
                     responsePayload,
                     LambdaResponse.class
             );
 
-            // 4. Lambda 실행 오류 확인
-            if (lambdaResponse.getStatusCode() != 200) {
+            // 5. Lambda 응답 상태 확인
+            if (lambdaResponse.getStatusCode() == null || lambdaResponse.getStatusCode() != 200) {
                 throw new CanvasSyncException(
                         "Lambda returned non-200 status: " + lambdaResponse.getStatusCode()
                 );

@@ -1,6 +1,8 @@
 package com.unisync.schedule.schedules.dto;
 
 import com.unisync.schedule.common.entity.Schedule;
+import com.unisync.schedule.common.entity.Schedule.ScheduleSource;
+import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -46,14 +48,14 @@ public class ScheduleResponse {
     @Schema(description = "종일 일정 여부", example = "false")
     private Boolean isAllDay;
 
-    @Schema(description = "일정 상태", example = "TODO", allowableValues = {"TODO", "IN_PROGRESS", "DONE"})
-    private String status;
+    @Schema(description = "일정 상태", example = "TODO")
+    private ScheduleStatus status;
 
     @Schema(description = "반복 규칙 (iCal RRULE 형식)", example = "FREQ=WEEKLY;BYDAY=MO,WE,FR")
     private String recurrenceRule;
 
-    @Schema(description = "일정 소스", example = "USER", allowableValues = {"USER", "CANVAS", "GOOGLE_CALENDAR", "TODOIST"})
-    private String source;
+    @Schema(description = "일정 소스", example = "USER")
+    private ScheduleSource source;
 
     @Schema(description = "외부 시스템 ID", example = "canvas-assignment-12345")
     private String sourceId;
@@ -76,9 +78,9 @@ public class ScheduleResponse {
                 .startTime(schedule.getStartTime())
                 .endTime(schedule.getEndTime())
                 .isAllDay(schedule.getIsAllDay())
-                .status(schedule.getStatus().name())
+                .status(schedule.getStatus())
                 .recurrenceRule(schedule.getRecurrenceRule())
-                .source(schedule.getSource().name())
+                .source(schedule.getSource())
                 .sourceId(schedule.getSourceId())
                 .createdAt(schedule.getCreatedAt())
                 .updatedAt(schedule.getUpdatedAt())
