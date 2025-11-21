@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "unisync"
+version = "0.1.0"
+description = "Canvas LMS 연동 학업 일정관리 서비스"
+authors = ["UniSync Team"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+boto3 = "^1.34.0"
+requests = "^2.31.0"
+mysql-connector-python = "^9.1.0"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+pytest-timeout = "^2.3.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+# Pytest configuration (pytest.ini 내용 통합)
+testpaths = ["app/serverless", "system-tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "-p", "no:cacheprovider"
+]
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (may require external services)",
+    "slow: Slow running tests"
+]
