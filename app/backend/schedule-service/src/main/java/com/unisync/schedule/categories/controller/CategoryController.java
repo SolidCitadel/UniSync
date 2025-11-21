@@ -4,6 +4,7 @@ import com.unisync.schedule.categories.dto.CategoryRequest;
 import com.unisync.schedule.categories.dto.CategoryResponse;
 import com.unisync.schedule.categories.service.CategoryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class CategoryController {
 
     @GetMapping
     @Operation(summary = "카테고리 목록 조회")
-    public ResponseEntity<List<CategoryResponse>> getCategories(@RequestHeader("X-Cognito-Sub") String cognitoSub) {
+    public ResponseEntity<List<CategoryResponse>> getCategories(@Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub) {
         return ResponseEntity.ok(categoryService.getCategoriesByUserId(cognitoSub));
     }
 
@@ -36,7 +37,7 @@ public class CategoryController {
     @PostMapping
     @Operation(summary = "카테고리 생성")
     public ResponseEntity<CategoryResponse> createCategory(
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody CategoryRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(categoryService.createCategory(request, cognitoSub));
@@ -46,7 +47,7 @@ public class CategoryController {
     @Operation(summary = "카테고리 수정")
     public ResponseEntity<CategoryResponse> updateCategory(
             @PathVariable Long categoryId,
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody CategoryRequest request
     ) {
         return ResponseEntity.ok(categoryService.updateCategory(categoryId, request, cognitoSub));
@@ -56,7 +57,7 @@ public class CategoryController {
     @Operation(summary = "카테고리 삭제")
     public ResponseEntity<Void> deleteCategory(
             @PathVariable Long categoryId,
-            @RequestHeader("X-Cognito-Sub") String cognitoSub
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
         categoryService.deleteCategory(categoryId, cognitoSub);
         return ResponseEntity.noContent().build();

@@ -1,5 +1,6 @@
 package com.unisync.user.credentials.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,26 +18,31 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Canvas API 토큰 조회 응답 (내부 API 전용, 복호화된 토큰 포함)")
 public class InternalCanvasTokenResponse {
 
     /**
      * 복호화된 Canvas API 토큰
      * Lambda가 Canvas API를 호출할 때 사용
      */
+    @Schema(description = "복호화된 Canvas API 토큰 (Lambda가 Canvas API 호출 시 사용)", example = "1234~ABCDefghIJKLmnopQRSTuvwxYZ0123456789abcdefghijklmnopqrstuvwxyz")
     private String canvasToken;
 
     /**
      * 토큰이 마지막으로 검증된 시각
      */
+    @Schema(description = "토큰이 마지막으로 검증된 시각", example = "2025-01-15T10:30:00")
     private LocalDateTime lastValidatedAt;
 
     /**
      * Canvas 사용자 ID (외부 시스템 ID)
      */
+    @Schema(description = "Canvas 사용자 ID", example = "12345")
     private String externalUserId;
 
     /**
      * Canvas 로그인 ID (학번 등)
      */
+    @Schema(description = "Canvas 로그인 ID (학번 등)", example = "2024123456")
     private String externalUsername;
 }

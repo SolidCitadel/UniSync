@@ -3,6 +3,7 @@ package com.unisync.course.course.controller;
 import com.unisync.course.assignment.dto.AssignmentResponse;
 import com.unisync.course.course.dto.CourseResponse;
 import com.unisync.course.course.service.CourseService;
+import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +25,7 @@ public class CourseController {
      */
     @GetMapping
     public ResponseEntity<List<CourseResponse>> getUserCourses(
-            @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
+            @Parameter(hidden = true) @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
         List<CourseResponse> courses = courseService.getUserCourses(cognitoSub);
         return ResponseEntity.ok(courses);

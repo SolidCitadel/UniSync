@@ -6,6 +6,7 @@ import com.unisync.schedule.schedules.dto.ScheduleResponse;
 import com.unisync.schedule.schedules.dto.UpdateScheduleStatusRequest;
 import com.unisync.schedule.schedules.service.ScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class ScheduleController {
     @GetMapping
     @Operation(summary = "일정 목록 조회", description = "사용자의 일정 목록을 조회합니다.")
     public ResponseEntity<List<ScheduleResponse>> getSchedules(
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
@@ -50,7 +51,7 @@ public class ScheduleController {
     @PostMapping
     @Operation(summary = "일정 생성")
     public ResponseEntity<ScheduleResponse> createSchedule(
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody ScheduleRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(scheduleService.createSchedule(request, cognitoSub));
@@ -60,7 +61,7 @@ public class ScheduleController {
     @Operation(summary = "일정 수정")
     public ResponseEntity<ScheduleResponse> updateSchedule(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody ScheduleRequest request
     ) {
         return ResponseEntity.ok(scheduleService.updateSchedule(scheduleId, request, cognitoSub));
@@ -70,7 +71,7 @@ public class ScheduleController {
     @Operation(summary = "일정 상태 변경")
     public ResponseEntity<ScheduleResponse> updateScheduleStatus(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
             @Valid @RequestBody UpdateScheduleStatusRequest request
     ) {
         return ResponseEntity.ok(scheduleService.updateScheduleStatus(scheduleId, request.getStatus(), cognitoSub));
@@ -80,7 +81,7 @@ public class ScheduleController {
     @Operation(summary = "일정 삭제")
     public ResponseEntity<Void> deleteSchedule(
             @PathVariable Long scheduleId,
-            @RequestHeader("X-Cognito-Sub") String cognitoSub
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub
     ) {
         scheduleService.deleteSchedule(scheduleId, cognitoSub);
         return ResponseEntity.noContent().build();

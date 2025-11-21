@@ -41,13 +41,13 @@ public class UserController {
             description = "API Gateway가 JWT를 검증하고 전달한 X-Cognito-Sub 헤더로 사용자 정보 조회"
     )
     public ResponseEntity<UserResponse> getMyInfo(
-            @Parameter(description = "API Gateway가 추가한 Cognito Sub (UUID)", required = true)
+            @Parameter(hidden = true)
             @RequestHeader("X-Cognito-Sub") String cognitoSub,
 
-            @Parameter(description = "API Gateway가 추가한 사용자 이메일")
+            @Parameter(hidden = true)
             @RequestHeader(value = "X-User-Email", required = false) String email,
 
-            @Parameter(description = "API Gateway가 추가한 사용자 이름")
+            @Parameter(hidden = true)
             @RequestHeader(value = "X-User-Name", required = false) String name
     ) {
         log.info("사용자 정보 조회 요청: cognitoSub={}, email={}, name={}", cognitoSub, email, name);
