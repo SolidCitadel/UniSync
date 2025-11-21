@@ -1,13 +1,11 @@
 package com.unisync.user.credentials.service;
 
-import com.unisync.shared.dto.sqs.UserTokenRegisteredEvent;
 import com.unisync.user.common.config.EncryptionService;
 import com.unisync.user.common.entity.CredentialProvider;
 import com.unisync.user.common.entity.Credentials;
 import com.unisync.user.common.entity.User;
 import com.unisync.user.common.repository.CredentialsRepository;
 import com.unisync.user.common.repository.UserRepository;
-import com.unisync.user.common.service.SqsPublisher;
 import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.credentials.dto.CanvasTokenResponse;
 import com.unisync.user.credentials.dto.InternalCanvasTokenResponse;
@@ -16,7 +14,6 @@ import com.unisync.user.credentials.dto.RegisterCanvasTokenResponse;
 import com.unisync.user.credentials.exception.CanvasTokenNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,18 +27,18 @@ public class CredentialsService {
     private final CredentialsRepository credentialsRepository;
     private final EncryptionService encryptionService;
     private final CanvasApiClient canvasApiClient;
-    private final SqsPublisher sqsPublisher;
     private final UserRepository userRepository;
 
-    @Value("${aws.sqs.queues.user-token-registered}")
-    private String userTokenRegisteredQueue;
+    // Phase 1: SQS 발행 제거로 인해 sqsPublisher, userTokenRegisteredQueue 삭제
+    // Phase 2에서 필요 시 재추가
 
     /**
-     * Canvas 토큰을 등록합니다.
+     * Canvas 토큰을 등록합니다 (Phase 1: 수동 동기화).
      * 1. Canvas API로 토큰 유효성 검증 + 프로필 조회
      * 2. AES-256으로 암호화하여 저장
      * 3. 연동 정보 저장 (is_connected, external_user_id, external_username)
-     * 4. SQS 이벤트 발행 (user-token-registered)
+     *
+     * 참고: 사용자가 명시적으로 "동기화" 버튼 클릭 시 동기화 시작 (POST /v1/sync/canvas)
      *
      * @param cognitoSub Cognito 사용자 ID (JWT에서 추출)
      * @param request    토큰 등록 요청

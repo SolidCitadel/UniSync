@@ -7,6 +7,7 @@ import com.unisync.user.auth.exception.InvalidCredentialsException;
 import com.unisync.user.auth.exception.UserNotFoundException;
 import com.unisync.user.credentials.exception.CanvasTokenNotFoundException;
 import com.unisync.user.credentials.exception.InvalidCanvasTokenException;
+import com.unisync.user.sync.exception.CanvasSyncException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -91,6 +92,16 @@ public class GlobalExceptionHandler {
         log.error("Canvas 토큰을 찾을 수 없음: {}", e.getMessage());
         ErrorResponse errorResponse = new ErrorResponse("CANVAS_TOKEN_NOT_FOUND", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    /**
+     * Canvas 동기화 실패 예외 처리
+     */
+    @ExceptionHandler(CanvasSyncException.class)
+    public ResponseEntity<ErrorResponse> handleCanvasSyncError(CanvasSyncException e) {
+        log.error("Canvas 동기화 실패: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("CANVAS_SYNC_ERROR", e.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
 
     /**

@@ -22,18 +22,17 @@ spring:
 aws:
   region: ${AWS_REGION}
   credentials:
-    access-key: test
-    secret-key: test
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
   cognito:
     user-pool-id: ${COGNITO_USER_POOL_ID}
     client-id: ${COGNITO_CLIENT_ID}
     region: ${AWS_REGION}
-    endpoint: http://localhost:4566
+    endpoint: ${COGNITO_ENDPOINT}
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
     region: ${AWS_REGION}
     queues:
-      user-token-registered: ${SQS_USER_TOKEN_REGISTERED_QUEUE}
 
 # UniSync Configuration
 unisync:

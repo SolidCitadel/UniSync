@@ -32,11 +32,11 @@ public class CourseEnrollmentListener {
     private final ObjectMapper objectMapper;
 
     /**
-     * course-enrollment-queue에서 메시지를 수신하여 Course 및 Enrollment 생성
+     * lambda-to-courseservice-enrollments 큐에서 메시지를 수신하여 Course 및 Enrollment 생성
      *
      * @param messageBody JSON 형식의 CourseEnrollmentEvent 메시지
      */
-    @SqsListener(value = "course-enrollment-queue")
+    @SqsListener(value = "lambda-to-courseservice-enrollments")
     public void receiveCourseEnrollment(String messageBody) {
         log.info("📥 Received course-enrollment event");
 
@@ -91,18 +91,8 @@ public class CourseEnrollmentListener {
                         event.getCognitoSub(), course.getId());
             }
 
-            // 4. 새 Course면 Assignment 동기화 필요
-            if (isNewCourse) {
-                AssignmentSyncNeededEvent syncEvent = AssignmentSyncNeededEvent.builder()
-                        .courseId(course.getId())
-                        .canvasCourseId(course.getCanvasCourseId())
-                        .leaderCognitoSub(event.getCognitoSub())
-                        .build();
-
-                sqsTemplate.send("assignment-sync-needed-queue", syncEvent);
-
-                log.info("   📤 Published assignment-sync-needed event for courseId={}", course.getId());
-            }
+            // Phase 1: Assignment 동기화는 Lambda가 이미 처리함 (수동 동기화)
+            // Assignment 동기화 필요 이벤트 발행 제거 (기존: assignment-sync-needed-queue)
 
             log.info("✅ Successfully processed course-enrollment event");
 

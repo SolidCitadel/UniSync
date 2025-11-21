@@ -19,7 +19,6 @@ aws:
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
     queues:
-      user-token-registered: ${SQS_USER_TOKEN_REGISTERED_QUEUE}
 
 # Logging (운영과 유사한 레벨)
 logging:

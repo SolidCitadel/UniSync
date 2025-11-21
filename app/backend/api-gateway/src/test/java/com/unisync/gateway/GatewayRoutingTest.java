@@ -156,9 +156,9 @@ class GatewayRoutingTest {
                 .expectBody()
                 .jsonPath("$.message").isEqualTo("User created");
 
-        // Then: 재작성된 경로 검증
+        // Then: 재작성된 경로 검증 (/api만 제거, /v1은 유지)
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/auth/signup");
+        assertThat(request.getPath()).isEqualTo("/v1/auth/signup");
         assertThat(request.getMethod()).isEqualTo("POST");
     }
 
@@ -179,11 +179,11 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/auth/signin");
+        assertThat(request.getPath()).isEqualTo("/v1/auth/signin");
     }
 
     @Test
-    @DisplayName("User Service: /api/v1/users/123 → /users/123 경로 재작성")
+    @DisplayName("User Service: /api/v1/users/123 → /v1/users/123 경로 재작성")
     void testUsersPathRewrite() throws InterruptedException {
         // Given
         userService.enqueue(new MockResponse()
@@ -198,7 +198,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/users/123");
+        assertThat(request.getPath()).isEqualTo("/v1/users/123");
     }
 
     @Test
@@ -216,7 +216,7 @@ class GatewayRoutingTest {
 
         // Then: 헤더가 백엔드 서비스로 전달되었는지 확인
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/users/profile");
+        assertThat(request.getPath()).isEqualTo("/v1/users/profile");
         assertThat(request.getHeader("Authorization")).isEqualTo("Bearer test-jwt-token");
     }
 
@@ -238,7 +238,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = courseService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/courses");
+        assertThat(request.getPath()).isEqualTo("/v1/courses");
     }
 
     @Test
@@ -257,7 +257,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = courseService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/courses/456");
+        assertThat(request.getPath()).isEqualTo("/v1/courses/456");
     }
 
     // ==================== Course Service - Sync 경로 테스트 ====================
@@ -278,7 +278,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = courseService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/sync/status");
+        assertThat(request.getPath()).isEqualTo("/v1/sync/status");
     }
 
     // ==================== Schedule Service 테스트 ====================
@@ -299,7 +299,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = scheduleService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/schedules");
+        assertThat(request.getPath()).isEqualTo("/v1/schedules");
     }
 
     // ==================== Todos/Categories 경로 테스트 ====================
@@ -320,7 +320,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = scheduleService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/todos");
+        assertThat(request.getPath()).isEqualTo("/v1/todos");
     }
 
     @Test
@@ -339,7 +339,7 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = scheduleService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/categories");
+        assertThat(request.getPath()).isEqualTo("/v1/categories");
     }
 
     // ==================== 404 테스트 ====================
@@ -380,7 +380,7 @@ class GatewayRoutingTest {
 
         // Then: 경로는 재작성되고 Query Parameter는 유지
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/users?page=1&size=10");
+        assertThat(request.getPath()).isEqualTo("/v1/users?page=1&size=10");
     }
 
     // ==================== 복잡한 경로 테스트 ====================
@@ -401,6 +401,6 @@ class GatewayRoutingTest {
 
         // Then
         RecordedRequest request = userService.takeRequest();
-        assertThat(request.getPath()).isEqualTo("/users/123/profile");
+        assertThat(request.getPath()).isEqualTo("/v1/users/123/profile");
     }
 }

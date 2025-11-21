@@ -21,13 +21,15 @@ spring:
         format_sql: true
     open-in-view: false
 
-# AWS Cognito Configuration
+# AWS Configuration
 aws:
   cognito:
     user-pool-id: ${COGNITO_USER_POOL_ID}
     client-id: ${COGNITO_CLIENT_ID}
     region: ${COGNITO_REGION}
     endpoint: ${COGNITO_ENDPOINT}
+  lambda:
+    canvas-sync-function-name: ${AWS_LAMBDA_CANVAS_SYNC_FUNCTION_NAME}
 
 # UniSync Configuration
 unisync:

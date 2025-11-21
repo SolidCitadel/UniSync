@@ -35,15 +35,14 @@ services:
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
-    tmpfs:
-      - /var/lib/localstack  # 익명 볼륨 대신 tmpfs 사용
     networks:
       - acceptance-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      test: ["CMD", "test", "-f", "/tmp/localstack-init-complete"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 30
+      start_period: 60s
 
   # MySQL - 테스트용 휘발성 DB
   mysql:
@@ -83,6 +82,10 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -111,6 +114,10 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -141,6 +148,10 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -173,6 +184,11 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    user: root  # entrypoint 실행 위해 임시로 root 필요
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       user-service:
         condition: service_healthy

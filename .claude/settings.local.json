@@ -5,7 +5,9 @@
       "Bash(cat:*)",
       "Bash(./gradlew test:*)",
       "Bash(docker-compose:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(docker logs:*)"
     ],
     "deny": [],
     "ask": []

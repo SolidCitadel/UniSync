@@ -16,7 +16,7 @@ spring:
         cors-configurations:
           '[/**]':
             allowedOrigins:
-              - "http://localhost:3000"  # React 개발 서버
+              - ${CORS_ALLOWED_ORIGIN}
             allowedMethods:
               - GET
               - POST

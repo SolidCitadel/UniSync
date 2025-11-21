@@ -26,10 +26,10 @@ sqs:
     assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
     submission-events: ${SQS_SUBMISSION_EVENTS_QUEUE}
 
-# External Service URLs (로컬 개발)
+# External Service URLs (환경변수에서 주입)
 services:
   user-service:
-    url: http://localhost:8081
+    url: ${USER_SERVICE_URL}
 
 # Logging (상세 로깅)
 logging:
