@@ -17,12 +17,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from typing import Generator
 
-# 환경변수 로드 (docker-compose.acceptance.yml과 동일한 순서)
-# pytest는 호스트에서 실행되므로 localhost 접속
+# 환경변수 로드
+# pytest는 호스트에서 실행
 project_root = Path(__file__).parent.parent
 load_dotenv(project_root / '.env.local')  # 비밀 + localhost
-load_dotenv(project_root / '.env.common', override=False)  # 공통 (덮어쓰지 않음)
-load_dotenv(project_root / '.env.acceptance', override=True)  # 테스트 오버라이드
+load_dotenv(project_root / '.env.common')  # compose 환경으로 덮어씌움
+load_dotenv(project_root / '.env.acceptance', override=True)  # 향후 추가 대비
 
 
 # =============================================================================
