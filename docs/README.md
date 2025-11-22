@@ -23,6 +23,8 @@ UniSync 프로젝트의 모든 문서를 담고 있습니다.
 - [canvas-sync.md](features/canvas-sync.md) - **Canvas LMS 동기화 상세 설계 (✅ Phase 1 구현 완료)**
 - [assignment-to-schedule.md](features/assignment-to-schedule.md) - **과제 → 일정/할일 자동 변환 (✅ Phase 1 구현 완료)**
 - [schedule-management.md](features/schedule-management.md) - 일정 및 할일 관리 기능 설계
+- [social-and-groups.md](features/social-and-groups.md) - **소셜 기능 및 그룹 관리 (친구 추가, 그룹 생성/관리, 권한)**
+- [schedule-coordination.md](features/schedule-coordination.md) - **그룹 일정 조율 (공강 찾기, 시간 블록 계산, 그룹 일정 생성)**
 - [google-calendar-integration.md](features/google-calendar-integration.md) - Google Calendar 연동 구현 계획
 
 ### 📝 [adr/](adr/)

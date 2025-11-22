@@ -7,6 +7,7 @@ import com.unisync.schedule.categories.exception.DuplicateCategoryException;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,13 +22,17 @@ import java.util.stream.Collectors;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final GroupPermissionService groupPermissionService;
 
     /**
      * 카테고리 생성
      */
     @Transactional
     public CategoryResponse createCategory(CategoryRequest request, String cognitoSub) {
-        log.info("카테고리 생성 요청 - cognitoSub: {}, name: {}", cognitoSub, request.getName());
+        log.info("카테고리 생성 요청 - cognitoSub: {}, name: {}, groupId: {}", cognitoSub, request.getName(), request.getGroupId());
+
+        // 그룹 카테고리인 경우 쓰기 권한 검증
+        groupPermissionService.validateWritePermission(request.getGroupId(), cognitoSub);
 
         // 개인 카테고리인 경우 중복 체크
         if (request.getGroupId() == null) {
@@ -186,11 +191,14 @@ public class CategoryService {
     }
 
     /**
-     * 카테고리 소유권 검증
+     * 카테고리 소유권/권한 검증
      */
     private void validateCategoryOwnership(Category category, String cognitoSub) {
-        // 그룹 카테고리가 아니고, cognitoSub가 일치하지 않으면 권한 없음
-        if (category.getGroupId() == null && !category.getCognitoSub().equals(cognitoSub)) {
+        if (category.getGroupId() != null) {
+            // 그룹 카테고리: User-Service에서 권한 확인
+            groupPermissionService.validateWritePermission(category.getGroupId(), cognitoSub);
+        } else if (!category.getCognitoSub().equals(cognitoSub)) {
+            // 개인 카테고리: cognitoSub 일치 확인
             throw new UnauthorizedAccessException("해당 카테고리에 접근할 권한이 없습니다.");
         }
     }

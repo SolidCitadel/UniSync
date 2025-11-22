@@ -5,6 +5,7 @@ import com.unisync.schedule.common.entity.Todo.TodoStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.TodoRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.todos.dto.TodoRequest;
 import com.unisync.schedule.todos.dto.TodoResponse;
 import com.unisync.schedule.todos.exception.InvalidTodoException;
@@ -26,13 +27,17 @@ public class TodoService {
 
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
+    private final GroupPermissionService groupPermissionService;
 
     /**
      * 할일 생성
      */
     @Transactional
     public TodoResponse createTodo(TodoRequest request, String cognitoSub) {
-        log.info("할일 생성 요청 - cognitoSub: {}, title: {}", cognitoSub, request.getTitle());
+        log.info("할일 생성 요청 - cognitoSub: {}, title: {}, groupId: {}", cognitoSub, request.getTitle(), request.getGroupId());
+
+        // 그룹 할일인 경우 쓰기 권한 검증
+        groupPermissionService.validateWritePermission(request.getGroupId(), cognitoSub);
 
         // 날짜 유효성 검증
         validateTodoDates(request.getStartDate(), request.getDueDate());
@@ -328,11 +333,14 @@ public class TodoService {
     }
 
     /**
-     * 할일 소유권 검증
+     * 할일 소유권/권한 검증
      */
     private void validateTodoOwnership(Todo todo, String cognitoSub) {
-        // 그룹 할일이 아니고, cognitoSub가 일치하지 않으면 권한 없음
-        if (todo.getGroupId() == null && !todo.getCognitoSub().equals(cognitoSub)) {
+        if (todo.getGroupId() != null) {
+            // 그룹 할일: User-Service에서 권한 확인
+            groupPermissionService.validateWritePermission(todo.getGroupId(), cognitoSub);
+        } else if (!todo.getCognitoSub().equals(cognitoSub)) {
+            // 개인 할일: cognitoSub 일치 확인
             throw new UnauthorizedAccessException("해당 할일에 접근할 권한이 없습니다.");
         }
     }

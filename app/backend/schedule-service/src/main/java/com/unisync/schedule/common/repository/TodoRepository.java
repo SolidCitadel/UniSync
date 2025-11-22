@@ -63,4 +63,10 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     // AI 생성 할일 조회
     List<Todo> findByCognitoSubAndIsAiGenerated(String cognitoSub, Boolean isAiGenerated);
+
+    // 그룹 할일 삭제 (그룹 삭제 시)
+    void deleteByGroupId(Long groupId);
+
+    // 그룹 할일 존재 여부
+    boolean existsByGroupId(Long groupId);
 }

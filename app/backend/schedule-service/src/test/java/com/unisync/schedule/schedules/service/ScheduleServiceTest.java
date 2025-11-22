@@ -8,6 +8,7 @@ import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.ScheduleRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
 import com.unisync.schedule.schedules.exception.InvalidScheduleException;
@@ -37,6 +38,9 @@ class ScheduleServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private GroupPermissionService groupPermissionService;
 
     @InjectMocks
     private ScheduleService scheduleService;

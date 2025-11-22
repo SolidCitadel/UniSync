@@ -38,6 +38,11 @@ unisync:
   api-keys:
     canvas-sync-lambda: ${CANVAS_SYNC_API_KEY}
 
+# Internal Service URLs
+services:
+  schedule-service:
+    url: ${SCHEDULE_SERVICE_URL}
+
 # Canvas Configuration
 canvas:
   base-url: ${CANVAS_BASE_URL}

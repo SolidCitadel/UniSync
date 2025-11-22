@@ -7,6 +7,7 @@ import com.unisync.schedule.categories.exception.DuplicateCategoryException;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class CategoryServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private GroupPermissionService groupPermissionService;
 
     @InjectMocks
     private CategoryService categoryService;

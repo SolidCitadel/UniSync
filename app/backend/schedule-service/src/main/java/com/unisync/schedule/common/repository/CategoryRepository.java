@@ -30,4 +30,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     // 카테고리명으로 조회 (사용자)
     Optional<Category> findByCognitoSubAndName(String cognitoSub, String name);
+
+    // 그룹 카테고리 삭제 (그룹 삭제 시)
+    void deleteByGroupId(Long groupId);
+
+    // 그룹 카테고리 존재 여부
+    boolean existsByGroupId(Long groupId);
 }

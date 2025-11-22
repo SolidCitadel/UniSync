@@ -27,8 +27,10 @@ system-tests/
 │   │   └── test_todo_api.py             # Todo CRUD, 서브태스크
 │   └── user_service/
 │       ├── test_credentials_api.py      # Canvas 토큰 관리
-│       └── test_profile_api.py          # 사용자 프로필, 연동 상태
-├── integration/                         # 3단계: 서비스 간 연동 검증 (15개)
+│       ├── test_profile_api.py          # 사용자 프로필, 연동 상태
+│       ├── test_friend_api.py           # 친구 관리 API
+│       └── test_group_api.py            # 그룹 관리 API
+├── integration/                         # 3단계: 서비스 간 연동 검증
 │   ├── user_to_lambda/                  # User-Service → Lambda
 │   │   └── test_canvas_sync_trigger.py  # 동기화 API → Lambda 호출
 │   ├── lambda_to_course/                # Lambda → Course-Service
@@ -36,10 +38,12 @@ system-tests/
 │   │   └── test_assignment_event_flow.py
 │   └── course_to_schedule/              # Course-Service → Schedule-Service
 │       └── test_assignment_to_schedule.py
-└── scenarios/                           # 4단계: E2E 사용자 시나리오 (5개)
+└── scenarios/                           # 4단계: E2E 사용자 시나리오
     ├── test_full_user_journey.py        # 전체 사용자 여정
     ├── test_todo_journey.py             # Todo 관리 워크플로우
-    └── test_category_management.py      # 카테고리 관리 워크플로우
+    ├── test_category_management.py      # 카테고리 관리 워크플로우
+    ├── test_friend_management.py        # 친구 관리 워크플로우
+    └── test_group_management.py         # 그룹 관리 워크플로우
 ```
 
 **총 테스트 수: 86개** (Unit Tests 156개 별도)

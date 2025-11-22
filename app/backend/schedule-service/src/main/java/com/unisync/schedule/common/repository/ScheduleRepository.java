@@ -52,4 +52,10 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 중복 체크 (Canvas 과제 등)
     boolean existsBySourceAndSourceId(ScheduleSource source, String sourceId);
+
+    // 그룹 일정 삭제 (그룹 삭제 시)
+    void deleteByGroupId(Long groupId);
+
+    // 그룹 일정 존재 여부
+    boolean existsByGroupId(Long groupId);
 }

@@ -235,6 +235,34 @@ def schedule_db_connection():
             time.sleep(1)
 
 
+@pytest.fixture(scope="session")
+def user_db_connection():
+    """MySQL 연결 fixture (User-Service DB)"""
+    max_retries = 30
+    host = os.environ['MYSQL_HOST']
+    port = int(os.environ['MYSQL_PORT'])
+    user = os.environ['MYSQL_USER']
+    password = os.environ['MYSQL_PASSWORD']
+    database = os.environ['USER_SERVICE_DB_NAME']
+
+    for i in range(max_retries):
+        try:
+            conn = mysql.connector.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                database=database
+            )
+            yield conn
+            conn.close()
+            return
+        except mysql.connector.Error as e:
+            if i == max_retries - 1:
+                raise
+            time.sleep(1)
+
+
 # =============================================================================
 # 데이터 정리 Fixtures
 # =============================================================================
@@ -280,6 +308,29 @@ def clean_schedule_database(schedule_db_connection):
     cursor.execute("TRUNCATE TABLE categories")
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
     schedule_db_connection.commit()
+    cursor.close()
+
+
+@pytest.fixture(scope="function")
+def clean_user_database(user_db_connection):
+    """각 테스트 전후 User-Service DB 정리 (friend/group 데이터만)"""
+    cursor = user_db_connection.cursor()
+
+    cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+    cursor.execute("TRUNCATE TABLE group_members")
+    cursor.execute("TRUNCATE TABLE `groups`")
+    cursor.execute("TRUNCATE TABLE friendships")
+    cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+    user_db_connection.commit()
+
+    yield
+
+    cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+    cursor.execute("TRUNCATE TABLE group_members")
+    cursor.execute("TRUNCATE TABLE `groups`")
+    cursor.execute("TRUNCATE TABLE friendships")
+    cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+    user_db_connection.commit()
     cursor.close()
 
 
@@ -346,34 +397,61 @@ def test_user_credentials():
 
 
 @pytest.fixture(scope="function")
-def jwt_auth_tokens(test_user_credentials, service_urls):
+def jwt_auth_tokens(service_urls):
     """
-    회원가입 및 로그인을 통해 JWT 토큰 획득
-    각 테스트마다 새로운 사용자를 생성하여 독립성 보장
+    회원가입 및 로그인을 통해 JWT 토큰 획득 (멀티 유저 지원)
+    각 테스트마다 새로운 사용자들을 생성하여 독립성 보장
+
+    Returns:
+        dict with keys: user1, user1_sub, user2, user2_sub
     """
+    import uuid
     gateway_url = service_urls.get("gateway", "http://localhost:8080")
 
-    print(f"\n[Setup] JWT 인증 - 회원가입 중...")
+    def create_user(user_name: str) -> dict:
+        unique_id = uuid.uuid4().hex[:8]
+        credentials = {
+            "email": f"e2e-{user_name}-{unique_id}@unisync.com",
+            "password": "TestPassword123!",
+            "name": f"E2E {user_name.title()} User"
+        }
 
-    # 회원가입 (API Gateway 경유)
-    signup_response = requests.post(
-        f"{gateway_url}/api/v1/auth/signup",
-        json=test_user_credentials,
-        timeout=10
-    )
+        signup_response = requests.post(
+            f"{gateway_url}/api/v1/auth/signup",
+            json=credentials,
+            timeout=10
+        )
 
-    if signup_response.status_code != 201:
-        pytest.fail(f"회원가입 실패: {signup_response.status_code} - {signup_response.text}")
+        if signup_response.status_code != 201:
+            pytest.fail(f"회원가입 실패 ({user_name}): {signup_response.status_code} - {signup_response.text}")
 
-    signup_data = signup_response.json()
-    print(f"[Setup] 회원가입 완료: cognitoSub={signup_data.get('cognitoSub')}")
+        signup_data = signup_response.json()
+        print(f"[Setup] {user_name} 회원가입 완료: cognitoSub={signup_data.get('cognitoSub')}")
+
+        return {
+            "id_token": signup_data.get("idToken"),
+            "access_token": signup_data.get("accessToken"),
+            "refresh_token": signup_data.get("refreshToken"),
+            "cognito_sub": signup_data.get("cognitoSub"),
+            "email": signup_data.get("email")
+        }
+
+    print(f"\n[Setup] JWT 인증 - 멀티 유저 회원가입 중...")
+
+    user1_data = create_user("user1")
+    user2_data = create_user("user2")
 
     return {
-        "id_token": signup_data.get("idToken"),
-        "access_token": signup_data.get("accessToken"),
-        "refresh_token": signup_data.get("refreshToken"),
-        "cognito_sub": signup_data.get("cognitoSub"),
-        "email": signup_data.get("email")
+        "user1": user1_data["id_token"],
+        "user1_sub": user1_data["cognito_sub"],
+        "user2": user2_data["id_token"],
+        "user2_sub": user2_data["cognito_sub"],
+        # 하위 호환성 유지
+        "id_token": user1_data["id_token"],
+        "access_token": user1_data["access_token"],
+        "refresh_token": user1_data["refresh_token"],
+        "cognito_sub": user1_data["cognito_sub"],
+        "email": user1_data["email"]
     }
 
 

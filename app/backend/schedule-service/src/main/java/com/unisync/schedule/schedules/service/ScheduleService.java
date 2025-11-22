@@ -6,6 +6,7 @@ import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.ScheduleRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
 import com.unisync.schedule.schedules.exception.InvalidScheduleException;
@@ -27,13 +28,17 @@ public class ScheduleService {
 
     private final ScheduleRepository scheduleRepository;
     private final CategoryRepository categoryRepository;
+    private final GroupPermissionService groupPermissionService;
 
     /**
      * 일정 생성
      */
     @Transactional
     public ScheduleResponse createSchedule(ScheduleRequest request, String cognitoSub) {
-        log.info("일정 생성 요청 - cognitoSub: {}, title: {}", cognitoSub, request.getTitle());
+        log.info("일정 생성 요청 - cognitoSub: {}, title: {}, groupId: {}", cognitoSub, request.getTitle(), request.getGroupId());
+
+        // 그룹 일정인 경우 쓰기 권한 검증
+        groupPermissionService.validateWritePermission(request.getGroupId(), cognitoSub);
 
         // 날짜 유효성 검증
         validateScheduleDates(request.getStartTime(), request.getEndTime());
@@ -199,11 +204,14 @@ public class ScheduleService {
     }
 
     /**
-     * 일정 소유권 검증
+     * 일정 소유권/권한 검증
      */
     private void validateScheduleOwnership(Schedule schedule, String cognitoSub) {
-        // 그룹 일정이 아니고, cognitoSub가 일치하지 않으면 권한 없음
-        if (schedule.getGroupId() == null && !schedule.getCognitoSub().equals(cognitoSub)) {
+        if (schedule.getGroupId() != null) {
+            // 그룹 일정: User-Service에서 권한 확인
+            groupPermissionService.validateWritePermission(schedule.getGroupId(), cognitoSub);
+        } else if (!schedule.getCognitoSub().equals(cognitoSub)) {
+            // 개인 일정: cognitoSub 일치 확인
             throw new UnauthorizedAccessException("해당 일정에 접근할 권한이 없습니다.");
         }
     }

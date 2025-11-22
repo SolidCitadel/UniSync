@@ -8,6 +8,7 @@ import com.unisync.schedule.common.entity.Todo.TodoStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.TodoRepository;
+import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.todos.dto.TodoRequest;
 import com.unisync.schedule.todos.dto.TodoResponse;
 import com.unisync.schedule.todos.exception.InvalidTodoException;
@@ -37,6 +38,9 @@ class TodoServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private GroupPermissionService groupPermissionService;
 
     @InjectMocks
     private TodoService todoService;
