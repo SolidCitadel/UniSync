@@ -1,9 +1,9 @@
-# docker-compose.demo.yml - 데모 환경
-# Usage: docker-compose -f docker-compose.demo.yml up
+# docker-compose.demo.yml - 데모 환경 (Persistent)
+# Usage: docker-compose -f docker-compose.demo.yml up --build
 #
 # 용도:
-# - 프론트엔드/인프라 담당자가 전체 시스템 확인
-# - DockerHub 이미지 사용 (빌드 불필요)
+# - 전체 시스템 데모 및 시연
+# - 소스 코드 기반 빌드 및 실행 (docker-compose.acceptance.yml 기반)
 # - 영구 볼륨 사용 (데이터 유지)
 #
 # 환경변수:
@@ -11,9 +11,9 @@
 # - .env.common (앱 컨테이너 기본값)
 # - .env.demo (demo 오버라이드)
 #
-# 참고:
-# - LocalStack 초기화 후 .env의 Cognito 값 업데이트 필요
-# - .env.demo의 API 키들을 실제 값으로 변경 필요
+# 정리:
+# - docker-compose -f docker-compose.demo.yml down (데이터 유지)
+# - docker-compose -f docker-compose.demo.yml down -v (데이터 삭제)
 
 services:
   # LocalStack - AWS 서비스 로컬 에뮬레이션
@@ -24,28 +24,28 @@ services:
       - "4566:4566"
     env_file:
       - .env.local  # 로컬 종속 비밀 (LOCALSTACK_AUTH_TOKEN 등)
-      - .env.common  # Lambda가 사용할 공통 설정 (CANVAS_API_BASE_URL, USER_SERVICE_URL 등)
+      - .env.common  # Lambda가 사용할 공통 설정
       - .env.demo
     environment:
-      - SERVICES=sqs,stepfunctions,lambda,s3,secretsmanager,events,cognito-idp,elasticloadbalancingv2,ec2
+      - SERVICES=sqs,lambda,cognito-idp,iam
       - DEBUG=1
-      - PERSISTENCE=1
+      - PERSISTENCE=1  # 데이터 영구 저장 활성화
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_EXECUTOR=docker-reuse
-      - LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT=30
     volumes:
       - ".:/workspace"
       - "./localstack-init:/etc/localstack/init/ready.d"
       - "./app/serverless:/var/lib/localstack/serverless"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "demo-localstack-data:/var/lib/localstack"
+      - "demo-localstack-data:/var/lib/localstack" # 영구 볼륨 마운트
     networks:
       - demo-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "test", "-f", "/tmp/localstack-init-complete"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
 
   # MySQL - 영구 데이터 저장
   mysql:
@@ -59,29 +59,36 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - TZ=Asia/Seoul
     volumes:
-      - demo-mysql-data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
+      - demo-mysql-data:/var/lib/mysql # 영구 볼륨 마운트 (tmpfs 제거)
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
       - demo-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # User Service - DockerHub 이미지
+  # User Service
   user-service:
-    image: solidcitadel/unisync-user-service:latest
+    build:
+      context: ./app
+      dockerfile: backend/user-service/Dockerfile
     container_name: unisync-demo-user-service
     ports:
       - "8081:8081"
     env_file:
-      - .env.local  # 비밀 (COGNITO_USER_POOL_ID 등)
-      - .env.common # 공통 설정
-      - .env.demo   # demo 오버라이드
+      - .env.local
+      - .env.common
+      - .env.demo
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -91,23 +98,30 @@ services:
       - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
-  # Course Service - DockerHub 이미지
+  # Course Service
   course-service:
-    image: solidcitadel/unisync-course-service:latest
+    build:
+      context: ./app
+      dockerfile: backend/course-service/Dockerfile
     container_name: unisync-demo-course-service
     ports:
       - "8082:8082"
     env_file:
-      - .env.local  # 비밀 (COGNITO_USER_POOL_ID 등)
-      - .env.common # 공통 설정
-      - .env.demo   # demo 오버라이드
+      - .env.local
+      - .env.common
+      - .env.demo
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -119,23 +133,30 @@ services:
       - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
-  # Schedule Service - DockerHub 이미지
+  # Schedule Service
   schedule-service:
-    image: solidcitadel/unisync-schedule-service:latest
+    build:
+      context: ./app
+      dockerfile: backend/schedule-service/Dockerfile
     container_name: unisync-demo-schedule-service
     ports:
       - "8083:8083"
     env_file:
-      - .env.local  # 비밀 (COGNITO_USER_POOL_ID 등)
-      - .env.common # 공통 설정
-      - .env.demo   # demo 오버라이드
+      - .env.local
+      - .env.common
+      - .env.demo
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
         condition: service_healthy
@@ -149,23 +170,30 @@ services:
       - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
-  # API Gateway - DockerHub 이미지
+  # API Gateway
   api-gateway:
-    image: solidcitadel/unisync-api-gateway:latest
+    build:
+      context: ./app
+      dockerfile: backend/api-gateway/Dockerfile
     container_name: unisync-demo-api-gateway
     ports:
       - "8080:8080"
     env_file:
-      - .env.local  # 비밀 (COGNITO_USER_POOL_ID 등)
-      - .env.common # 공통 설정
-      - .env.demo   # demo 오버라이드
+      - .env.local
+      - .env.common
+      - .env.demo
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+    volumes:
+      - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
+      - ./.env.local:/workspace/.env.local:ro
+    user: root
+    entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       user-service:
         condition: service_healthy
@@ -177,10 +205,10 @@ services:
       - demo-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
 volumes:
   demo-mysql-data:
