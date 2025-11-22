@@ -3,9 +3,15 @@ package com.unisync.schedule.internal.client;
 import com.unisync.schedule.internal.dto.GroupMembershipResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * User-Service Internal API 클라이언트
@@ -61,5 +67,34 @@ public class UserServiceClient {
                 .isMember(false)
                 .role(null)
                 .build();
+    }
+
+    /**
+     * 그룹의 모든 멤버 cognitoSub 목록 조회
+     *
+     * @param groupId 그룹 ID
+     * @return cognitoSub 목록 (조회 실패 시 빈 리스트)
+     */
+    public List<String> getGroupMemberCognitoSubs(Long groupId) {
+        String url = userServiceUrl + "/api/internal/groups/" + groupId + "/members/cognito-subs";
+
+        try {
+            log.debug("User-Service 그룹 멤버 목록 조회: groupId={}", groupId);
+            ResponseEntity<List<String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<String>>() {}
+            );
+
+            List<String> cognitoSubs = response.getBody();
+            log.debug("User-Service 그룹 멤버 목록 조회 결과: groupId={}, memberCount={}",
+                    groupId, cognitoSubs != null ? cognitoSubs.size() : 0);
+            return cognitoSubs != null ? cognitoSubs : Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("User-Service 그룹 멤버 목록 조회 실패: groupId={}, error={}",
+                    groupId, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 }

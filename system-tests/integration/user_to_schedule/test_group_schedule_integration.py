@@ -319,3 +319,57 @@ class TestScheduleInternalGroupApi:
         assert response["deletedSchedules"] == 0
         assert response["deletedTodos"] == 0
         assert response["deletedCategories"] == 0
+
+
+class TestUserToScheduleCoordination:
+    """User-Service → Schedule-Service 일정 조율 Internal API 테스트"""
+
+    def test_internal_get_group_member_cognito_subs(
+        self, user_service_url, jwt_auth_tokens
+    ):
+        """Internal API: 그룹 멤버 cognitoSub 목록 조회"""
+        # Arrange: 그룹 생성
+        headers = {
+            "Authorization": f"Bearer {jwt_auth_tokens['user1']}",
+            "X-Cognito-Sub": jwt_auth_tokens['user1_sub']
+        }
+
+        group_data = {
+            "name": f"Coordination API Test {uuid.uuid4().hex[:8]}",
+            "description": "Test group member list API"
+        }
+
+        create_resp = requests.post(
+            f"{user_service_url}/v1/groups",
+            json=group_data,
+            headers=headers
+        )
+        assert create_resp.status_code == 201
+        group_id = create_resp.json()["groupId"]
+
+        try:
+            # user2 추가
+            invite_resp = requests.post(
+                f"{user_service_url}/v1/groups/{group_id}/members",
+                json={"userCognitoSub": jwt_auth_tokens['user2_sub']},
+                headers=headers
+            )
+            assert invite_resp.status_code == 201
+
+            # Act: Internal API로 그룹 멤버 cognitoSub 목록 조회
+            # (Schedule-Service가 공강 찾기 시 호출하는 API)
+            members_resp = requests.get(
+                f"{user_service_url}/api/internal/groups/{group_id}/members/cognito-subs"
+            )
+
+            # Assert
+            assert members_resp.status_code == 200
+            cognito_subs = members_resp.json()
+            assert isinstance(cognito_subs, list)
+            assert len(cognito_subs) == 2  # user1, user2
+            assert jwt_auth_tokens['user1_sub'] in cognito_subs
+            assert jwt_auth_tokens['user2_sub'] in cognito_subs
+
+        finally:
+            # Cleanup
+            requests.delete(f"{user_service_url}/v1/groups/{group_id}", headers=headers)

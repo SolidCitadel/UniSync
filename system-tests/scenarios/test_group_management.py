@@ -980,3 +980,234 @@ class TestGroupScheduleCascadeFlow:
         print(f"✅ STEP 3: 마지막 OWNER 탈퇴 → 그룹 자동 삭제")
         print(f"✅ STEP 4: Schedule 데이터 cascade 삭제 확인")
         print("=" * 100 + "\n")
+
+
+class TestScheduleCoordinationFlow:
+    """일정 조율 플로우 통합 테스트"""
+
+    def test_team_meeting_coordination_flow(self, service_urls, clean_user_database):
+        """
+        팀 프로젝트 미팅 일정 조율 시나리오:
+        1. 팀장이 프로젝트 그룹 생성
+        2. 팀원 초대
+        3. 각자 개인 일정 등록
+        4. 공강 시간 조회 (API Gateway 통해)
+        5. 발견된 공강 시간에 그룹 미팅 일정 생성
+        6. 모든 멤버가 그룹 일정 조회 가능 확인
+        """
+        gateway_url = service_urls.get("gateway", "http://localhost:8080")
+
+        print("\n" + "=" * 100)
+        print("팀 프로젝트 미팅 일정 조율 E2E 플로우 테스트")
+        print("=" * 100)
+
+        # =================================================================
+        # STEP 1: 사용자 준비 (Leader, Member)
+        # =================================================================
+        print(f"\n[STEP 1/6] 사용자 준비")
+
+        leader = create_test_user(gateway_url, "Team Leader")
+        member = create_test_user(gateway_url, "Team Member")
+
+        print(f"  ✅ Team Leader 생성: {leader['email']}")
+        print(f"  ✅ Team Member 생성: {member['email']}")
+
+        # =================================================================
+        # STEP 2: 그룹 생성 및 멤버 초대
+        # =================================================================
+        print(f"\n[STEP 2/6] 그룹 생성 및 멤버 초대")
+
+        group_response = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            headers=leader['headers'],
+            json={"name": "SE Project Team", "description": "Software Engineering Final Project"},
+            timeout=5
+        )
+        assert group_response.status_code == 201
+        group_id = group_response.json()["groupId"]
+
+        print(f"  ✅ 그룹 생성 성공 (groupId: {group_id})")
+
+        # 멤버 초대
+        invite_response = requests.post(
+            f"{gateway_url}/api/v1/groups/{group_id}/members",
+            headers=leader['headers'],
+            json={"userCognitoSub": member['cognitoSub']},
+            timeout=5
+        )
+        assert invite_response.status_code == 201
+
+        print(f"  ✅ 멤버 초대 성공")
+
+        # =================================================================
+        # STEP 3: 각자 개인 일정 등록
+        # =================================================================
+        print(f"\n[STEP 3/6] 각자 개인 일정 등록")
+
+        # Leader 카테고리
+        leader_cat_response = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=leader['headers'],
+            json={"name": "Personal", "color": "#FF5733"},
+            timeout=5
+        )
+        assert leader_cat_response.status_code == 201
+        leader_cat_id = leader_cat_response.json()["categoryId"]
+
+        # Leader 일정 (09:00-12:00)
+        leader_schedule_response = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            json={
+                "title": "Operating Systems Class",
+                "categoryId": leader_cat_id,
+                "startTime": "2025-12-08T09:00:00",
+                "endTime": "2025-12-08T12:00:00"
+            },
+            timeout=5
+        )
+        assert leader_schedule_response.status_code == 201
+
+        # Member 카테고리
+        member_cat_response = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            json={"name": "Personal", "color": "#33FF57"},
+            timeout=5
+        )
+        assert member_cat_response.status_code == 201
+        member_cat_id = member_cat_response.json()["categoryId"]
+
+        # Member 일정 (14:00-16:00)
+        member_schedule_response = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=member['headers'],
+            json={
+                "title": "Database Class",
+                "categoryId": member_cat_id,
+                "startTime": "2025-12-08T14:00:00",
+                "endTime": "2025-12-08T16:00:00"
+            },
+            timeout=5
+        )
+        assert member_schedule_response.status_code == 201
+
+        print(f"  ✅ Leader 일정 등록 (09:00-12:00)")
+        print(f"  ✅ Member 일정 등록 (14:00-16:00)")
+
+        # =================================================================
+        # STEP 4: 공강 시간 조회 (API Gateway 통해)
+        # =================================================================
+        print(f"\n[STEP 4/6] 공강 시간 조회")
+
+        free_slots_response = requests.post(
+            f"{gateway_url}/api/v1/schedules/find-free-slots",
+            headers=leader['headers'],
+            json={
+                "groupId": group_id,
+                "startDate": "2025-12-08",
+                "endDate": "2025-12-08",
+                "minDurationMinutes": 120,  # 최소 2시간
+                "workingHoursStart": "09:00",
+                "workingHoursEnd": "20:00"
+            },
+            timeout=5
+        )
+
+        assert free_slots_response.status_code == 200
+        free_slots_data = free_slots_response.json()
+
+        assert free_slots_data["groupId"] == group_id
+        assert free_slots_data["memberCount"] == 2
+        assert len(free_slots_data["freeSlots"]) > 0
+
+        # 12:00-14:00 또는 16:00-20:00 공강 확인
+        found_slot = None
+        for slot in free_slots_data["freeSlots"]:
+            if "16:00:00" in slot["startTime"] and slot["durationMinutes"] >= 120:
+                found_slot = slot
+                break
+
+        assert found_slot is not None, "2시간 이상 공강이 발견되지 않음"
+
+        print(f"  ✅ 공강 시간 발견: {found_slot['startTime']} ~ {found_slot['endTime']} ({found_slot['durationMinutes']}분)")
+
+        # =================================================================
+        # STEP 5: 그룹 미팅 일정 생성
+        # =================================================================
+        print(f"\n[STEP 5/6] 그룹 미팅 일정 생성")
+
+        # 그룹 카테고리 생성
+        group_cat_response = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=leader['headers'],
+            json={"name": "Team Project", "color": "#FF6B6B", "groupId": group_id},
+            timeout=5
+        )
+        assert group_cat_response.status_code == 201
+        group_cat_id = group_cat_response.json()["categoryId"]
+
+        # 그룹 일정 생성 (발견된 공강 시간에)
+        meeting_response = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            json={
+                "groupId": group_id,
+                "categoryId": group_cat_id,
+                "title": "Team Project Kickoff Meeting",
+                "description": "Discuss project requirements",
+                "location": "Engineering Building Room 301",
+                "startTime": found_slot["startTime"],
+                "endTime": "2025-12-08T18:00:00",  # 2시간 미팅
+                "source": "USER"
+            },
+            timeout=5
+        )
+
+        assert meeting_response.status_code == 201
+        meeting_schedule_id = meeting_response.json()["scheduleId"]
+
+        print(f"  ✅ 그룹 미팅 일정 생성 성공 (scheduleId: {meeting_schedule_id})")
+
+        # =================================================================
+        # STEP 6: 모든 멤버가 그룹 일정 조회 가능 확인
+        # =================================================================
+        print(f"\n[STEP 6/6] 모든 멤버 그룹 일정 조회 확인")
+
+        # Leader 조회
+        leader_schedule_check = requests.get(
+            f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
+            headers=leader['headers'],
+            timeout=5
+        )
+        assert leader_schedule_check.status_code == 200
+        assert leader_schedule_check.json()["groupId"] == group_id
+
+        # Member 조회
+        member_schedule_check = requests.get(
+            f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
+            headers=member['headers'],
+            timeout=5
+        )
+        assert member_schedule_check.status_code == 200
+        assert member_schedule_check.json()["title"] == "Team Project Kickoff Meeting"
+
+        print(f"  ✅ Leader 조회 성공")
+        print(f"  ✅ Member 조회 성공")
+
+        # Cleanup
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_id}", headers=leader['headers'], timeout=5)
+
+        # =================================================================
+        # 최종 요약
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[PASS] 팀 프로젝트 미팅 일정 조율 E2E 플로우 테스트 성공!")
+        print("=" * 100)
+        print(f"✅ STEP 1: 사용자 준비 (Leader, Member)")
+        print(f"✅ STEP 2: 그룹 생성 및 멤버 초대")
+        print(f"✅ STEP 3: 각자 개인 일정 등록")
+        print(f"✅ STEP 4: 공강 시간 조회 (API Gateway)")
+        print(f"✅ STEP 5: 발견된 공강 시간에 그룹 미팅 일정 생성")
+        print(f"✅ STEP 6: 모든 멤버 그룹 일정 조회 가능 확인")
+        print("=" * 100 + "\n")

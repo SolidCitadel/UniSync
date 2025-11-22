@@ -443,6 +443,33 @@ public class GroupService {
                 });
     }
 
+    /**
+     * Internal API: 그룹의 모든 멤버 cognitoSub 목록 조회
+     *
+     * Schedule-Service에서 공강 시간 찾기 시 사용
+     *
+     * @param groupId 그룹 ID
+     * @return cognitoSub 목록
+     */
+    @Transactional(readOnly = true)
+    public List<String> getGroupMemberCognitoSubs(Long groupId) {
+        log.debug("그룹 멤버 cognitoSub 목록 조회 (Internal) - groupId={}", groupId);
+
+        // 그룹 존재 여부 확인
+        if (!groupRepository.existsById(groupId)) {
+            log.warn("그룹 멤버 cognitoSub 목록 조회 실패: 그룹 없음 - groupId={}", groupId);
+            return List.of();
+        }
+
+        List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
+        List<String> cognitoSubs = members.stream()
+                .map(GroupMember::getUserCognitoSub)
+                .collect(Collectors.toList());
+
+        log.debug("그룹 멤버 cognitoSub 목록 조회 완료 - groupId={}, memberCount={}", groupId, cognitoSubs.size());
+        return cognitoSubs;
+    }
+
     // ========== Helper methods ==========
 
     private User getUserByCognitoSub(String cognitoSub) {

@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * 그룹 Internal API Controller
  *
@@ -39,5 +41,19 @@ public class InternalGroupController {
     ) {
         GroupMembershipResponse response = groupService.getMembershipInfo(groupId, cognitoSub);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 그룹 멤버 cognitoSub 목록 조회
+     *
+     * Schedule-Service에서 공강 시간 찾기 시 사용
+     */
+    @GetMapping("/{groupId}/members/cognito-subs")
+    @Operation(summary = "그룹 멤버 목록 조회", description = "그룹의 모든 멤버 cognitoSub 목록 반환")
+    public ResponseEntity<List<String>> getGroupMemberCognitoSubs(
+            @Parameter(description = "그룹 ID") @PathVariable Long groupId
+    ) {
+        List<String> cognitoSubs = groupService.getGroupMemberCognitoSubs(groupId);
+        return ResponseEntity.ok(cognitoSubs);
     }
 }

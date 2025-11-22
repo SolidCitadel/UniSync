@@ -58,4 +58,16 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 그룹 일정 존재 여부
     boolean existsByGroupId(Long groupId);
+
+    // 여러 사용자 + 그룹의 일정 조회 (일정 조율용)
+    @Query("SELECT s FROM Schedule s WHERE " +
+           "(s.cognitoSub IN :cognitoSubs OR s.groupId = :groupId) " +
+           "AND s.startTime < :endDate AND s.endTime > :startDate " +
+           "ORDER BY s.startTime")
+    List<Schedule> findByUsersOrGroupAndDateRange(
+        @Param("cognitoSubs") List<String> cognitoSubs,
+        @Param("groupId") Long groupId,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate
+    );
 }
