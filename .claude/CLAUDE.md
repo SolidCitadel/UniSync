@@ -24,10 +24,11 @@ Canvas LMS 연동 학업 일정관리 서비스. Canvas 과제를 자동 동기�
 - Credentials 테이블 `provider='CANVAS'`
 
 ### 2. 단계별 구현 전략
-**Phase 1 (✅ 구현 완료): 수동 API 기반 동기화**
+**Phase 1 (✅ 구현 완료): 수동 API 기반 동기화 + Assignment → Schedule 자동 변환**
 - User-Service: POST /v1/sync/canvas 엔드포인트로 Canvas Sync Lambda 직접 호출 (AWS SDK)
-- Lambda: Canvas API 조회 후 SQS로 enrollments/assignments 메시지 발행
-- Course-Service: SQS 메시지 consume하여 DB 저장
+- Lambda: Canvas API 조회 (페이지네이션 순회) 후 SQS로 enrollments/assignments 메시지 발행
+- Course-Service: SQS 메시지 consume하여 DB 저장 → Assignment 저장 시 SQS 이벤트 발행
+- Schedule-Service: SQS 메시지 consume하여 Assignment → Schedule 자동 변환
 - 사용자가 명시적으로 동기화 버튼 클릭
 
 **Phase 2 (계획): EventBridge 자동 동기화**

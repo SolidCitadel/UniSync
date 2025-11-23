@@ -376,37 +376,37 @@ python -m pytest tests/integration/test_assignment_to_schedule_integration.py -v
 
 ## 구현 체크리스트
 
-### Phase 1: 기본 과제 → 일정 변환
+### Phase 1: 기본 과제 → 일정 변환 ✅
 
 #### 인프라
-- [ ] LocalStack: `courseservice-to-scheduleservice-assignments` 큐 생성
-- [ ] 환경변수: `.env.common`, `.env.local`에 큐 이름 추가
+- [x] LocalStack: `courseservice-to-scheduleservice-assignments` 큐 생성
+- [x] 환경변수: `.env.common`, `.env.local`에 큐 이름 추가
 
 #### Course-Service
-- [ ] SqsPublisherConfig: SqsAsyncClient Bean 생성
-- [ ] AssignmentEventPublisher: SQS 발행 로직
-- [ ] AssignmentService: Assignment 저장 후 이벤트 발행
-- [ ] AssignmentEventDto: SQS 메시지 DTO 정의
-- [ ] 단위 테스트: AssignmentEventPublisherTest
+- [x] SqsPublisherConfig: SqsAsyncClient Bean 생성
+- [x] AssignmentEventPublisher: SQS 발행 로직
+- [x] AssignmentService: Assignment 저장 후 이벤트 발행
+- [x] AssignmentEventDto: SQS 메시지 DTO 정의
+- [x] 단위 테스트: AssignmentEventPublisherTest
 
 #### Schedule-Service
-- [ ] Schedules 테이블: `canvas_assignment_id` 컬럼 추가 (마이그레이션)
-- [ ] AssignmentListener: SQS 메시지 consume
-- [ ] AssignmentEventDto: SQS 메시지 DTO (Course-Service와 동일)
-- [ ] AssignmentToScheduleConverter: 변환 로직
-- [ ] CategoryService: "Canvas 과제" 기본 카테고리 생성
-- [ ] ScheduleService: Schedule 저장 로직 (기존 활용)
-- [ ] 단위 테스트: AssignmentListenerTest, ConverterTest
+- [x] Schedules 테이블: `source`, `sourceId` 컬럼 추가 (canvas_assignment_id 대신)
+- [x] AssignmentListener: SQS 메시지 consume
+- [x] AssignmentEventDto: SQS 메시지 DTO (Course-Service와 동일)
+- [x] AssignmentService: 변환 로직 (AssignmentToScheduleConverter 역할)
+- [x] CategoryService: "Canvas 과제" 기본 카테고리 생성
+- [x] ScheduleService: Schedule 저장 로직 (기존 활용)
+- [x] 단위 테스트: AssignmentServiceTest
 
 #### 통합 테스트
-- [ ] test_assignment_to_schedule_flow
-- [ ] test_duplicate_assignment_idempotency
-- [ ] test_assignment_update
-- [ ] test_default_category_creation
+- [x] test_assignment_to_schedule_flow
+- [x] test_duplicate_assignment_idempotency
+- [x] test_assignment_update
+- [x] test_default_category_creation
 
 #### 문서
-- [ ] 이 문서 업데이트 (구현 완료 표시)
-- [ ] CLAUDE.md: Phase 1 완료 업데이트
+- [x] 이 문서 업데이트 (구현 완료 표시)
+- [x] CLAUDE.md: Phase 1 완료 업데이트
 
 ### Phase 2: 과제 → 할일 변환 (향후)
 - [ ] Todos 테이블: `schedule_id` FK 추가

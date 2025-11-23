@@ -47,7 +47,7 @@ UniSync 시스템의 SQS 기반 메시지 아키텍처 설계 문서입니다.
 |---------|-----------|-------------|------|------|--------|
 | `lambda-to-courseservice-enrollments` | Canvas-Sync-Lambda | Course-Service | Canvas 과목 등록 정보 전달 | ✅ Phase 1 | [enrollment-events](#enrollment-events) |
 | `lambda-to-courseservice-assignments` | Canvas-Sync-Lambda | Course-Service | Canvas 과제 정보 전달 | ✅ Phase 1 | [assignment-events](#assignment-events) |
-| `courseservice-to-scheduleservice-assignments` | Course-Service | Schedule-Service | 과제 → 일정/할일 변환 | 🚧 Phase 1 예정 | [assignment-to-schedule](#assignment-to-schedule) |
+| `courseservice-to-scheduleservice-assignments` | Course-Service | Schedule-Service | 과제 → 일정/할일 변환 | ✅ Phase 1 | [assignment-to-schedule](#assignment-to-schedule) |
 | `dlq-queue` | - | Manual Review | Dead Letter Queue (모든 큐 공용) | ✅ 공통 | - |
 
 **향후 추가 예정**:
@@ -75,12 +75,12 @@ Canvas-Sync-Lambda
            ↓
         Course-Service (Assignment 저장)
            ↓
-        [Phase 1 예정] SQS: courseservice-to-scheduleservice-assignments
+        SQS: courseservice-to-scheduleservice-assignments
            ↓
-        Schedule-Service (Schedule/Todo 생성)
+        Schedule-Service (Schedule 생성)
 ```
 
-### Assignment → Schedule 변환 플로우 (Phase 1 구현 예정)
+### Assignment → Schedule 변환 플로우 (Phase 1 구현 완료)
 
 ```
 Course-Service
