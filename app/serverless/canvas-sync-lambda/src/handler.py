@@ -11,10 +11,10 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # Environment variables
-USER_SERVICE_URL = os.environ.get('USER_SERVICE_URL', 'http://localhost:8081')
-CANVAS_API_BASE_URL = os.environ.get('CANVAS_API_BASE_URL', 'https://canvas.instructure.com/api/v1')
-AWS_REGION = os.environ.get('AWS_REGION', 'ap-northeast-2')
-SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT', None)  # For LocalStack
+USER_SERVICE_URL = os.environ['USER_SERVICE_URL']
+CANVAS_API_BASE_URL = os.environ['CANVAS_API_BASE_URL']
+AWS_REGION = os.environ['AWS_REGION']
+SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT')  # Optional: For LocalStack
 
 # SQS client
 sqs = boto3.client('sqs', region_name=AWS_REGION, endpoint_url=SQS_ENDPOINT)
@@ -162,31 +162,72 @@ def get_canvas_token(cognito_sub: str) -> str:
     return data['canvasToken']
 
 
+def extract_next_url(link_header: str) -> str:
+    """
+    Link 헤더에서 rel="next" URL 추출
+
+    Link: <URL>; rel="current", <URL>; rel="next"
+    """
+    if not link_header:
+        return None
+
+    links = link_header.split(',')
+    for link in links:
+        if 'rel="next"' in link:
+            # <URL>; rel="next" → URL 추출
+            url_part = link.split(';')[0].strip()
+            return url_part.strip('<>')
+
+    return None
+
+
 def fetch_user_courses(token: str) -> List[Dict[str, Any]]:
-    """사용자가 수강 중인 Course 목록 가져오기"""
+    """사용자가 수강 중인 Course 목록 가져오기 (페이지네이션 순회)"""
     url = f"{CANVAS_API_BASE_URL}/courses"
     headers = {'Authorization': f'Bearer {token}'}
     params = {
         'enrollment_type': 'student',
         'enrollment_state': 'active',
-        'include[]': ['term', 'course_progress']
+        'include[]': ['term', 'course_progress'],
+        'per_page': 100
     }
 
-    response = requests.get(url, headers=headers, params=params, timeout=10)
-    response.raise_for_status()
+    all_courses = []
+    while url:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
 
-    return response.json()
+        courses = response.json()
+        all_courses.extend(courses)
+
+        # Link 헤더에서 다음 페이지 확인
+        link_header = response.headers.get('Link', '')
+        url = extract_next_url(link_header)
+        params = None  # 다음 페이지 URL에 이미 파라미터 포함됨
+
+    return all_courses
 
 
 def fetch_canvas_assignments(token: str, canvas_course_id: str) -> List[Dict[str, Any]]:
-    """특정 Course의 Assignment 목록 가져오기"""
+    """특정 Course의 Assignment 목록 가져오기 (페이지네이션 순회)"""
     url = f"{CANVAS_API_BASE_URL}/courses/{canvas_course_id}/assignments"
     headers = {'Authorization': f'Bearer {token}'}
+    params = {'per_page': 100}
 
-    response = requests.get(url, headers=headers, timeout=10)
-    response.raise_for_status()
+    all_assignments = []
+    while url:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
 
-    return response.json()
+        assignments = response.json()
+        all_assignments.extend(assignments)
+
+        # Link 헤더에서 다음 페이지 확인
+        link_header = response.headers.get('Link', '')
+        url = extract_next_url(link_header)
+        params = None  # 다음 페이지 URL에 이미 파라미터 포함됨
+
+    return all_assignments
 
 
 def send_to_sqs(queue_name: str, message: Dict[str, Any]):

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "========================================="
-echo "LocalStack Init Start"
+echo "SQS Queue Init Start"
 echo "========================================="
 
 ENDPOINT="http://localhost:4566"
@@ -47,5 +47,5 @@ echo "Listing Queues:"
 awslocal sqs list-queues --region $REGION
 
 echo "========================================="
-echo "LocalStack Init Complete"
+echo "SQS Queue Init Complete"
 echo "========================================="
