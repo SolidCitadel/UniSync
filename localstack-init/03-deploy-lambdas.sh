@@ -54,7 +54,7 @@ if [ -d "$LAMBDA_DIR" ]; then
     --handler handler.lambda_handler \
     --zip-file fileb:///tmp/canvas-lambda.zip \
     --role arn:aws:iam::000000000000:role/lambda-execution-role \
-    --timeout 30 \
+    --timeout 120 \
     --memory-size 256 \
     --environment Variables="{
       CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL},

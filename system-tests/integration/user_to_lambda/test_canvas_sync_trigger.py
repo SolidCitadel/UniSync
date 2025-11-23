@@ -25,8 +25,7 @@ class TestUserToLambdaIntegration:
         jwt_auth_tokens,
         service_urls,
         sqs_client,
-        enrollment_queue_url,
-        assignment_queue_url
+        canvas_sync_queue_url
     ):
         """
         동기화 API 호출 시 Lambda가 실행되는지 검증
@@ -72,12 +71,10 @@ class TestUserToLambdaIntegration:
         print(f"\n[Integration] Canvas 토큰 등록: {register_response.status_code}")
 
         # 동기화 호출 전 SQS 메시지 수 확인
-        initial_enrollment_count = get_queue_message_count(sqs_client, enrollment_queue_url)
-        initial_assignment_count = get_queue_message_count(sqs_client, assignment_queue_url)
+        initial_sync_count = get_queue_message_count(sqs_client, canvas_sync_queue_url)
 
         print(f"[Integration] 동기화 전 큐 상태:")
-        print(f"  - Enrollment Queue: {initial_enrollment_count}")
-        print(f"  - Assignment Queue: {initial_assignment_count}")
+        print(f"  - Canvas Sync Queue: {initial_sync_count}")
 
         # 동기화 API 호출
         print(f"\n[Integration] Canvas 동기화 API 호출...")

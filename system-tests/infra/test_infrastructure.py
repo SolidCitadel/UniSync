@@ -34,19 +34,9 @@ class TestLocalStackHealth:
 class TestSqsQueues:
     """SQS 큐 검증"""
 
-    def test_assignment_events_queue_exists(self, sqs_client):
-        """lambda-to-courseservice-assignments 큐가 존재하는지 확인"""
-        queue_name = os.environ['SQS_ASSIGNMENT_EVENTS_QUEUE']
-        queues = sqs_client.list_queues()
-        queue_urls = queues.get('QueueUrls', [])
-
-        assert any(queue_name in url for url in queue_urls), \
-            f"Queue '{queue_name}' not found. Available: {queue_urls}"
-        print(f"[OK] SQS queue '{queue_name}' exists")
-
-    def test_enrollment_queue_exists(self, sqs_client):
-        """lambda-to-courseservice-enrollments 큐가 존재하는지 확인"""
-        queue_name = os.environ['SQS_COURSE_ENROLLMENT_QUEUE']
+    def test_canvas_sync_queue_exists(self, sqs_client):
+        """lambda-to-courseservice-sync 큐가 존재하는지 확인"""
+        queue_name = os.environ['SQS_CANVAS_SYNC_QUEUE']
         queues = sqs_client.list_queues()
         queue_urls = queues.get('QueueUrls', [])
 

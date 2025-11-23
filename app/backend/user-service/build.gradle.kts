@@ -57,6 +57,7 @@ dependencies {
 
     // AWS SDK for Lambda
     implementation("software.amazon.awssdk:lambda:${property("awsSdkVersion")}")
+    implementation("software.amazon.awssdk:apache-client:${property("awsSdkVersion")}")
 
     // Lombok
     compileOnly("org.projectlombok:lombok")

@@ -6,7 +6,7 @@ Canvas Sync Lambda 통합 테스트 (Phase 1: Manual Sync)
 플로우:
 1. Lambda 직접 호출 (cognitoSub)
 2. Lambda → Canvas API (courses, assignments 조회)
-3. Lambda → SQS (enrollments, assignments 메시지 발행)
+3. Lambda → SQS (통합 동기화 메시지 발행)
 4. Course-Service → SQS (메시지 consume)
 5. Course-Service → DB (저장)
 """
@@ -23,8 +23,7 @@ class TestCanvasSyncIntegration:
         self,
         lambda_client,
         sqs_client,
-        enrollment_queue_url,
-        assignment_queue_url,
+        canvas_sync_queue_url,
         mysql_connection
     ):
         """
@@ -34,7 +33,7 @@ class TestCanvasSyncIntegration:
         When: Lambda를 cognitoSub로 직접 호출
         Then:
           1. Lambda가 Canvas API 호출하여 courses와 assignments 조회
-          2. Lambda가 SQS에 enrollment 및 assignment 메시지 발행
+          2. Lambda가 SQS에 통합 동기화 메시지 발행
           3. Course-Service가 메시지 consume하여 DB에 저장
           4. DB에 courses와 assignments가 저장됨
         """
@@ -88,114 +87,88 @@ class TestCanvasSyncIntegration:
         else:
             print("\n⚠️  Canvas API에서 courses를 가져오지 못함 (테스트 환경에서 정상)")
 
-    def test_sqs_message_format_enrollment(
+    def test_sqs_message_format_canvas_sync(
         self,
         lambda_client,
         sqs_client,
-        enrollment_queue_url
+        canvas_sync_queue_url
     ):
         """
-        Enrollment 메시지 형식 검증
+        Canvas Sync 메시지 형식 검증
 
-        Lambda가 발행하는 enrollment 메시지가 올바른 형식인지 확인
+        Lambda가 발행하는 통합 동기화 메시지가 올바른 형식인지 확인
         """
         lambda_event = {
             "cognitoSub": "test-cognito-sub-123"
         }
 
         # SQS 큐 비우기
-        sqs_client.purge_queue(QueueUrl=enrollment_queue_url)
+        sqs_client.purge_queue(QueueUrl=canvas_sync_queue_url)
         time.sleep(2)
 
         # Lambda 실행
-        print(f"\n🚀 Invoking Lambda for enrollment message test")
+        print(f"\n🚀 Invoking Lambda for canvas sync message test")
         lambda_client.invoke(
             FunctionName='canvas-sync-lambda',
             InvocationType='RequestResponse',
             Payload=json.dumps(lambda_event)
         )
 
-        # SQS에서 enrollment 메시지 확인
+        # SQS에서 canvas sync 메시지 확인
         time.sleep(3)
 
         response = sqs_client.receive_message(
-            QueueUrl=enrollment_queue_url,
-            MaxNumberOfMessages=10,
+            QueueUrl=canvas_sync_queue_url,
+            MaxNumberOfMessages=1,
             WaitTimeSeconds=2
         )
 
         messages = response.get('Messages', [])
 
         if len(messages) > 0:
-            print(f"\n✅ {len(messages)}개의 enrollment 메시지 발견")
+            print(f"\n✅ Canvas sync 메시지 발견")
 
-            first_message = json.loads(messages[0]['Body'])
-            print(f"📬 Enrollment Message: {json.dumps(first_message, indent=2)}")
-
-            # 필수 필드 검증
-            assert 'cognitoSub' in first_message
-            assert 'canvasCourseId' in first_message
-            assert 'courseName' in first_message
-            assert first_message['cognitoSub'] == "test-cognito-sub-123"
-
-            print(f"✅ Enrollment 메시지 형식 검증 완료")
-        else:
-            print("\n⚠️  Enrollment 메시지 없음 (Canvas API에서 courses를 가져오지 못함)")
-
-    def test_sqs_message_format_assignment(
-        self,
-        lambda_client,
-        sqs_client,
-        assignment_queue_url
-    ):
-        """
-        Assignment 메시지 형식 검증
-
-        Lambda가 발행하는 assignment 메시지가 올바른 형식인지 확인
-        """
-        lambda_event = {
-            "cognitoSub": "test-cognito-sub-123"
-        }
-
-        # SQS 큐 비우기
-        sqs_client.purge_queue(QueueUrl=assignment_queue_url)
-        time.sleep(2)
-
-        # Lambda 실행
-        print(f"\n🚀 Invoking Lambda for assignment message test")
-        lambda_client.invoke(
-            FunctionName='canvas-sync-lambda',
-            InvocationType='RequestResponse',
-            Payload=json.dumps(lambda_event)
-        )
-
-        # SQS에서 assignment 메시지 확인
-        time.sleep(3)
-
-        response = sqs_client.receive_message(
-            QueueUrl=assignment_queue_url,
-            MaxNumberOfMessages=10,
-            WaitTimeSeconds=2
-        )
-
-        messages = response.get('Messages', [])
-
-        if len(messages) > 0:
-            print(f"\n✅ {len(messages)}개의 assignment 메시지 발견")
-
-            first_message = json.loads(messages[0]['Body'])
-            print(f"📬 Assignment Message: {json.dumps(first_message, indent=2)}")
+            message = json.loads(messages[0]['Body'])
+            print(f"📬 Canvas Sync Message (summary):")
+            print(f"   - eventType: {message.get('eventType')}")
+            print(f"   - cognitoSub: {message.get('cognitoSub')}")
+            print(f"   - courses: {len(message.get('courses', []))}")
 
             # 필수 필드 검증
-            assert 'eventType' in first_message
-            assert 'canvasCourseId' in first_message
-            assert 'canvasAssignmentId' in first_message
-            assert 'title' in first_message
-            assert first_message['eventType'] == 'ASSIGNMENT_CREATED'
+            assert 'eventType' in message
+            assert 'cognitoSub' in message
+            assert 'syncedAt' in message
+            assert 'courses' in message
+            assert message['eventType'] == 'CANVAS_SYNC_COMPLETED'
+            assert message['cognitoSub'] == "test-cognito-sub-123"
+            assert isinstance(message['courses'], list)
 
-            print(f"✅ Assignment 메시지 형식 검증 완료")
+            # 첫 번째 course 구조 검증 (있는 경우)
+            if len(message['courses']) > 0:
+                course = message['courses'][0]
+                print(f"\n📘 First course structure validation:")
+                print(f"   - canvasCourseId: {course.get('canvasCourseId')}")
+                print(f"   - courseName: {course.get('courseName')}")
+                print(f"   - assignments: {len(course.get('assignments', []))}")
+
+                assert 'canvasCourseId' in course
+                assert 'courseName' in course
+                assert 'assignments' in course
+                assert isinstance(course['assignments'], list)
+
+                # 첫 번째 assignment 구조 검증 (있는 경우)
+                if len(course['assignments']) > 0:
+                    assignment = course['assignments'][0]
+                    print(f"\n📝 First assignment structure validation:")
+                    print(f"   - canvasAssignmentId: {assignment.get('canvasAssignmentId')}")
+                    print(f"   - title: {assignment.get('title')}")
+
+                    assert 'canvasAssignmentId' in assignment
+                    assert 'title' in assignment
+
+            print(f"✅ Canvas Sync 메시지 형식 검증 완료")
         else:
-            print("\n⚠️  Assignment 메시지 없음 (Canvas API에서 assignments를 가져오지 못함)")
+            print("\n⚠️  Canvas Sync 메시지 없음 (Canvas API에서 courses를 가져오지 못함)")
 
     def test_idempotency_duplicate_sync(
         self,

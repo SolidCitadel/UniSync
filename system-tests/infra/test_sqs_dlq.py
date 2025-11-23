@@ -138,8 +138,7 @@ class TestSqsDlq:
         """
         # 검사할 메인 큐 목록
         target_queues = [
-            os.environ.get('SQS_ASSIGNMENT_EVENTS_QUEUE', 'lambda-to-courseservice-assignments'),
-            os.environ.get('SQS_COURSE_ENROLLMENT_QUEUE', 'lambda-to-courseservice-enrollments'),
+            os.environ.get('SQS_CANVAS_SYNC_QUEUE', 'lambda-to-courseservice-sync'),
             os.environ.get('SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE', 'courseservice-to-scheduleservice-assignments')
         ]
 

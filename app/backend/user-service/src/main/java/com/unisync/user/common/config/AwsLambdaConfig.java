@@ -5,10 +5,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.retry.RetryPolicy;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.lambda.LambdaClient;
 
 import java.net.URI;
+import java.time.Duration;
 
 /**
  * AWS Lambda Client 설정
@@ -31,11 +36,25 @@ public class AwsLambdaConfig {
 
     @Bean
     public LambdaClient lambdaClient() {
+        // HTTP 클라이언트 설정: 타임아웃 증가
+        SdkHttpClient httpClient = ApacheHttpClient.builder()
+                .socketTimeout(Duration.ofSeconds(150))  // Lambda timeout(120초) + 여유
+                .connectionTimeout(Duration.ofSeconds(10))
+                .build();
+
+        // 클라이언트 오버라이드 설정
+        ClientOverrideConfiguration clientConfig = ClientOverrideConfiguration.builder()
+                .retryPolicy(RetryPolicy.none())  // 재시도 비활성화
+                .apiCallTimeout(Duration.ofSeconds(150))  // API 호출 전체 타임아웃
+                .build();
+
         var builder = LambdaClient.builder()
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-                ));
+                ))
+                .httpClient(httpClient)
+                .overrideConfiguration(clientConfig);
 
         // LocalStack용 엔드포인트 설정
         if (endpointUrl != null && !endpointUrl.isEmpty()) {

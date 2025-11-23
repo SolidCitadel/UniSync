@@ -22,16 +22,13 @@ echo "Creating Main Queues..."
 # 전체를 홑따옴표(')로 감싸서 쉘의 변수 확장을 방지하고 문자열 그대로 전달.
 ATTRIBUTES='{"VisibilityTimeout":"30","MessageRetentionPeriod":"345600","RedrivePolicy":"{\"deadLetterTargetArn\":\"arn:aws:sqs:ap-northeast-2:000000000000:dlq-queue\",\"maxReceiveCount\":\"3\"}"}'
 
+# Lambda → Course-Service: 통합 동기화 메시지 (단일 메시지에 모든 course + assignments 포함)
 awslocal sqs create-queue \
-  --queue-name lambda-to-courseservice-enrollments \
+  --queue-name lambda-to-courseservice-sync \
   --region $REGION \
   --attributes "$ATTRIBUTES"
 
-awslocal sqs create-queue \
-  --queue-name lambda-to-courseservice-assignments \
-  --region $REGION \
-  --attributes "$ATTRIBUTES"
-
+# Course-Service → Schedule-Service: Assignment 이벤트
 awslocal sqs create-queue \
   --queue-name courseservice-to-scheduleservice-assignments \
   --region $REGION \

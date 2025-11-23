@@ -19,6 +19,9 @@ SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT')  # Optional: For LocalStack
 # SQS client
 sqs = boto3.client('sqs', region_name=AWS_REGION, endpoint_url=SQS_ENDPOINT)
 
+# Queue URL 캐시 (Lambda 실행 기간 동안 재사용)
+_queue_url_cache = {}
+
 
 def lambda_handler(event, context):
     """
@@ -54,27 +57,29 @@ def lambda_handler(event, context):
 
         print(f"  - Fetched {len(courses)} courses")
 
-        # 4. 각 Course 처리
+        # 4. 단일 동기화 메시지 구성
+        courses_data = []
+
+        # 5. 각 Course 처리
         for course in courses:
-            # 4-1. Course 데이터 SQS 발행
-            send_to_sqs('lambda-to-courseservice-enrollments', {
-                'cognitoSub': cognito_sub,
+            # 5-1. Course 정보 수집
+            course_data = {
                 'canvasCourseId': course['id'],
                 'courseName': course['name'],
                 'courseCode': course.get('course_code', ''),
                 'workflowState': course.get('workflow_state', 'available'),
                 'startAt': course.get('start_at'),
                 'endAt': course.get('end_at'),
-                'publishedAt': datetime.utcnow().isoformat()
-            })
+                'assignments': []
+            }
 
-            # 4-2. 해당 Course의 Assignments 조회
+            # 5-2. 해당 Course의 Assignments 조회
             assignments = fetch_canvas_assignments(canvas_token, str(course['id']))
             total_assignments += len(assignments)
 
             print(f"  - Course {course['id']}: {len(assignments)} assignments")
 
-            # 4-3. 각 Assignment 데이터 SQS 발행
+            # 5-3. Assignment 데이터 수집
             for assignment in assignments:
                 submission_types = assignment.get('submission_types', [])
                 submission_types_str = ','.join(submission_types) if submission_types else ''
@@ -95,9 +100,7 @@ def lambda_handler(event, context):
                 if updated_at:
                     updated_at_formatted = updated_at.replace('Z', '').split('.')[0]
 
-                send_to_sqs('lambda-to-courseservice-assignments', {
-                    'eventType': 'ASSIGNMENT_CREATED',
-                    'canvasCourseId': course['id'],
+                course_data['assignments'].append({
                     'canvasAssignmentId': assignment['id'],
                     'title': assignment['name'],
                     'description': assignment.get('description', ''),
@@ -109,9 +112,21 @@ def lambda_handler(event, context):
                     'updatedAt': updated_at_formatted
                 })
 
+            courses_data.append(course_data)
+
+        # 6. 단일 메시지 전송
+        sync_message = {
+            'eventType': 'CANVAS_SYNC_COMPLETED',
+            'cognitoSub': cognito_sub,
+            'syncedAt': datetime.utcnow().isoformat(),
+            'courses': courses_data
+        }
+
+        send_to_sqs('lambda-to-courseservice-sync', sync_message)
+
         print(f"✅ Canvas sync completed: {len(courses)} courses, {total_assignments} assignments")
 
-        # 5. 동기 응답 (Spring은 즉시 사용, EventBridge는 무시)
+        # 7. 동기 응답 (Spring은 즉시 사용, EventBridge는 무시)
         return {
             'statusCode': 200,
             'body': {
@@ -230,10 +245,23 @@ def fetch_canvas_assignments(token: str, canvas_course_id: str) -> List[Dict[str
     return all_assignments
 
 
+def get_queue_url_cached(queue_name: str) -> str:
+    """
+    Queue URL 조회 (캐싱)
+
+    Lambda 실행 중 동일한 큐는 한 번만 조회하여 성능 향상
+    """
+    if queue_name not in _queue_url_cache:
+        response = sqs.get_queue_url(QueueName=queue_name)
+        _queue_url_cache[queue_name] = response['QueueUrl']
+        print(f"  -> Queue URL cached: {queue_name}")
+
+    return _queue_url_cache[queue_name]
+
+
 def send_to_sqs(queue_name: str, message: Dict[str, Any]):
-    """SQS 큐에 메시지 발행"""
-    response = sqs.get_queue_url(QueueName=queue_name)
-    queue_url = response['QueueUrl']
+    """SQS 큐에 메시지 발행 (개별)"""
+    queue_url = get_queue_url_cached(queue_name)
 
     sqs.send_message(
         QueueUrl=queue_url,
@@ -241,3 +269,34 @@ def send_to_sqs(queue_name: str, message: Dict[str, Any]):
     )
 
     print(f"  -> SQS sent: {queue_name}")
+
+
+def send_batch_to_sqs(queue_name: str, messages: List[Dict[str, Any]]):
+    """
+    SQS 큐에 메시지 배치 발행 (최대 10개씩)
+
+    성능 향상: 100개 메시지 = 10번 API 호출
+    """
+    if not messages:
+        return
+
+    queue_url = get_queue_url_cached(queue_name)
+
+    # 10개씩 나눠서 전송 (SQS 배치 제한)
+    for i in range(0, len(messages), 10):
+        batch = messages[i:i + 10]
+
+        entries = [
+            {
+                'Id': str(idx),
+                'MessageBody': json.dumps(msg)
+            }
+            for idx, msg in enumerate(batch)
+        ]
+
+        sqs.send_message_batch(
+            QueueUrl=queue_url,
+            Entries=entries
+        )
+
+    print(f"  -> SQS batch sent: {queue_name} ({len(messages)} messages)")

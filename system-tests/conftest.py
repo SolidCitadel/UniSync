@@ -109,24 +109,9 @@ def lambda_client(localstack_endpoint: str):
 # =============================================================================
 
 @pytest.fixture(scope="session")
-def assignment_queue_url(sqs_client) -> str:
-    """lambda-to-courseservice-assignments URL 조회/생성"""
-    queue_name = os.environ['SQS_ASSIGNMENT_EVENTS_QUEUE']
-    try:
-        response = sqs_client.get_queue_url(QueueName=queue_name)
-        return response['QueueUrl']
-    except sqs_client.exceptions.QueueDoesNotExist:
-        response = sqs_client.create_queue(
-            QueueName=queue_name,
-            Attributes={'VisibilityTimeout': '5'}
-        )
-        return response['QueueUrl']
-
-
-@pytest.fixture(scope="session")
-def enrollment_queue_url(sqs_client) -> str:
-    """lambda-to-courseservice-enrollments URL 조회/생성"""
-    queue_name = os.environ['SQS_COURSE_ENROLLMENT_QUEUE']
+def canvas_sync_queue_url(sqs_client) -> str:
+    """lambda-to-courseservice-sync URL 조회/생성"""
+    queue_name = os.environ['SQS_CANVAS_SYNC_QUEUE']
     try:
         response = sqs_client.get_queue_url(QueueName=queue_name)
         return response['QueueUrl']
@@ -335,14 +320,14 @@ def clean_user_database(user_db_connection):
 
 
 @pytest.fixture(scope="function")
-def clean_sqs_queue(sqs_client, assignment_queue_url):
+def clean_sqs_queue(sqs_client, canvas_sync_queue_url):
     """각 테스트 전후 SQS 큐 비우기"""
-    sqs_client.purge_queue(QueueUrl=assignment_queue_url)
+    sqs_client.purge_queue(QueueUrl=canvas_sync_queue_url)
     time.sleep(1)
 
     yield
 
-    sqs_client.purge_queue(QueueUrl=assignment_queue_url)
+    sqs_client.purge_queue(QueueUrl=canvas_sync_queue_url)
 
 
 # =============================================================================

@@ -95,6 +95,13 @@ public class CanvasSyncService {
 
         } catch (CanvasSyncException e) {
             throw e;
+        } catch (software.amazon.awssdk.core.exception.SdkClientException e) {
+            log.error("Lambda invocation failed (timeout or connection error)", e);
+            if (e.getMessage().contains("timed out")) {
+                throw new CanvasSyncException(
+                        "Canvas sync timeout: Lambda execution took too long. Please try again.", e);
+            }
+            throw new CanvasSyncException("Canvas sync failed: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Failed to invoke Canvas sync Lambda", e);
             throw new CanvasSyncException("Canvas sync failed: " + e.getMessage(), e);
