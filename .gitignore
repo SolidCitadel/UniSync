@@ -59,7 +59,7 @@ build/
 # .env.local만 gitignore (민감 정보)
 .env.local
 .env.*.local
-.env.*.local.mine
+.env.local.mine
 
 # Test results
 test-results/
