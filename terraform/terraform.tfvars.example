@@ -1,0 +1,32 @@
+# Terraform Variables Example
+# Copy this file to terraform.tfvars and modify as needed
+
+aws_region = "us-east-1"
+project_name = "unisync"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# EC2 CIDR blocks for temporary RDS access (optional)
+# ec2_cidr_blocks = ["YOUR_EC2_IP/32"]
+
+# RDS Configuration
+rds_instance_class = "db.t3.micro"
+rds_allocated_storage = 30
+rds_max_allocated_storage = 100
+rds_master_username = "unisync"
+rds_multi_az = true
+rds_backup_retention_period = 7
+rds_performance_insights_enabled = false
+rds_deletion_protection = true
+
+# Common Tags
+common_tags = {
+  Project     = "UniSync"
+  Environment = "production"
+  ManagedBy   = "Terraform"
+}
+
