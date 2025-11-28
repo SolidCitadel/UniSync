@@ -15,12 +15,41 @@ USER_SERVICE_URL = os.environ['USER_SERVICE_URL']
 CANVAS_API_BASE_URL = os.environ['CANVAS_API_BASE_URL']
 AWS_REGION = os.environ['AWS_REGION']
 SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT')  # Optional: For LocalStack
+CANVAS_SYNC_API_KEY_SECRET_ARN = os.environ.get('CANVAS_SYNC_API_KEY_SECRET_ARN')
 
-# SQS client
+# AWS clients
 sqs = boto3.client('sqs', region_name=AWS_REGION, endpoint_url=SQS_ENDPOINT)
+secretsmanager = boto3.client('secretsmanager', region_name=AWS_REGION)
 
 # Queue URL 캐시 (Lambda 실행 기간 동안 재사용)
 _queue_url_cache = {}
+
+# Canvas Sync API Key 캐시 (Lambda 실행 기간 동안 재사용)
+_canvas_sync_api_key_cache = None
+
+
+def get_canvas_sync_api_key() -> str:
+    """Secrets Manager에서 Canvas Sync API Key 조회 (캐시 사용)"""
+    global _canvas_sync_api_key_cache
+    
+    if _canvas_sync_api_key_cache is not None:
+        return _canvas_sync_api_key_cache
+    
+    # LocalStack 또는 Secrets Manager ARN이 없는 경우 환경변수에서 직접 읽기
+    if not CANVAS_SYNC_API_KEY_SECRET_ARN or SQS_ENDPOINT:
+        _canvas_sync_api_key_cache = os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
+        return _canvas_sync_api_key_cache
+    
+    # Secrets Manager에서 조회
+    try:
+        response = secretsmanager.get_secret_value(SecretId=CANVAS_SYNC_API_KEY_SECRET_ARN)
+        _canvas_sync_api_key_cache = response['SecretString']
+        return _canvas_sync_api_key_cache
+    except Exception as e:
+        print(f"⚠️ Failed to get secret from Secrets Manager: {e}")
+        # Fallback to environment variable
+        _canvas_sync_api_key_cache = os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
+        return _canvas_sync_api_key_cache
 
 
 def lambda_handler(event, context):
@@ -167,7 +196,7 @@ def get_canvas_token(cognito_sub: str) -> str:
     """User-Service 내부 API로 Canvas 토큰 조회 (복호화됨)"""
     url = f"{USER_SERVICE_URL}/internal/v1/credentials/canvas/by-cognito-sub/{cognito_sub}"
     headers = {
-        'X-Api-Key': os.environ.get('CANVAS_SYNC_API_KEY', 'local-dev-token')
+        'X-Api-Key': get_canvas_sync_api_key()
     }
 
     response = requests.get(url, headers=headers, timeout=5)

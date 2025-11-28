@@ -53,14 +53,6 @@ resource "aws_security_group" "ecs" {
   }
 
   egress {
-    description     = "MySQL access to RDS"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
-  egress {
     description = "All outbound traffic via NAT Gateway"
     from_port   = 0
     to_port     = 0
@@ -76,27 +68,22 @@ resource "aws_security_group" "ecs" {
   )
 }
 
+# ECS to RDS egress rule (별도 리소스로 분리하여 순환 참조 방지)
+resource "aws_security_group_rule" "ecs_to_rds" {
+  type                     = "egress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.rds.id
+  security_group_id        = aws_security_group.ecs.id
+  description              = "MySQL access to RDS"
+}
+
 # Security Group for RDS
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-sg-rds"
   description = "Security group for RDS MySQL"
   vpc_id      = var.vpc_id
-
-  ingress {
-    description     = "MySQL from ECS Fargate"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  ingress {
-    description     = "MySQL from Lambda"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
-  }
 
   # EC2 접근 허용 (임시 - RDS 마이그레이션용)
   ingress {
@@ -107,13 +94,7 @@ resource "aws_security_group" "rds" {
     cidr_blocks = var.ec2_cidr_blocks
   }
 
-  egress {
-    description     = "All outbound traffic to ECS and Lambda"
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    security_groups = [aws_security_group.ecs.id, aws_security_group.lambda.id]
-  }
+  # RDS는 클라이언트 연결을 받기만 하면 되므로 egress 규칙 불필요
 
   tags = merge(
     var.tags,
@@ -123,6 +104,28 @@ resource "aws_security_group" "rds" {
   )
 }
 
+# RDS ingress from ECS (별도 리소스로 분리하여 순환 참조 방지)
+resource "aws_security_group_rule" "rds_from_ecs" {
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.rds.id
+  description              = "MySQL from ECS Fargate"
+}
+
+# RDS ingress from Lambda (별도 리소스로 분리하여 순환 참조 방지)
+resource "aws_security_group_rule" "rds_from_lambda" {
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda.id
+  security_group_id        = aws_security_group.rds.id
+  description              = "MySQL from Lambda"
+}
+
 # Security Group for Lambda
 resource "aws_security_group" "lambda" {
   name        = "${var.project_name}-sg-lambda"
@@ -130,14 +133,6 @@ resource "aws_security_group" "lambda" {
   vpc_id      = var.vpc_id
 
   # Lambda는 EventBridge가 VPC 외부에서 호출하므로 inbound 규칙 없음
-
-  egress {
-    description     = "MySQL access to RDS"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
 
   egress {
     description = "All outbound traffic via NAT Gateway"
@@ -153,5 +148,16 @@ resource "aws_security_group" "lambda" {
       Name = "${var.project_name}-sg-lambda"
     }
   )
+}
+
+# Lambda to RDS egress rule (별도 리소스로 분리하여 순환 참조 방지)
+resource "aws_security_group_rule" "lambda_to_rds" {
+  type                     = "egress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.rds.id
+  security_group_id        = aws_security_group.lambda.id
+  description              = "MySQL access to RDS"
 }
 

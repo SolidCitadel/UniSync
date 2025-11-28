@@ -9,7 +9,11 @@ terraform/
 ├── modules/
 │   ├── network/          # VPC, Subnets, IGW, NAT Gateway
 │   ├── security-groups/  # Security Groups (ALB, ECS, RDS, Lambda)
-│   └── rds/              # RDS MySQL with Secrets Manager
+│   ├── rds/             # RDS MySQL with Secrets Manager
+│   ├── sqs/             # SQS Queues (DLQ 포함)
+│   ├── secrets/         # Secrets Manager (Canvas Sync API Key)
+│   ├── lambda/          # Lambda Functions (Canvas Sync)
+│   └── eventbridge/     # EventBridge Rules (스케줄링)
 ├── main.tf               # 메인 Terraform 설정
 ├── variables.tf          # 변수 정의
 ├── outputs.tf            # 출력 값
@@ -92,15 +96,45 @@ aws secretsmanager get-secret-value \
 - 자동 백업 (7일 보관)
 - CloudWatch Logs 활성화
 
+### SQS Module
+- Dead Letter Queue (DLQ)
+- `lambda-to-courseservice-sync` 큐
+- `courseservice-to-scheduleservice-assignments` 큐
+- 모든 큐는 DLQ로 재시도 설정 (maxReceiveCount: 3)
+
+### Secrets Module
+- Canvas Sync API Key 저장 (`unisync/canvas-sync-api-key`)
+
+### Lambda Module
+- Canvas Sync Lambda 함수
+- Python 3.11 런타임
+- VPC 설정 (NAT Gateway를 통한 외부 API 호출)
+- Secrets Manager에서 API Key 조회
+- SQS 메시지 발행 권한
+
+### EventBridge Module
+- 매시간 Canvas Sync Lambda 실행 (cron: `rate(1 hour)`)
+- Lambda 함수 자동 트리거
+
 ## 다음 단계
 
+### Phase 1 완료 (RDS)
 1. RDS 생성 후 `.env.local` 파일 업데이트
 2. Docker Compose에서 MySQL 컨테이너 제거
 3. 애플리케이션 재시작 및 테스트
+
+### Phase 2 완료 (Lambda & SQS)
+1. SQS 큐 생성 확인
+2. Lambda 함수 배포 확인
+3. EventBridge 규칙 확인 (매시간 실행)
+4. LocalStack에서 실제 AWS로 전환
 
 ## 주의사항
 
 - `terraform.tfvars` 파일은 gitignore되므로 비밀 정보를 안전하게 관리
 - RDS 삭제 보호가 활성화되어 있음 (`rds_deletion_protection = true`)
 - EC2에서 RDS 접근을 위해 보안 그룹에 EC2 IP를 추가해야 함
+- Lambda 함수는 VPC 내부에서 실행되므로 NAT Gateway를 통해 외부 API 호출
+- EventBridge는 매시간 Lambda를 자동 실행 (비용 발생)
+- Canvas Sync API Key는 Secrets Manager에 저장되며 Lambda에서 자동 조회
 

@@ -69,7 +69,7 @@ resource "aws_db_instance" "main" {
   performance_insights_enabled = var.performance_insights_enabled
 
   # Monitoring
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Deletion protection
   deletion_protection = var.deletion_protection

@@ -88,6 +88,24 @@ variable "rds_deletion_protection" {
   default     = true
 }
 
+variable "canvas_sync_api_key" {
+  description = "Canvas Sync API key for Lambda authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "user_service_url" {
+  description = "User Service URL for Lambda to call"
+  type        = string
+  default     = "http://user-service:8081"
+}
+
+variable "canvas_api_base_url" {
+  description = "Canvas API base URL"
+  type        = string
+  default     = "https://khcanvas.khu.ac.kr/api/v1"
+}
+
 variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)

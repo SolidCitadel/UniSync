@@ -65,7 +65,11 @@ terraform/
 ├── modules/
 │   ├── network/          # VPC, Subnets, IGW, NAT Gateway
 │   ├── security-groups/  # Security Groups (ALB, ECS, RDS, Lambda)
-│   └── rds/              # RDS MySQL with Secrets Manager
+│   ├── rds/              # RDS MySQL with Secrets Manager
+│   ├── sqs/              # SQS Queues (DLQ 포함)
+│   ├── secrets/          # Secrets Manager (Canvas Sync API Key)
+│   ├── lambda/           # Lambda Functions (Canvas Sync)
+│   └── eventbridge/      # EventBridge Rules (스케줄링)
 ├── main.tf               # 메인 Terraform 설정
 ├── variables.tf          # 변수 정의
 ├── outputs.tf            # 출력 값
@@ -112,9 +116,47 @@ terraform/
 - **포트**: 3306
 - **비밀번호**: Secrets Manager에 저장 (`unisync/rds-password`)
 
+### RDS 설정
+
+- **인스턴스 클래스**: db.t3.micro
+- **스토리지**: 30GB (최대 100GB 자동 확장)
+- **Multi-AZ**: 활성화 (고가용성)
+- **백업**: 7일 보관
+- **엔진**: MySQL 8.0.39
+- **포트**: 3306
+- **비밀번호**: Secrets Manager에 저장 (`unisync/rds-password`)
+
+### SQS 설정
+
+- **DLQ**: `unisync-dlq-queue` (14일 보관)
+- **큐 목록**:
+  - `unisync-lambda-to-courseservice-sync` (4일 보관, DLQ 연결)
+  - `unisync-courseservice-to-scheduleservice-assignments` (4일 보관, DLQ 연결)
+- **재시도**: maxReceiveCount 3회
+
+### Lambda 설정
+
+- **함수**: `unisync-canvas-sync-lambda`
+- **런타임**: Python 3.11
+- **메모리**: 256MB
+- **타임아웃**: 120초
+- **VPC**: Private Subnet 배치 (NAT Gateway를 통한 외부 API 호출)
+- **Secrets Manager**: Canvas Sync API Key 자동 조회
+- **SQS 권한**: lambda-to-courseservice-sync 큐에 메시지 발행
+
+### EventBridge 설정
+
+- **규칙**: `unisync-canvas-sync-schedule`
+- **스케줄**: 매시간 실행 (`rate(1 hour)`)
+- **타겟**: Canvas Sync Lambda 함수
+
 ### 주의사항
 
 - **DB 포트**: MySQL은 3306 포트 사용 (PostgreSQL의 5432가 아님)
 - **논리적 DB 생성**: Terraform은 RDS 인스턴스만 생성. `user_db`, `course_db`, `schedule_db`는 애플리케이션 초기화 시점이나 별도 스크립트로 생성
 - **EC2 접근**: RDS 마이그레이션을 위해 임시로 EC2 IP를 보안 그룹에 추가 (ECS 전환 후 제거)
-- **Secrets Manager**: DB 비밀번호는 Secrets Manager에 저장되며, Terraform에서 자동 생성 및 참조
+- **Secrets Manager**: 
+  - DB 비밀번호: `unisync/rds-password`
+  - Canvas Sync API Key: `unisync/canvas-sync-api-key`
+- **Lambda VPC**: NAT Gateway를 통해 외부 API(Canvas LMS) 호출
+- **EventBridge**: 매시간 Lambda 실행 (비용 발생)
