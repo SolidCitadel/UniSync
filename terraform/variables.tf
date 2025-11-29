@@ -106,6 +106,12 @@ variable "canvas_api_base_url" {
   default     = "https://khcanvas.khu.ac.kr/api/v1"
 }
 
+variable "lambda_execution_role_arn" {
+  description = "ARN of existing IAM Role for Lambda execution (LabRole)"
+  type        = string
+  default     = "arn:aws:iam::381492267817:role/LabRole"
+}
+
 variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)

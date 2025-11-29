@@ -95,6 +95,7 @@ module "lambda" {
 
   project_name                  = var.project_name
   aws_region                    = var.aws_region
+  lambda_execution_role_arn     = var.lambda_execution_role_arn
   private_subnet_ids            = module.network.private_subnet_ids
   lambda_security_group_id      = module.security_groups.lambda_security_group_id
   user_service_url              = var.user_service_url
