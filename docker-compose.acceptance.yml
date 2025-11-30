@@ -84,7 +84,7 @@ services:
       - SPRING_PROFILES_ACTIVE=acceptance
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -116,7 +116,7 @@ services:
       - SPRING_PROFILES_ACTIVE=acceptance
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -150,7 +150,7 @@ services:
       - SPRING_PROFILES_ACTIVE=acceptance
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -186,7 +186,7 @@ services:
       - SPRING_PROFILES_ACTIVE=acceptance
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     user: root  # entrypoint 실행 위해 임시로 root 필요
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
