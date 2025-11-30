@@ -73,6 +73,9 @@ public class AssignmentService {
         // Canvas 카테고리 조회 또는 생성
         Long categoryId = categoryService.getOrCreateCanvasCategory(message.getCognitoSub());
 
+        // 하루 종일 이벤트 시간 (날짜의 00:00:00)
+        LocalDateTime allDayTime = calculateAllDayStartTime(message.getDueAt());
+
         // Schedule 생성
         Schedule schedule = Schedule.builder()
                 .cognitoSub(message.getCognitoSub())
@@ -81,9 +84,9 @@ public class AssignmentService {
                 .title(buildScheduleTitle(message))
                 .description(message.getDescription())
                 .location(null)
-                .startTime(calculateStartTime(message.getDueAt()))
-                .endTime(message.getDueAt())
-                .isAllDay(false)
+                .startTime(allDayTime)
+                .endTime(allDayTime)  // 하루 종일 이벤트는 start와 end가 동일
+                .isAllDay(true)  // Canvas 과제는 하루 종일 이벤트
                 .status(ScheduleStatus.TODO)
                 .recurrenceRule(null)
                 .source(ScheduleSource.CANVAS)
@@ -117,11 +120,14 @@ public class AssignmentService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Schedule not found for assignment: sourceId=" + sourceId));
 
+        // 하루 종일 이벤트 시간
+        LocalDateTime allDayTime = calculateAllDayStartTime(message.getDueAt());
+
         // 필드 업데이트
         schedule.setTitle(buildScheduleTitle(message));
         schedule.setDescription(message.getDescription());
-        schedule.setStartTime(calculateStartTime(message.getDueAt()));
-        schedule.setEndTime(message.getDueAt());
+        schedule.setStartTime(allDayTime);
+        schedule.setEndTime(allDayTime);  // 하루 종일 이벤트는 start와 end가 동일
 
         Schedule updated = scheduleRepository.save(schedule);
 
@@ -160,13 +166,13 @@ public class AssignmentService {
     }
 
     /**
-     * 시작 시간 계산
-     * 마감 시간 24시간 전을 시작 시간으로 설정
+     * 하루 종일 이벤트 시작 시간 계산
+     * dueAt의 날짜 00:00:00으로 설정 (해당 날짜의 시작)
      */
-    private LocalDateTime calculateStartTime(LocalDateTime dueAt) {
+    private LocalDateTime calculateAllDayStartTime(LocalDateTime dueAt) {
         if (dueAt == null) {
-            return LocalDateTime.now();
+            return LocalDateTime.now().toLocalDate().atStartOfDay();
         }
-        return dueAt.minusHours(24);
+        return dueAt.toLocalDate().atStartOfDay();
     }
 }

@@ -102,9 +102,11 @@ class AssignmentServiceTest {
         assertThat(savedSchedule.getCategoryId()).isEqualTo(canvasCategoryId);
         assertThat(savedSchedule.getTitle()).isEqualTo("[데이터구조] 중간고사 프로젝트");
         assertThat(savedSchedule.getDescription()).isEqualTo("Spring Boot로 REST API 구현");
-        assertThat(savedSchedule.getEndTime()).isEqualTo(validMessage.getDueAt());
-        assertThat(savedSchedule.getStartTime()).isEqualTo(validMessage.getDueAt().minusHours(24));
-        assertThat(savedSchedule.getIsAllDay()).isFalse();
+
+        LocalDateTime expectedTime = validMessage.getDueAt().toLocalDate().atStartOfDay();
+        assertThat(savedSchedule.getStartTime()).isEqualTo(expectedTime);
+        assertThat(savedSchedule.getEndTime()).isEqualTo(expectedTime);  // start와 end가 동일
+        assertThat(savedSchedule.getIsAllDay()).isTrue();  // Canvas 과제는 하루 종일 이벤트
         assertThat(savedSchedule.getStatus()).isEqualTo(ScheduleStatus.TODO);
         assertThat(savedSchedule.getSource()).isEqualTo(ScheduleSource.CANVAS);
         assertThat(savedSchedule.getSourceId()).isEqualTo("canvas-assignment-456-user-123");
@@ -162,8 +164,10 @@ class AssignmentServiceTest {
         Schedule updatedSchedule = scheduleCaptor.getValue();
         assertThat(updatedSchedule.getTitle()).isEqualTo("[데이터구조] 업데이트된 제목");
         assertThat(updatedSchedule.getDescription()).isEqualTo(validMessage.getDescription());
-        assertThat(updatedSchedule.getEndTime()).isEqualTo(validMessage.getDueAt());
-        assertThat(updatedSchedule.getStartTime()).isEqualTo(validMessage.getDueAt().minusHours(24));
+
+        LocalDateTime expectedTime = validMessage.getDueAt().toLocalDate().atStartOfDay();
+        assertThat(updatedSchedule.getStartTime()).isEqualTo(expectedTime);
+        assertThat(updatedSchedule.getEndTime()).isEqualTo(expectedTime);  // start와 end가 동일
     }
 
     @Test
@@ -263,8 +267,8 @@ class AssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("시작 시간은 마감 시간 24시간 전으로 설정")
-    void createSchedule_StartTime24HoursBeforeDue() {
+    @DisplayName("하루 종일 이벤트로 시작 시간은 해당 날짜 00:00:00으로 설정")
+    void createSchedule_AllDayEvent_StartTimeAtMidnight() {
         // given
         LocalDateTime dueAt = LocalDateTime.of(2025, 11, 20, 23, 59, 59);
         validMessage.setDueAt(dueAt);
