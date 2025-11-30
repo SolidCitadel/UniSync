@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +24,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+import java.util.Set;
 
 /**
  * 외부 서비스 연동 통합 API
@@ -98,11 +103,14 @@ public class IntegrationController {
      * Canvas 수동 동기화 시작
      */
     @PostMapping("/canvas/sync")
-    @Operation(summary = "Canvas 동기화", description = "Canvas 과목/과제를 동기화합니다. syncMode=courses_only/full")
+    @Operation(summary = "Canvas 동기화", description = "Canvas 과목/과제를 동기화합니다. syncMode=courses|assignments")
     public ResponseEntity<CanvasSyncResponse> syncCanvas(
         @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
-        @RequestParam(name = "mode", defaultValue = "full") String syncMode
+        @RequestParam(name = "mode", defaultValue = "assignments") String syncMode
     ) {
+        if (!Set.of("courses", "assignments").contains(syncMode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sync mode: " + syncMode);
+        }
         log.info("POST /v1/integrations/canvas/sync - Cognito Sub: {}, mode={}", cognitoSub, syncMode);
         CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub, syncMode);
         log.info("Canvas sync response: {} courses, {} assignments",

@@ -193,6 +193,40 @@ integration/
 - 데이터 흐름 방향이 명확함
 - 어떤 서비스 간 통합인지 즉시 파악 가능
 
+### Scenario Test 원칙
+
+Scenario Tests (`system-tests/scenarios/`)는 실제 사용자가 프론트엔드에서 수행하는 전체 플로우를 검증합니다.
+
+**핵심 원칙**:
+- **DB 직접 조작 금지**: DB fixture (`mysql_connection`, `schedule_db_connection` 등) 사용 금지. 모든 데이터는 API를 통해서만 생성/조회/검증
+- **Gateway 엔드포인트만 사용**: 프론트엔드가 실제로 호출할 수 있는 API Gateway를 통한 엔드포인트만 사용 (내부 서비스 직접 호출 금지)
+- **실제 사용자 플로우**: 사용자가 UI에서 수행하는 동작과 동일한 순서로 테스트
+
+**예시**:
+```python
+# ✅ Good - API만 사용
+def test_full_user_journey_via_gateway():
+    # API Gateway를 통한 회원가입
+    response = requests.post(f"{API_GATEWAY_URL}/v1/auth/signup", ...)
+
+    # API Gateway를 통한 토큰 등록
+    response = requests.post(f"{API_GATEWAY_URL}/v1/credentials", ...)
+
+    # API Gateway를 통한 동기화
+    response = requests.post(f"{API_GATEWAY_URL}/v1/sync/canvas", ...)
+
+    # API Gateway를 통한 일정 조회
+    response = requests.get(f"{API_GATEWAY_URL}/v1/schedules", ...)
+
+# ❌ Bad - DB 직접 조작
+def test_full_user_journey_with_db():
+    # DB에 직접 사용자 생성 (금지)
+    cursor.execute("INSERT INTO users ...")
+
+    # DB에서 직접 조회 (금지)
+    cursor.execute("SELECT * FROM schedules ...")
+```
+
 ### Fixture 사용
 
 `conftest.py`에서 제공하는 공통 fixtures:

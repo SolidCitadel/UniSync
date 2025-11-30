@@ -2,7 +2,7 @@ package com.unisync.course.assignment.publisher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.unisync.course.assignment.dto.AssignmentToScheduleEventDto;
+import com.unisync.course.assignment.dto.UserAssignmentsBatchEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,14 +34,14 @@ public class AssignmentEventPublisher {
     private String queueName;
 
     /**
-     * Assignment 이벤트를 Schedule-Service로 발행
+     * 사용자별 assignments 배치 이벤트를 Schedule-Service로 발행
      *
-     * @param events 발행할 이벤트 리스트
+     * @param events 사용자당 1개 배치 이벤트 리스트
      */
-    public void publishAssignmentEvents(List<AssignmentToScheduleEventDto> events) {
+    public void publishAssignmentBatchEvents(List<UserAssignmentsBatchEvent> events) {
         String queueUrl = getQueueUrl();
 
-        for (AssignmentToScheduleEventDto event : events) {
+        for (UserAssignmentsBatchEvent event : events) {
             try {
                 String messageBody = objectMapper.writeValueAsString(event);
 
@@ -51,16 +51,17 @@ public class AssignmentEventPublisher {
                         .build();
 
                 sqsAsyncClient.sendMessage(request)
-                        .thenAccept(response -> log.info("✅ Published assignment event to SQS: eventType={}, assignmentId={}, cognitoSub={}",
-                                event.getEventType(), event.getAssignmentId(), event.getCognitoSub()))
+                        .thenAccept(response -> log.info("✅ Published assignment batch to SQS: eventType={}, cognitoSub={}, assignments={}",
+                                event.getEventType(), event.getCognitoSub(),
+                                event.getAssignments() != null ? event.getAssignments().size() : 0))
                         .exceptionally(throwable -> {
-                            log.error("❌ Failed to publish assignment event: eventType={}, assignmentId={}, cognitoSub={}",
-                                    event.getEventType(), event.getAssignmentId(), event.getCognitoSub(), throwable);
+                            log.error("❌ Failed to publish assignment batch: cognitoSub={}",
+                                    event.getCognitoSub(), throwable);
                             return null;
                         });
 
             } catch (JsonProcessingException e) {
-                log.error("❌ Failed to serialize assignment event", e);
+                log.error("❌ Failed to serialize assignment batch event", e);
             }
         }
     }

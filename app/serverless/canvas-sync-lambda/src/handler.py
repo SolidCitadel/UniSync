@@ -29,31 +29,35 @@ def lambda_handler(event, context):
     Canvas 동기화 요청 처리 (Phase 1/2/3 공통)
 
     입력 예시:
-    - direct invoke: {"cognitoSub": "...", "syncMode": "full"}
-    - EventBridge: {"detail": {"cognitoSub": "...", "syncMode": "courses_only"}}
-    - SQS: {"Records": [{"body": "{\"cognitoSub\": \"...\", \"syncMode\": \"full\"}"}]}
+    - direct invoke: {"cognitoSub": "...", "syncMode": "assignments"}
+    - EventBridge: {"detail": {"cognitoSub": "...", "syncMode": "courses"}}
+    - SQS: {"Records": [{"body": "{\"cognitoSub\": \"...\", \"syncMode\": \"assignments\"}"}]}
     """
     try:
         cognito_sub = extract_cognito_sub(event)
         sync_mode = extract_sync_mode(event)
 
+        if sync_mode not in ("courses", "assignments"):
+            raise ValueError(f"Invalid syncMode: {sync_mode}")
+
         print(f"Canvas sync started for cognitoSub={cognito_sub}, syncMode={sync_mode}")
 
-        # 1. Course-Service에서 sync 활성 과목 조회
-        enabled_courses = fetch_enabled_enrollments(cognito_sub)
-        enabled_canvas_ids = {c["canvasCourseId"] for c in enabled_courses}
+        enabled_canvas_ids = set()
+        if sync_mode == 'assignments':
+            # assignments 모드에서는 활성화된 수강 과목만 동기화
+            enabled_courses = fetch_enabled_enrollments(cognito_sub)
+            enabled_canvas_ids = {c["canvasCourseId"] for c in enabled_courses}
 
-        # 활성화된 수강 내역이 없으면 바로 종료
-        if not enabled_courses:
-            print("  - No enabled enrollments found, skipping Canvas fetch")
-            return {
-                'statusCode': 200,
-                'body': {
-                    'coursesCount': 0,
-                    'assignmentsCount': 0,
-                    'syncedAt': datetime.utcnow().isoformat()
+            if not enabled_courses:
+                print("  - No enabled enrollments found, skipping Canvas fetch")
+                return {
+                    'statusCode': 200,
+                    'body': {
+                        'coursesCount': 0,
+                        'assignmentsCount': 0,
+                        'syncedAt': datetime.utcnow().isoformat()
+                    }
                 }
-            }
 
         # 2. User-Service에서 Canvas Token 조회 (복호화된 토큰)
         canvas_token = get_canvas_token(cognito_sub)
@@ -68,8 +72,8 @@ def lambda_handler(event, context):
 
         # 4. 과목 처리
         for course in courses:
-            # sync enabled 필터링: 활성 과목만 처리
-            if enabled_canvas_ids and course['id'] not in enabled_canvas_ids:
+            # assignments 모드일 때만 활성 과목 필터링
+            if sync_mode == 'assignments' and enabled_canvas_ids and course['id'] not in enabled_canvas_ids:
                 continue
 
             course_data = {
@@ -82,8 +86,8 @@ def lambda_handler(event, context):
                 'assignments': []
             }
 
-            # courses_only 모드면 과제 조회 스킵
-            if sync_mode == 'courses_only':
+            # courses 모드면 과제 조회 스킵
+            if sync_mode == 'courses':
                 courses_data.append(course_data)
                 continue
 
@@ -132,7 +136,7 @@ def lambda_handler(event, context):
             }
 
         # 5. 메시지 송신
-        event_type = 'CANVAS_COURSES_SYNCED' if sync_mode == 'courses_only' else 'CANVAS_SYNC_COMPLETED'
+        event_type = 'CANVAS_COURSES_SYNCED' if sync_mode == 'courses' else 'CANVAS_SYNC_COMPLETED'
 
         sync_message = {
             'eventType': event_type,
@@ -180,9 +184,9 @@ def extract_cognito_sub(event: Dict[str, Any]) -> str:
 
 def extract_sync_mode(event: Dict[str, Any]) -> str:
     """
-    syncMode 추출 (기본값: full)
+    syncMode 추출 (기본값: assignments)
     """
-    default_mode = 'full'
+    default_mode = 'assignments'
 
     if 'detail' in event and 'syncMode' in event['detail']:
         return event['detail']['syncMode']

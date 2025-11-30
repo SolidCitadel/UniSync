@@ -75,6 +75,7 @@ public class GatewayRoutesConfig {
                         .path(
                             "/api/v1/courses/**",
                             "/api/v1/assignments/**",
+                            "/api/v1/enrollments/**",
                             "/api/v1/tasks/**",
                             "/api/v1/notices/**"
                         )

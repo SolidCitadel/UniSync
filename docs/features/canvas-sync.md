@@ -25,13 +25,14 @@ Canvas LMS의 과제 및 강의 데이터를 UniSync로 동기화하여 사용�
 - SQS 큐 간소화: 7개 → 3개
 - 명확한 큐 네이밍: `{source}-to-{destination}-{purpose}` 형식
 - Phase별 명확한 분리: 수동(Phase 1) → 자동(Phase 2) → LLM(Phase 3)
+- `syncMode` 명확화: `courses`(과목만) / `assignments`(활성 과목의 과제까지). 이전 이름(`courses_only`/`full`)은 제거.
 
 ### 1.2 Phase별 구현 전략
 
 | Phase | 상태 | 설명 | 트리거 |
 |-------|------|------|--------|
-| **Phase 1.0** | ✅ 완료 | 기본 수동 동기화 (강의+과제 일괄) | 사용자 버튼 클릭 → Spring → Lambda |
-| **Phase 1.1** | 🔄 진행 중 | 과목 선택형 동기화 (강의 목록 → 선택 → 과제) | 사용자 선택적 동기화 |
+| **Phase 1.0** | ✅ 완료 | 기본 수동 동기화 (courses+assignments 일괄) | 사용자 버튼 클릭 → Spring → Lambda |
+| **Phase 1.1** | 🔄 진행 중 | 과목 선택형 동기화 (과목만 → 사용자 선택 → 과제) | 사용자 선택적 동기화 |
 | **Phase 2** | 📋 계획 | 자동 동기화 | EventBridge 스케줄러 → Lambda |
 | **Phase 3** | 💡 선택 | LLM 자동화 | Assignment 감지 → LLM 분석 → Subtask 생성 |
 
@@ -54,9 +55,9 @@ Canvas LMS의 과제 및 강의 데이터를 UniSync로 동기화하여 사용�
 - 과목별로 동기화 활성화/비활성화 필요
 
 **새로운 플로우** (3단계):
-1. **강의 목록만 동기화** (`syncMode: 'courses_only'`)
+1. **강의 목록만 동기화** (`syncMode: 'courses'`)
 2. **사용자가 UI에서 과목 선택** (Enrollment 토글)
-3. **과제 동기화** (`syncMode: 'full'`, 활성화된 과목만)
+3. **과제 동기화** (`syncMode: 'assignments'`, 활성화된 과목만)
 
 ### 2.2 전체 플로우
 
@@ -83,10 +84,10 @@ sequenceDiagram
 
     Note over User,CourseService: 1. 강의 목록만 동기화
     User->>Frontend: "Canvas 연동" 버튼 클릭
-    Frontend->>Gateway: POST /api/v1/sync/canvas?mode=courses_only
-    Gateway->>UserService: POST /v1/sync/canvas?mode=courses_only (JWT)
+    Frontend->>Gateway: POST /api/v1/sync/canvas?mode=courses
+    Gateway->>UserService: POST /v1/sync/canvas?mode=courses (JWT)
 
-    UserService->>Lambda: invoke({cognitoSub, syncMode: 'courses_only'})
+    UserService->>Lambda: invoke({cognitoSub, syncMode: 'courses'})
     Lambda->>Canvas: GET /api/v1/courses
     Canvas-->>Lambda: [Course1, Course2, ...]
     Lambda->>SQS: CANVAS_COURSES_SYNCED (courses만, assignments 제외)
@@ -110,10 +111,10 @@ sequenceDiagram
 
     Note over User,CourseService: 3. 활성화된 과목만 과제 동기화
     User->>Frontend: "과제 동기화" 버튼 클릭
-    Frontend->>Gateway: POST /api/v1/sync/canvas?mode=full
-    Gateway->>UserService: POST /v1/sync/canvas?mode=full (JWT)
+    Frontend->>Gateway: POST /api/v1/sync/canvas?mode=assignments
+    Gateway->>UserService: POST /v1/sync/canvas?mode=assignments (JWT)
 
-    UserService->>Lambda: invoke({cognitoSub, syncMode: 'full'})
+    UserService->>Lambda: invoke({cognitoSub, syncMode: 'assignments'})
     Lambda->>CourseService: GET /internal/v1/enrollments/enabled/{cognitoSub}
     CourseService-->>Lambda: [{canvasCourseId: 1}, {canvasCourseId: 3}]
 
@@ -127,9 +128,10 @@ sequenceDiagram
 
     SQS->>CourseService: CANVAS_SYNC_COMPLETED
     CourseService->>CourseService: Assignment 저장
-    CourseService->>SQS: ASSIGNMENT_CREATED (활성화된 enrollment의 학생들에게만)
-    SQS->>ScheduleService: ASSIGNMENT_CREATED
-    ScheduleService->>ScheduleService: Schedule 생성 (과목별 카테고리)
+    CourseService->>CourseService: Enabled enrollment별 그룹핑
+    CourseService->>SQS: USER_ASSIGNMENTS_CREATED (사용자당 1개 batch)
+    SQS->>ScheduleService: USER_ASSIGNMENTS_CREATED
+    ScheduleService->>ScheduleService: Schedule 생성 (과목별 카테고리, batch 처리)
 ```
 
 ### 2.3 동작 방식
@@ -140,12 +142,12 @@ sequenceDiagram
 - AES-256 암호화하여 `credentials` 테이블에 저장
 
 **Step 1: 강의 목록만 동기화**
-- 프론트엔드: `POST /api/v1/sync/canvas?mode=courses_only` (JWT)
-- User-Service → Lambda: `{cognitoSub, syncMode: 'courses_only'}`
+- 프론트엔드: `POST /api/v1/sync/canvas?mode=courses` (JWT)
+- User-Service → Lambda: `{cognitoSub, syncMode: 'courses'}`
 - Lambda: Course-Service 내부 API로 `is_sync_enabled=true` 과목 목록 조회
   - 활성 과목이 없으면 Canvas 호출 없이 0건으로 종료
 - Lambda: Canvas API에서 courses만 조회 (assignments 제외)
-- SQS: `CANVAS_COURSES_SYNCED` 이벤트 발행 (`syncMode=courses_only`, `courses` 필드만)
+- SQS: `CANVAS_COURSES_SYNCED` 이벤트 발행 (`syncMode=courses`, `courses` 필드만)
 - Course-Service: Course + Enrollment upsert
 
 **Step 2: 사용자가 과목 선택**
@@ -156,14 +158,17 @@ sequenceDiagram
 - SQS: `COURSE_DISABLED` 이벤트 발행 (Schedule-Service가 해당 과목 Schedule 삭제)
 
 **Step 3: 활성화된 과목만 과제 동기화**
-- 프론트엔드: `POST /api/v1/sync/canvas?mode=full` (JWT)
-- User-Service → Lambda: `{cognitoSub, syncMode: 'full'}`
+- 프론트엔드: `POST /api/v1/sync/canvas?mode=assignments` (JWT)
+- User-Service → Lambda: `{cognitoSub, syncMode: 'assignments'}`
 - Lambda → Course-Service: `GET /internal/v1/enrollments/enabled` (헤더 `X-Cognito-Sub`)
   - 활성 과목이 없으면 Canvas 호출 없이 0건으로 종료
 - Lambda: 활성화된 과목만 Canvas API에서 assignments 조회 (`dueAt`가 없으면 제외)
-- SQS: `CANVAS_SYNC_COMPLETED` 이벤트 발행 (`syncMode=full`, assignments 포함)
-- Course-Service: Assignment 저장 → `ASSIGNMENT_CREATED` 이벤트 발행 (활성화된 학생들에게만)
-- Schedule-Service: Schedule 생성 (과목별 카테고리)
+- SQS: `CANVAS_SYNC_COMPLETED` 이벤트 발행 (`syncMode=assignments`, assignments 포함)
+- Course-Service:
+  - Assignment 저장
+  - Enabled enrollment별로 그룹핑
+  - `USER_ASSIGNMENTS_CREATED` 이벤트 발행 (사용자당 1개 batch 메시지)
+- Schedule-Service: 사용자의 모든 assignments를 batch 처리하여 Schedule 생성 (과목별 카테고리)
 
 ### 2.4 주요 특징
 
@@ -183,7 +188,7 @@ sequenceDiagram
 
 | 큐 이름 | 송신자 | 수신자 | 용도 | 상태 |
 |---------|--------|--------|------|------|
-| `lambda-to-courseservice-sync` | Lambda | Course-Service | Canvas 동기화 통합 메시지 (courses_only/full) | ✅ |
+| `lambda-to-courseservice-sync` | Lambda | Course-Service | Canvas 동기화 통합 메시지 (courses/assignments) | ✅ |
 | `courseservice-to-scheduleservice-assignments` | Course-Service | Schedule-Service | Assignment → Schedule 변환 | ✅ |
 | `courseservice-to-scheduleservice-courses` | Course-Service | Schedule-Service | Course 비활성화 이벤트 (`COURSE_DISABLED`) | ✅ |
 | `dlq-queue` | - | - | 처리 실패 메시지 저장 (DLQ) | ✅ |
@@ -193,15 +198,15 @@ sequenceDiagram
 #### 3.2.1 Canvas 동기화 메시지 (`lambda-to-courseservice-sync`)
 
 **Phase 1.1 개선**: 기존 분리 메시지 → 1개 통합 큐로 변경
-- 이벤트 타입으로 구분: `CANVAS_COURSES_SYNCED`(courses_only), `CANVAS_SYNC_COMPLETED`(full)
-- `syncMode` 필드 추가 (courses_only/full)
+- 이벤트 타입으로 구분: `CANVAS_COURSES_SYNCED`(courses), `CANVAS_SYNC_COMPLETED`(assignments)
+- `syncMode` 필드: `courses`/`assignments`
 - 활성 enrollments가 없으면 0건 메시지 반환, SQS 발행 생략
 
 **강의 목록만 동기화** (`CANVAS_COURSES_SYNCED`):
 ```json
 {
   "eventType": "CANVAS_COURSES_SYNCED",
-  "syncMode": "courses_only",
+  "syncMode": "courses",
   "cognitoSub": "user-cognito-sub-123",
   "syncedAt": "2025-11-30T12:00:00Z",
   "courses": [
@@ -221,7 +226,7 @@ sequenceDiagram
 ```json
 {
   "eventType": "CANVAS_SYNC_COMPLETED",
-  "syncMode": "full",
+  "syncMode": "assignments",
   "cognitoSub": "user-cognito-sub-123",
   "syncedAt": "2025-11-30T12:00:00Z",
   "courses": [
@@ -251,8 +256,8 @@ sequenceDiagram
 ```
 
 **차이점**:
-- `CANVAS_COURSES_SYNCED`: `assignments` 필드 없음 (courses_only)
-- `CANVAS_SYNC_COMPLETED`: `assignments` 필드 포함 (full), `dueAt`가 null인 과제는 제외
+- `CANVAS_COURSES_SYNCED`: `assignments` 필드 없음 (courses)
+- `CANVAS_SYNC_COMPLETED`: `assignments` 필드 포함 (assignments), `dueAt`가 null인 과제는 제외
 
 #### 3.2.2 Course 이벤트 메시지 (`courseservice-to-scheduleservice-course-events`)
 
@@ -481,10 +486,10 @@ EventBridge Rule (cron)
 - [ ] Migration 스크립트 작성
 
 #### Lambda
-- [ ] `syncMode` 파라미터 처리 ('courses_only' | 'full')
-- [ ] `courses_only` 모드: assignments 조회 건너뛰기
-- [ ] `full` 모드: Course-Service에서 활성화된 enrollment 조회
-- [ ] `full` 모드: 활성화된 과목만 assignments 조회
+- [ ] `syncMode` 파라미터 처리 ('courses' | 'assignments')
+- [ ] `courses` 모드: assignments 조회 건너뛰기
+- [ ] `assignments` 모드: Course-Service에서 활성화된 enrollment 조회
+- [ ] `assignments` 모드: 활성화된 과목만 assignments 조회
 - [ ] `get_enabled_enrollments()` 함수 추가
 - [ ] 이벤트 타입 구분: `CANVAS_COURSES_SYNCED`, `CANVAS_SYNC_COMPLETED`
 - [ ] 단위 테스트 업데이트

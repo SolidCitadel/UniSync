@@ -2,6 +2,7 @@ package com.unisync.course.sync.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unisync.course.assignment.service.AssignmentService;
+import com.unisync.course.assignment.publisher.AssignmentEventPublisher;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.entity.Enrollment;
 import com.unisync.course.common.repository.CourseRepository;
@@ -36,21 +37,24 @@ class CanvasSyncListenerTest {
     @Mock
     private AssignmentService assignmentService;
 
+    @Mock
+    private AssignmentEventPublisher assignmentEventPublisher;
+
     private ObjectMapper objectMapper;
 
-    @InjectMocks
+@InjectMocks
     private CanvasSyncListener canvasSyncListener;
 
 @BeforeEach
 void setUp() {
     MockitoAnnotations.openMocks(this);
     objectMapper = new ObjectMapper();
-    canvasSyncListener = new CanvasSyncListener(courseRepository, enrollmentRepository, assignmentService, objectMapper);
+    canvasSyncListener = new CanvasSyncListener(courseRepository, enrollmentRepository, assignmentService, assignmentEventPublisher, objectMapper);
 }
 
 @Test
-@DisplayName("courses_only 모드일 때 assignments를 처리하지 않는다")
-void coursesOnlyModeSkipsAssignments() throws Exception {
+@DisplayName("courses 모드일 때 assignments를 처리하지 않는다")
+void coursesModeSkipsAssignments() throws Exception {
         // given
         Course course = Course.builder()
                 .id(1L)
@@ -64,7 +68,7 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
         CanvasSyncMessage message = CanvasSyncMessage.builder()
                 .eventType("CANVAS_COURSES_SYNCED")
                 .cognitoSub("user-1")
-                .syncMode("courses_only")
+                .syncMode("courses")
                 .courses(List.of(
                         CanvasSyncMessage.CourseData.builder()
                                 .canvasCourseId(123L)
@@ -90,8 +94,8 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
     }
 
     @Test
-    @DisplayName("full 모드일 때 assignments를 처리한다")
-    void fullModeProcessesAssignments() throws Exception {
+    @DisplayName("assignments 모드일 때 assignments를 처리한다")
+    void assignmentsModeProcessesAssignments() throws Exception {
         // given
         Course course = Course.builder()
                 .id(1L)
@@ -105,7 +109,7 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
         CanvasSyncMessage message = CanvasSyncMessage.builder()
                 .eventType("CANVAS_SYNC_COMPLETED")
                 .cognitoSub("user-1")
-                .syncMode("full")
+                .syncMode("assignments")
                 .courses(List.of(
                         CanvasSyncMessage.CourseData.builder()
                                 .canvasCourseId(123L)
@@ -135,8 +139,8 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
     }
 
     @Test
-    @DisplayName("eventType이 CANVAS_COURSES_SYNCED이면 syncMode가 full이어도 assignments를 건너뛴다")
-    void eventTypeCoursesSyncedSkipsAssignmentsEvenIfModeFull() throws Exception {
+    @DisplayName("eventType이 CANVAS_COURSES_SYNCED이면 syncMode가 assignments여도 assignments를 건너뛴다")
+    void eventTypeCoursesSyncedSkipsAssignmentsEvenIfModeAssignments() throws Exception {
         Course course = Course.builder()
                 .id(1L)
                 .canvasCourseId(200L)
@@ -149,7 +153,7 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
         CanvasSyncMessage message = CanvasSyncMessage.builder()
                 .eventType("CANVAS_COURSES_SYNCED")
                 .cognitoSub("user-2")
-                .syncMode("full") // eventType이 우선
+                .syncMode("assignments") // eventType이 우선
                 .courses(List.of(
                         CanvasSyncMessage.CourseData.builder()
                                 .canvasCourseId(200L)
@@ -178,7 +182,7 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
         CanvasSyncMessage message = CanvasSyncMessage.builder()
                 .eventType("CANVAS_COURSES_SYNCED")
                 .cognitoSub("user-3")
-                .syncMode("courses_only")
+                .syncMode("courses")
                 .courses(List.of())
                 .build();
 
@@ -207,7 +211,7 @@ void coursesOnlyModeSkipsAssignments() throws Exception {
         CanvasSyncMessage message = CanvasSyncMessage.builder()
                 .eventType("CANVAS_COURSES_SYNCED")
                 .cognitoSub("user-4")
-                .syncMode("courses_only")
+                .syncMode("courses")
                 .courses(List.of(
                         CanvasSyncMessage.CourseData.builder()
                                 .canvasCourseId(300L)

@@ -166,20 +166,31 @@ class IntegrationControllerTest {
                 .syncedAt("2025-01-22T10:30:00")
                 .build();
 
-        given(canvasSyncService.syncCanvas(COGNITO_SUB, "full"))
+        given(canvasSyncService.syncCanvas(COGNITO_SUB, "assignments"))
                 .willReturn(response);
 
         // When & Then
         mockMvc.perform(post("/v1/integrations/canvas/sync")
                         .header("X-Cognito-Sub", COGNITO_SUB)
-                        .param("mode", "full"))
+                        .param("mode", "assignments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Canvas sync started"))
                 .andExpect(jsonPath("$.coursesCount").value(5))
                 .andExpect(jsonPath("$.assignmentsCount").value(12));
 
-        then(canvasSyncService).should().syncCanvas(COGNITO_SUB, "full");
+        then(canvasSyncService).should().syncCanvas(COGNITO_SUB, "assignments");
+    }
+
+    @Test
+    @DisplayName("POST /v1/integrations/canvas/sync - 잘못된 mode면 400 반환")
+    void syncCanvas_InvalidMode() throws Exception {
+        mockMvc.perform(post("/v1/integrations/canvas/sync")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("mode", "invalid-mode"))
+                .andExpect(status().isBadRequest());
+
+        then(canvasSyncService).shouldHaveNoInteractions();
     }
 
     // Note: X-Cognito-Sub 헤더 검증은 API Gateway에서 처리하므로

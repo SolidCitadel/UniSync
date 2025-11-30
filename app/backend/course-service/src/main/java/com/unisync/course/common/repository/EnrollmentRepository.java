@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
@@ -55,4 +56,30 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
      */
     @Query("SELECT e FROM Enrollment e WHERE e.course.id = :courseId AND e.isSyncEnabled = true")
     List<Enrollment> findAllByCourseIdAndIsSyncEnabled(@Param("courseId") Long courseId);
+
+    /**
+     * 전체 활성화된 수강생 조회 (사용자별 assignments 배치 이벤트용)
+     */
+    @Query("SELECT e FROM Enrollment e JOIN FETCH e.course WHERE e.isSyncEnabled = true")
+    List<Enrollment> findAllByIsSyncEnabledTrue();
+
+    /**
+     * 사용자별 Assignments 조회 (enabled enrollment 대상)
+     */
+    @Query("""
+            SELECT a.id AS assignmentId,
+                   a.canvasAssignmentId AS canvasAssignmentId,
+                   c.canvasCourseId AS canvasCourseId,
+                   c.id AS courseId,
+                   c.name AS courseName,
+                   a.title AS title,
+                   a.description AS description,
+                   FUNCTION('DATE_FORMAT', a.dueAt, '%Y-%m-%dT%H:%i:%s') AS dueAt,
+                   a.pointsPossible AS pointsPossible
+            FROM Enrollment e
+            JOIN e.course c
+            JOIN Assignment a ON a.course.id = c.id
+            WHERE e.cognitoSub = :cognitoSub AND e.isSyncEnabled = true
+        """)
+    List<AssignmentProjection> findAssignmentsByCognitoSub(@Param("cognitoSub") String cognitoSub);
 }

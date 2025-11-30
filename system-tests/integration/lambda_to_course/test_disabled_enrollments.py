@@ -27,7 +27,7 @@ class TestDisabledEnrollments:
 
         lambda_event = {
             "cognitoSub": "test-cognito-sub-123",
-            "syncMode": "full"
+            "syncMode": "assignments"
         }
 
         print("\n🚫 Invoking Lambda with no enabled enrollments...")

@@ -38,18 +38,27 @@ Canvas 과제가 Course-Service에 저장되면 자동으로 Schedule-Service에
 
 ## 아키텍처
 
-### 전체 플로우
+### 전체 플로우 (Phase 1.1 - User Batch)
 
 ```
-Lambda → SQS → Course-Service
-                   ↓ Assignment DB 저장
-                   ↓ SQS 발행 (courseservice-to-scheduleservice-assignments)
+Lambda → SQS → Course-Service (CanvasSyncListener)
+                   ↓ CANVAS_SYNC_COMPLETED 수신
+                   ↓ 모든 Assignments DB 저장
+                   ↓ Enabled Enrollment별 그룹핑
+                   ↓ 사용자당 1개 batch 메시지 발행
+                   ↓ SQS: USER_ASSIGNMENTS_CREATED (N명 = N개 메시지)
                    ↓
-              Schedule-Service
-                   ↓ AssignmentListener (SQS consume)
+              Schedule-Service (AssignmentBatchListener)
+                   ↓ 사용자의 모든 assignments 수신
+                   ↓ Course별 Category 생성/조회
+                   ↓ Batch 처리 (dueAt null 스킵)
                    ↓ Schedule/Todo 생성
                    ↓ DB 저장
 ```
+
+**효율성 개선**:
+- **이전**: 401개 assignments × 10명 사용자 = 4,010개 메시지
+- **현재**: 사용자당 1개 batch = **10개 메시지** (99.75% 감소)
 
 ### SQS 기반 통신
 
@@ -68,52 +77,76 @@ Lambda → SQS → Course-Service
 ### 컴포넌트
 
 #### Course-Service
-- **AssignmentEventListener**: Lambda → SQS 메시지 consume (기존)
-- **AssignmentService**: Assignment DB 저장 후 이벤트 발행 (신규)
-- **AssignmentEventPublisher**: SQS 메시지 발행 (신규)
+- **CanvasSyncListener**: Lambda → SQS 메시지 consume (CANVAS_SYNC_COMPLETED)
+- **AssignmentService**: Assignment DB 저장
+- **AssignmentEventPublisher**: 사용자별 batch 메시지 발행 (USER_ASSIGNMENTS_CREATED)
 
 #### Schedule-Service
-- **AssignmentListener**: SQS 메시지 consume (신규)
-- **AssignmentToScheduleConverter**: Assignment → Schedule/Todo 변환 로직 (신규)
+- **AssignmentBatchListener**: SQS batch 메시지 consume (USER_ASSIGNMENTS_CREATED)
+- **AssignmentToScheduleConverter**: Assignment → Schedule/Todo 변환 로직 (batch 처리)
 - **ScheduleService**: Schedule DB 저장 (기존)
 - **TodoService**: Todo DB 저장 (기존)
+- **CategoryService**: 과목별 카테고리 생성/조회 (Phase 1.1)
 
 ## SQS 메시지 스키마
 
-### courseservice-to-scheduleservice-assignments
+### courseservice-to-scheduleservice-assignments (User Batch)
 
 **큐 이름**: `courseservice-to-scheduleservice-assignments`
 **DLQ**: `dlq-queue` (공통)
 
-**메시지 형식**:
+**메시지 형식** (Phase 1.1 - User Batch):
 ```json
 {
-  "eventType": "ASSIGNMENT_CREATED",
-  "assignmentId": "uuid-1234-5678",
+  "eventType": "USER_ASSIGNMENTS_CREATED",
   "cognitoSub": "abc-123-def-456",
-  "canvasAssignmentId": 123456,
-  "canvasCourseId": 789,
-  "title": "중간고사 프로젝트",
-  "description": "Spring Boot 프로젝트를 작성하세요...",
-  "dueAt": "2025-11-20T23:59:59Z",
-  "pointsPossible": 100.0,
-  "courseId": "course-uuid",
-  "courseName": "데이터구조"
+  "syncedAt": "2025-11-30T12:00:00Z",
+  "assignments": [
+    {
+      "assignmentId": "uuid-1234-5678",
+      "canvasAssignmentId": 123456,
+      "canvasCourseId": 789,
+      "courseId": "course-uuid",
+      "courseName": "데이터구조",
+      "title": "중간고사 프로젝트",
+      "description": "Spring Boot 프로젝트를 작성하세요...",
+      "dueAt": "2025-11-20T23:59:59Z",
+      "pointsPossible": 100.0
+    },
+    {
+      "assignmentId": "uuid-2345-6789",
+      "canvasAssignmentId": 123457,
+      "canvasCourseId": 790,
+      "courseId": "course-uuid-2",
+      "courseName": "알고리즘",
+      "title": "기말고사 프로젝트",
+      "description": "정렬 알고리즘 구현...",
+      "dueAt": "2025-12-15T23:59:59Z",
+      "pointsPossible": 150.0
+    }
+  ]
 }
 ```
 
 **필드 설명**:
-- `eventType`: 이벤트 타입 (ASSIGNMENT_CREATED, ASSIGNMENT_UPDATED, ASSIGNMENT_DELETED)
-- `assignmentId`: Course-Service의 Assignment UUID
+- `eventType`: `USER_ASSIGNMENTS_CREATED` (사용자별 assignments batch)
 - `cognitoSub`: 사용자 Cognito Sub (글로벌 식별자)
-- `canvasAssignmentId`: Canvas API의 assignment ID
-- `canvasCourseId`: Canvas API의 course ID
-- `title`: 과제 제목
-- `description`: 과제 설명 (LLM 분석용)
-- `dueAt`: 마감일시 (ISO 8601)
-- `pointsPossible`: 배점
-- `courseId`: Course-Service의 Course UUID
-- `courseName`: 과목명 (일정 표시용)
+- `syncedAt`: 동기화 완료 시각 (ISO 8601)
+- `assignments`: 해당 사용자의 모든 enabled course assignments 배열
+  - `assignmentId`: Course-Service의 Assignment UUID
+  - `canvasAssignmentId`: Canvas API의 assignment ID
+  - `canvasCourseId`: Canvas API의 course ID
+  - `courseId`: Course-Service의 Course UUID
+  - `courseName`: 과목명 (일정 제목 및 카테고리 생성용)
+  - `title`: 과제 제목
+  - `description`: 과제 설명 (LLM 분석용)
+  - `dueAt`: 마감일시 (ISO 8601, null이면 schedule 생성 스킵)
+  - `pointsPossible`: 배점
+
+**발행 시점**: Course-Service가 CANVAS_SYNC_COMPLETED 처리 완료 후, enabled enrollment별로 그룹핑하여 사용자당 1개 발행
+
+**효율성**:
+- 401개 assignments, 10명 사용자 → 기존 4,010개 → **10개 메시지** (99.75% 감소)
 
 ## Phase 1: 기본 과제 → 일정 변환
 

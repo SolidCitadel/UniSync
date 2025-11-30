@@ -33,7 +33,7 @@ public class CanvasSyncService {
      * Canvas 수동 동기화
      *
      * @param cognitoSub 사용자 Cognito Sub
-     * @param syncMode   동기화 모드 (courses_only | full)
+     * @param syncMode   동기화 모드 (courses | assignments)
      * @return 동기화 요청 결과
      */
     public CanvasSyncResponse syncCanvas(String cognitoSub, String syncMode) {
