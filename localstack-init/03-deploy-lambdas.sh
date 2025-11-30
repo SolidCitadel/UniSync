@@ -9,12 +9,15 @@ set -e
 AWS_REGION=${AWS_REGION:?ERROR: AWS_REGION environment variable must be set}
 CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL:?ERROR: CANVAS_API_BASE_URL environment variable must be set}
 USER_SERVICE_URL=${USER_SERVICE_URL:?ERROR: USER_SERVICE_URL environment variable must be set}
+COURSE_SERVICE_URL=${COURSE_SERVICE_URL:?ERROR: COURSE_SERVICE_URL environment variable must be set}
 CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY:?ERROR: CANVAS_SYNC_API_KEY environment variable must be set}
+AWS_SQS_ENDPOINT=${AWS_SQS_ENDPOINT:-}
 
 echo "🚀 Deploying Lambda functions to LocalStack..."
 echo "  - Region: ${AWS_REGION}"
 echo "  - Canvas API: ${CANVAS_API_BASE_URL}"
 echo "  - User Service URL: ${USER_SERVICE_URL}"
+echo "  - Course Service URL: ${COURSE_SERVICE_URL}"
 
 # 1. IAM Role 생성 (Lambda 실행용)
 echo "📝 Creating IAM role..."
@@ -56,17 +59,26 @@ if [ -d "$LAMBDA_DIR" ]; then
     --role arn:aws:iam::000000000000:role/lambda-execution-role \
     --timeout 120 \
     --memory-size 256 \
-    --environment Variables="{
-      CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL},
-      AWS_REGION=${AWS_REGION},
-      USER_SERVICE_URL=${USER_SERVICE_URL},
-      CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}
-    }" 2>/dev/null \
     && echo "  ✅ canvas-sync-lambda created" \
     || (awslocal lambda update-function-code \
+        --region ${AWS_REGION} \
         --function-name canvas-sync-lambda \
         --zip-file fileb:///tmp/canvas-lambda.zip \
         && echo "  ✅ canvas-sync-lambda updated")
+
+  # 환경 변수 구성 (JSON)
+  ENV_VARS="Variables={CANVAS_API_BASE_URL=${CANVAS_API_BASE_URL},AWS_REGION=${AWS_REGION},USER_SERVICE_URL=${USER_SERVICE_URL},COURSE_SERVICE_URL=${COURSE_SERVICE_URL},CANVAS_SYNC_API_KEY=${CANVAS_SYNC_API_KEY}"
+  if [ -n "${AWS_SQS_ENDPOINT}" ]; then
+    ENV_VARS="${ENV_VARS},SQS_ENDPOINT=${AWS_SQS_ENDPOINT}"
+  fi
+  ENV_VARS="${ENV_VARS}}"
+
+  awslocal lambda update-function-configuration \
+    --region ${AWS_REGION} \
+    --function-name canvas-sync-lambda \
+    --environment "${ENV_VARS}" \
+    >/dev/null \
+    && echo "  ✅ canvas-sync-lambda environment updated"
 
   # 정리
   rm -rf /tmp/lambda-package /tmp/canvas-lambda.zip
@@ -102,6 +114,7 @@ if [ -d "$LLM_LAMBDA_DIR" ]; then
     }" 2>/dev/null \
     && echo "  ✅ llm-lambda created" \
     || (awslocal lambda update-function-code \
+        --region ${AWS_REGION} \
         --function-name llm-lambda \
         --zip-file fileb:///tmp/llm-lambda.zip \
         && echo "  ✅ llm-lambda updated")

@@ -28,8 +28,16 @@ spring:
       credentials:
         access-key: ${AWS_ACCESS_KEY_ID}
         secret-key: ${AWS_SECRET_ACCESS_KEY}
-      sqs:
-        endpoint: ${AWS_SQS_ENDPOINT}
+
+aws:
+  region: ${AWS_REGION}
+  access-key-id: ${AWS_ACCESS_KEY_ID}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+  sqs:
+    endpoint: ${AWS_SQS_ENDPOINT}
+    queues:
+      assignment-to-schedule: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE}
+      course-to-schedule: ${SQS_COURSE_TO_SCHEDULE_QUEUE}
 
 # Swagger/OpenAPI
 springdoc:

@@ -36,4 +36,23 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     // 그룹 카테고리 존재 여부
     boolean existsByGroupId(Long groupId);
+
+    /**
+     * 외부 소스로 카테고리 조회 (Phase 1.1: 과목별 카테고리)
+     * 예: cognitoSub="user-123", sourceType="CANVAS_COURSE", sourceId="10"
+     */
+    Optional<Category> findByCognitoSubAndSourceTypeAndSourceId(
+            String cognitoSub,
+            String sourceType,
+            String sourceId
+    );
+
+    /**
+     * 외부 소스 중복 체크
+     */
+    boolean existsByCognitoSubAndSourceTypeAndSourceId(
+            String cognitoSub,
+            String sourceType,
+            String sourceId
+    );
 }

@@ -76,8 +76,11 @@ class AssignmentServiceTest {
         // given
         given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
             .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
-            .willReturn(canvasCategoryId);
+        given(categoryService.getOrCreateCourseCategory(
+            validMessage.getCognitoSub(),
+            validMessage.getCourseId(),
+            validMessage.getCourseName()
+        )).willReturn(canvasCategoryId);
         given(scheduleRepository.save(any(Schedule.class)))
             .willAnswer(invocation -> {
                 Schedule arg = invocation.getArgument(0);
@@ -93,7 +96,11 @@ class AssignmentServiceTest {
             eq(ScheduleSource.CANVAS),
             eq("canvas-assignment-456-user-123")
         );
-        then(categoryService).should(times(1)).getOrCreateCanvasCategory("user-123");
+        then(categoryService).should(times(1)).getOrCreateCourseCategory(
+            "user-123",
+            validMessage.getCourseId(),
+            validMessage.getCourseName()
+        );
         then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
 
         Schedule savedSchedule = scheduleCaptor.getValue();
@@ -250,8 +257,11 @@ class AssignmentServiceTest {
         // given
         given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
             .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
-            .willReturn(canvasCategoryId);
+        given(categoryService.getOrCreateCourseCategory(
+            validMessage.getCognitoSub(),
+            validMessage.getCourseId(),
+            validMessage.getCourseName()
+        )).willReturn(canvasCategoryId);
         given(scheduleRepository.save(any(Schedule.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -275,8 +285,11 @@ class AssignmentServiceTest {
 
         given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
             .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
-            .willReturn(canvasCategoryId);
+        given(categoryService.getOrCreateCourseCategory(
+            validMessage.getCognitoSub(),
+            validMessage.getCourseId(),
+            validMessage.getCourseName()
+        )).willReturn(canvasCategoryId);
         given(scheduleRepository.save(any(Schedule.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
 

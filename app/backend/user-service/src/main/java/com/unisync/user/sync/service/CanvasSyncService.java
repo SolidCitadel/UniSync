@@ -10,12 +10,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.lambda.LambdaClient;
+import software.amazon.awssdk.services.lambda.model.InvocationType;
 import software.amazon.awssdk.services.lambda.model.InvokeRequest;
 import software.amazon.awssdk.services.lambda.model.InvokeResponse;
-import software.amazon.awssdk.services.lambda.model.InvocationType;
 
 /**
- * Canvas 수동 동기화 서비스
+ * Canvas 동기화 서비스
  * Phase 1: Spring에서 Lambda 직접 호출
  */
 @Slf4j
@@ -30,55 +30,51 @@ public class CanvasSyncService {
     private String canvasSyncFunctionName;
 
     /**
-     * Canvas 수동 동기화 시작
+     * Canvas 수동 동기화
      *
-     * @param cognitoSub Cognito 사용자 ID
-     * @return 동기화 결과 통계
+     * @param cognitoSub 사용자 Cognito Sub
+     * @param syncMode   동기화 모드 (courses_only | full)
+     * @return 동기화 요청 결과
      */
-    public CanvasSyncResponse syncCanvas(String cognitoSub) {
-        log.info("Starting Canvas sync for cognitoSub: {}", cognitoSub);
+    public CanvasSyncResponse syncCanvas(String cognitoSub, String syncMode) {
+        log.info("Starting Canvas sync for cognitoSub={}, syncMode={}", cognitoSub, syncMode);
 
         try {
-            // 1. Lambda 페이로드 생성
-            CanvasSyncRequest request = new CanvasSyncRequest(cognitoSub);
+            // 1. Lambda 호출 요청 생성
+            CanvasSyncRequest request = new CanvasSyncRequest(cognitoSub, syncMode);
             String payload = objectMapper.writeValueAsString(request);
-
             log.debug("Lambda payload: {}", payload);
 
             // 2. Lambda 동기 호출
             InvokeRequest invokeRequest = InvokeRequest.builder()
                     .functionName(canvasSyncFunctionName)
-                    .invocationType(InvocationType.REQUEST_RESPONSE) // 동기 호출
+                    .invocationType(InvocationType.REQUEST_RESPONSE)
                     .payload(SdkBytes.fromUtf8String(payload))
                     .build();
 
             InvokeResponse invokeResponse = lambdaClient.invoke(invokeRequest);
 
-            // 3. Lambda 실행 에러 확인 (예외 발생 시)
+            // 3. Lambda 응답 파싱 (오류 포함)
             String responsePayload = invokeResponse.payload().asUtf8String();
             log.debug("Lambda response: {}", responsePayload);
 
             if (invokeResponse.functionError() != null) {
                 log.error("Lambda execution error: {}", responsePayload);
-                throw new CanvasSyncException(
-                        "Lambda execution failed: " + responsePayload
-                );
+                throw new CanvasSyncException("Lambda execution failed: " + responsePayload);
             }
 
-            // 4. 응답 파싱
             LambdaResponse lambdaResponse = objectMapper.readValue(
                     responsePayload,
                     LambdaResponse.class
             );
 
-            // 5. Lambda 응답 상태 확인
             if (lambdaResponse.getStatusCode() == null || lambdaResponse.getStatusCode() != 200) {
                 throw new CanvasSyncException(
                         "Lambda returned non-200 status: " + lambdaResponse.getStatusCode()
                 );
             }
 
-            // 5. 결과 반환
+            // 4. 응답 매핑
             CanvasSyncResponse syncResponse = CanvasSyncResponse.builder()
                     .success(true)
                     .message("Canvas sync started")
@@ -97,7 +93,7 @@ public class CanvasSyncService {
             throw e;
         } catch (software.amazon.awssdk.core.exception.SdkClientException e) {
             log.error("Lambda invocation failed (timeout or connection error)", e);
-            if (e.getMessage().contains("timed out")) {
+            if (e.getMessage() != null && e.getMessage().contains("timed out")) {
                 throw new CanvasSyncException(
                         "Canvas sync timeout: Lambda execution took too long. Please try again.", e);
             }
@@ -108,10 +104,10 @@ public class CanvasSyncService {
         }
     }
 
-    // 내부 DTO: Lambda 요청
-    private record CanvasSyncRequest(String cognitoSub) {}
+    // 요청 DTO
+    private record CanvasSyncRequest(String cognitoSub, String syncMode) {}
 
-    // 내부 DTO: Lambda 응답
+    // Lambda 응답 DTO
     @Data
     private static class LambdaResponse {
         private Integer statusCode;

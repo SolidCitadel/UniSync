@@ -17,7 +17,7 @@ import java.net.URI;
 @Configuration
 public class SqsPublisherConfig {
 
-    @Value("${aws.sqs.endpoint:}")
+    @Value("${aws.sqs.endpoint}")
     private String sqsEndpoint;
 
     @Value("${aws.region}")

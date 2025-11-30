@@ -70,8 +70,12 @@ public class AssignmentService {
             return;
         }
 
-        // Canvas 카테고리 조회 또는 생성
-        Long categoryId = categoryService.getOrCreateCanvasCategory(message.getCognitoSub());
+        // Canvas 과목별 카테고리 조회 또는 생성 (Phase 1.1)
+        Long categoryId = categoryService.getOrCreateCourseCategory(
+                message.getCognitoSub(),
+                message.getCourseId(),
+                message.getCourseName()
+        );
 
         // 하루 종일 이벤트 시간 (날짜의 00:00:00)
         LocalDateTime allDayTime = calculateAllDayStartTime(message.getDueAt());

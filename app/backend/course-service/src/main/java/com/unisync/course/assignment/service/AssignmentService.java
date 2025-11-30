@@ -133,16 +133,16 @@ public class AssignmentService {
 
     /**
      * Schedule-Service로 Assignment → Schedule 변환 이벤트 발행
-     * 해당 과목을 수강하는 모든 사용자에게 이벤트 발행
+     * 해당 과목을 수강하고 동기화가 활성화된 사용자에게만 이벤트 발행
      */
     private void publishAssignmentToScheduleEvents(Assignment assignment, String eventType) {
         Course course = assignment.getCourse();
 
-        // 1. 과목을 수강하는 모든 사용자 조회
-        List<Enrollment> enrollments = enrollmentRepository.findAllByCourseId(course.getId());
+        // 1. 과목을 수강하고 동기화가 활성화된 사용자만 조회
+        List<Enrollment> enrollments = enrollmentRepository.findAllByCourseIdAndIsSyncEnabled(course.getId());
 
         if (enrollments.isEmpty()) {
-            log.warn("No enrollments found for course: courseId={}", course.getId());
+            log.info("No enabled enrollments found for course: courseId={}", course.getId());
             return;
         }
 
@@ -166,7 +166,7 @@ public class AssignmentService {
         // 3. SQS로 발행
         assignmentEventPublisher.publishAssignmentEvents(events);
 
-        log.info("📤 Published {} assignment events to {} users: assignmentId={}, eventType={}",
+        log.info("📤 Published {} assignment events to {} enabled users: assignmentId={}, eventType={}",
                 events.size(), enrollments.size(), assignment.getId(), eventType);
     }
 }

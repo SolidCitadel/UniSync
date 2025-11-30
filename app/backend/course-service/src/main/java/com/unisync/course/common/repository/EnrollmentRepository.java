@@ -43,4 +43,16 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
      */
     @Query("SELECT e FROM Enrollment e WHERE e.course.id = :courseId AND e.isSyncLeader = true")
     Optional<Enrollment> findLeaderByCourseId(@Param("courseId") Long courseId);
+
+    /**
+     * 특정 사용자의 활성화된 수강 과목만 조회
+     */
+    @Query("SELECT e FROM Enrollment e JOIN FETCH e.course WHERE e.cognitoSub = :cognitoSub AND e.isSyncEnabled = true")
+    List<Enrollment> findAllByCognitoSubAndIsSyncEnabled(@Param("cognitoSub") String cognitoSub);
+
+    /**
+     * 특정 과목의 활성화된 수강생만 조회 (Assignment → Schedule 이벤트 발행용)
+     */
+    @Query("SELECT e FROM Enrollment e WHERE e.course.id = :courseId AND e.isSyncEnabled = true")
+    List<Enrollment> findAllByCourseIdAndIsSyncEnabled(@Param("courseId") Long courseId);
 }

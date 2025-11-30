@@ -1,6 +1,7 @@
 # application-acceptance.yml - 인수 테스트용 프로파일
 # docker-compose.acceptance.yml에서 SPRING_PROFILES_ACTIVE=acceptance로 실행됩니다.
 # 모든 환경 변수는 docker-compose.acceptance.yml에서 주입됩니다.
+# SQS 큐 이름/endpoint/region은 공통 application.yml에서 읽음
 
 spring:
   jpa:

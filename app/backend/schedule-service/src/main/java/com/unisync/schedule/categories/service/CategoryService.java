@@ -162,8 +162,11 @@ public class CategoryService {
 
     /**
      * Canvas 과제용 기본 카테고리 조회 또는 생성
-     * Assignment → Schedule 변환 시 사용
+     * Assignment → Schedule 변환 시 사용 (Phase 1.0 - 단일 Canvas 카테고리)
+     *
+     * @deprecated Phase 1.1부터 getOrCreateCourseCategory 사용
      */
+    @Deprecated
     @Transactional
     public Long getOrCreateCanvasCategory(String cognitoSub) {
         String canvasCategoryName = "Canvas";
@@ -188,6 +191,66 @@ public class CategoryService {
 
                     return saved.getCategoryId();
                 });
+    }
+
+    /**
+     * Canvas 과목별 카테고리 조회 또는 생성 (Phase 1.1)
+     * Assignment → Schedule 변환 시 사용
+     *
+     * @param cognitoSub 사용자 Cognito Sub
+     * @param courseId Course ID (source_id로 사용)
+     * @param courseName 과목명 (카테고리 이름으로 사용)
+     * @return 카테고리 ID
+     */
+    @Transactional
+    public Long getOrCreateCourseCategory(String cognitoSub, Long courseId, String courseName) {
+        String sourceType = "CANVAS_COURSE";
+        String sourceId = courseId.toString();
+
+        // 기존 과목 카테고리 조회 (source_type + source_id로)
+        return categoryRepository.findByCognitoSubAndSourceTypeAndSourceId(cognitoSub, sourceType, sourceId)
+                .map(Category::getCategoryId)
+                .orElseGet(() -> {
+                    // 과목 카테고리 없으면 생성
+                    Category courseCategory = Category.builder()
+                            .cognitoSub(cognitoSub)
+                            .groupId(null)
+                            .name(courseName) // "데이터구조", "알고리즘" 등
+                            .color(generateColorForCourse(courseId)) // 과목별 색상
+                            .icon("📚")
+                            .isDefault(true) // Canvas 과목 카테고리는 기본 카테고리
+                            .sourceType(sourceType)
+                            .sourceId(sourceId)
+                            .build();
+
+                    Category saved = categoryRepository.save(courseCategory);
+                    log.info("✅ Created course category: cognitoSub={}, courseId={}, courseName={}, categoryId={}",
+                            cognitoSub, courseId, courseName, saved.getCategoryId());
+
+                    return saved.getCategoryId();
+                });
+    }
+
+    /**
+     * 과목별 색상 자동 생성
+     * courseId를 해시하여 일관된 색상 할당
+     */
+    private String generateColorForCourse(Long courseId) {
+        // 과목별 미리 정의된 색상 팔레트
+        String[] colors = {
+                "#FF6B6B", // 빨강
+                "#4ECDC4", // 청록
+                "#45B7D1", // 파랑
+                "#FFA07A", // 주황
+                "#98D8C8", // 민트
+                "#F7DC6F", // 노랑
+                "#BB8FCE", // 보라
+                "#85C1E2"  // 하늘
+        };
+
+        // courseId를 색상 개수로 나눈 나머지로 색상 선택
+        int index = (int) (courseId % colors.length);
+        return colors[index];
     }
 
     /**

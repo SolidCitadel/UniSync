@@ -478,3 +478,49 @@ class TestAssignmentToScheduleIntegration:
         print(f"\n✅ Canvas 카테고리 재사용 검증 완료")
         print(f"   - Schedule count: {len(canvas_schedules)}")
         print(f"   - Reused Category ID: {first_category_id}")
+
+    @pytest.mark.usefixtures("clean_schedule_database")
+    def test_assignment_with_null_due_date_is_skipped(
+        self,
+        sqs_client,
+        assignment_to_schedule_queue_url,
+        schedule_service_url
+    ):
+        """
+        dueAt가 없는 Assignment 메시지는 Schedule로 생성되지 않아야 한다.
+        """
+        assignment_message = {
+            "eventType": "ASSIGNMENT_CREATED",
+            "assignmentId": 88888,
+            "cognitoSub": "test-user-nodue",
+            "canvasAssignmentId": 99999,
+            "canvasCourseId": 789,
+            "title": "기한 없는 과제",
+            "description": "dueAt가 없으면 무시되어야 함",
+            "dueAt": None,
+            "pointsPossible": 10,
+            "courseId": 106,
+            "courseName": "무기한 과목"
+        }
+
+        print(f"\n🕒 Publishing assignment without dueAt...")
+        sqs_client.send_message(
+            QueueUrl=assignment_to_schedule_queue_url,
+            MessageBody=json.dumps(assignment_message)
+        )
+
+        time.sleep(10)
+
+        response = requests.get(
+            f"{schedule_service_url}/v1/schedules",
+            headers={"X-Cognito-Sub": "test-user-nodue"},
+            timeout=5
+        )
+        assert response.status_code == 200, \
+            f"Schedule 조회 실패: {response.status_code} - {response.text}"
+
+        schedules = response.json()
+        created = [s for s in schedules if s.get('sourceId') == 'canvas-assignment-99999-test-user-nodue']
+
+        assert len(created) == 0, f"dueAt 없는 과제가 Schedule로 생성됨: {created}"
+        print("✅ dueAt가 없는 Assignment는 생성되지 않음")

@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
     @UniqueConstraint(name = "uk_user_course", columnNames = {"cognito_sub", "course_id"})
 })
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
@@ -43,6 +44,14 @@ public class Enrollment {
     @Column(name = "is_sync_leader", nullable = false)
     @Builder.Default
     private Boolean isSyncLeader = false;
+
+    /**
+     * 동기화 활성화 여부
+     * false인 경우 해당 과목의 Assignment는 Schedule로 변환되지 않음
+     */
+    @Column(name = "is_sync_enabled", nullable = false)
+    @Builder.Default
+    private Boolean isSyncEnabled = true;
 
     /**
      * 수강 등록 시각

@@ -15,11 +15,18 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 외부 서비스 연동 통합 API
- * - 연동 상태 조회
+ * - 통합 상태 조회
  * - Canvas 토큰 관리
  * - Canvas 동기화
  */
@@ -35,10 +42,10 @@ public class IntegrationController {
     private final CanvasSyncService canvasSyncService;
 
     /**
-     * 사용자의 외부 서비스 연동 상태 조회
+     * 사용자의 외부 서비스 통합 상태 조회
      */
     @GetMapping("/status")
-    @Operation(summary = "연동 상태 조회", description = "Canvas, Google Calendar 등의 연동 상태를 조회합니다.")
+    @Operation(summary = "통합 상태 조회", description = "Canvas, Google Calendar 등의 통합 상태를 조회합니다.")
     public ResponseEntity<IntegrationStatusResponse> getIntegrationStatus(
             @Parameter(hidden = true) @RequestHeader(value = "X-Cognito-Sub") String cognitoSub
     ) {
@@ -91,12 +98,13 @@ public class IntegrationController {
      * Canvas 수동 동기화 시작
      */
     @PostMapping("/canvas/sync")
-    @Operation(summary = "Canvas 동기화", description = "Canvas 과목 및 과제를 동기화합니다. (Phase 1: 수동 동기화)")
+    @Operation(summary = "Canvas 동기화", description = "Canvas 과목/과제를 동기화합니다. syncMode=courses_only/full")
     public ResponseEntity<CanvasSyncResponse> syncCanvas(
-            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub
+        @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
+        @RequestParam(name = "mode", defaultValue = "full") String syncMode
     ) {
-        log.info("POST /v1/integrations/canvas/sync - Cognito Sub: {}", cognitoSub);
-        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub);
+        log.info("POST /v1/integrations/canvas/sync - Cognito Sub: {}, mode={}", cognitoSub, syncMode);
+        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub, syncMode);
         log.info("Canvas sync response: {} courses, {} assignments",
                 response.getCoursesCount(),
                 response.getAssignmentsCount());

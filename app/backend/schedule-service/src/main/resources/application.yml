@@ -23,12 +23,12 @@ spring:
 
 # AWS SQS Configuration
 aws:
+  region: ${AWS_REGION}
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT}
-    region: ${AWS_REGION}
     queues:
-      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
-      task-creation: ${SQS_TASK_CREATION_QUEUE}
+      assignment-to-schedule: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE}
+      course-to-schedule: ${SQS_COURSE_TO_SCHEDULE_QUEUE}
 
 # External Service URLs
 services:

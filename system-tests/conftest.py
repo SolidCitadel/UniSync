@@ -260,6 +260,7 @@ def clean_database(mysql_connection):
     # 테스트 전: 기존 데이터 삭제
     cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
     cursor.execute("TRUNCATE TABLE assignments")
+    cursor.execute("TRUNCATE TABLE enrollments")
     cursor.execute("TRUNCATE TABLE courses")
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
     mysql_connection.commit()
@@ -269,6 +270,7 @@ def clean_database(mysql_connection):
     # 테스트 후: 생성된 데이터 삭제
     cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
     cursor.execute("TRUNCATE TABLE assignments")
+    cursor.execute("TRUNCATE TABLE enrollments")
     cursor.execute("TRUNCATE TABLE courses")
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
     mysql_connection.commit()

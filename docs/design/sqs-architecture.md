@@ -45,9 +45,9 @@ UniSync 시스템의 SQS 기반 메시지 아키텍처 설계 문서입니다.
 
 | 큐 이름 | Publisher | Consumer(s) | 용도 | 상태 | Schema |
 |---------|-----------|-------------|------|------|--------|
-| `lambda-to-courseservice-enrollments` | Canvas-Sync-Lambda | Course-Service | Canvas 과목 등록 정보 전달 | ✅ Phase 1 | [enrollment-events](#enrollment-events) |
-| `lambda-to-courseservice-assignments` | Canvas-Sync-Lambda | Course-Service | Canvas 과제 정보 전달 | ✅ Phase 1 | [assignment-events](#assignment-events) |
+| `lambda-to-courseservice-sync` | Canvas-Sync-Lambda | Course-Service | Canvas 동기화 통합 메시지 (courses_only/full) | ✅ Phase 1.1 | [sync-messages](#sync-messages) |
 | `courseservice-to-scheduleservice-assignments` | Course-Service | Schedule-Service | 과제 → 일정/할일 변환 | ✅ Phase 1 | [assignment-to-schedule](#assignment-to-schedule) |
+| `courseservice-to-scheduleservice-courses` | Course-Service | Schedule-Service | 과목 비활성화 이벤트 (`COURSE_DISABLED`) | ✅ Phase 1.1 | [course-events](#course-events) |
 | `dlq-queue` | - | Manual Review | Dead Letter Queue (모든 큐 공용) | ✅ 공통 | - |
 
 **향후 추가 예정**:
@@ -66,18 +66,17 @@ API Gateway → User-Service
 User-Service
     ↓ Lambda invoke (AWS SDK)
 Canvas-Sync-Lambda
-    ↓ Canvas API 조회
-    ├─→ SQS: lambda-to-courseservice-enrollments
-    │      ↓
-    │   Course-Service (Enrollment 저장)
-    │
-    └─→ SQS: lambda-to-courseservice-assignments
-           ↓
-        Course-Service (Assignment 저장)
-           ↓
-        SQS: courseservice-to-scheduleservice-assignments
-           ↓
-        Schedule-Service (Schedule 생성)
+    ↓ Course-Service: 활성 enrollment 조회
+    ↓ Canvas API 조회 (courses_only/full)
+    ↓ SQS: lambda-to-courseservice-sync
+          ↓
+       Course-Service (Course + Enrollment + Assignment 처리)
+          ├─→ SQS: courseservice-to-scheduleservice-assignments
+          │       ↓
+          │    Schedule-Service (Schedule 생성)
+          └─→ SQS: courseservice-to-scheduleservice-courses (COURSE_DISABLED)
+                  ↓
+               Schedule-Service (해당 과목 일정 삭제)
 ```
 
 ### Assignment → Schedule 변환 플로우 (Phase 1 구현 완료)
@@ -100,65 +99,41 @@ Schedule/Todo DB 저장
 
 ## 메시지 스키마
 
-### Enrollment Events
+### Sync Messages
 
-**큐**: `lambda-to-courseservice-enrollments`
+**큐**: `lambda-to-courseservice-sync`
 **Publisher**: Canvas-Sync-Lambda
 **Consumer**: Course-Service
 
 **메시지 형식**:
 ```json
 {
+  "eventType": "CANVAS_SYNC_COMPLETED",
+  "syncMode": "full",
   "cognitoSub": "abc-123-def-456",
-  "canvasCourseId": 789,
-  "courseName": "데이터구조",
-  "courseCode": "CS201",
-  "enrollmentState": "active",
-  "canvasUserId": 12345
+  "syncedAt": "2025-11-30T12:00:00Z",
+  "courses": [
+    {
+      "canvasCourseId": 789,
+      "courseName": "데이터구조",
+      "courseCode": "CS201",
+      "workflowState": "available",
+      "assignments": [
+        {
+          "canvasAssignmentId": 123456,
+          "title": "중간고사 프로젝트",
+          "dueAt": "2025-11-20T23:59:59Z",
+          "pointsPossible": 100.0
+        }
+      ]
+    }
+  ]
 }
 ```
 
-**필드 설명**:
-- `cognitoSub`: 사용자 Cognito Sub (글로벌 식별자)
-- `canvasCourseId`: Canvas API의 course ID
-- `courseName`: 과목명
-- `courseCode`: 과목 코드
-- `enrollmentState`: 등록 상태 (active, completed, etc.)
-- `canvasUserId`: Canvas 사용자 ID
-
-**JSON Schema**: `app/shared/message-schemas/enrollment-events.schema.json`
-
-### Assignment Events
-
-**큐**: `lambda-to-courseservice-assignments`
-**Publisher**: Canvas-Sync-Lambda
-**Consumer**: Course-Service
-
-**메시지 형식**:
-```json
-{
-  "eventType": "ASSIGNMENT_CREATED",
-  "canvasCourseId": 789,
-  "canvasAssignmentId": 123456,
-  "title": "중간고사 프로젝트",
-  "description": "Spring Boot 프로젝트를 작성하세요...",
-  "dueAt": "2025-11-20T23:59:59Z",
-  "pointsPossible": 100.0,
-  "submissionTypes": ["online_upload"]
-}
-```
-
-**필드 설명**:
-- `eventType`: 이벤트 타입 (ASSIGNMENT_CREATED, ASSIGNMENT_UPDATED)
-- `canvasCourseId`: Canvas API의 course ID
-- `canvasAssignmentId`: Canvas API의 assignment ID
-- `title`: 과제 제목
-- `description`: 과제 설명 (LLM 분석용)
-- `dueAt`: 마감일시 (ISO 8601)
-- `pointsPossible`: 배점
-- `submissionTypes`: 제출 유형 배열
-
-**JSON Schema**: `app/shared/message-schemas/assignment-events.schema.json`
+- `eventType`: `CANVAS_COURSES_SYNCED`(courses_only) | `CANVAS_SYNC_COMPLETED`(full)
+- `syncMode`: `courses_only` | `full`
+- assignments는 courses_only 모드에서 생략, `dueAt`가 null인 항목은 제외
 
 ### Assignment to Schedule
 
@@ -197,6 +172,17 @@ Schedule/Todo DB 저장
 - `courseName`: 과목명 (일정 제목 생성용)
 
 **JSON Schema**: `app/shared/message-schemas/assignment-to-schedule.schema.json`
+
+### Course Events
+
+**큐**: `courseservice-to-scheduleservice-courses`
+**Publisher**: Course-Service
+**Consumer**: Schedule-Service
+
+**이벤트 타입**:
+- `COURSE_DISABLED`: 해당 과목의 모든 Schedule 삭제
+
+**JSON Schema**: `app/shared/message-schemas/course-events.schema.json`
 
 ## 재시도 및 DLQ 전략
 

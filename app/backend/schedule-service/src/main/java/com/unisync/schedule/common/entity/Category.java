@@ -10,9 +10,11 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "categories", indexes = {
     @Index(name = "idx_cognito_sub", columnList = "cognito_sub"),
-    @Index(name = "idx_group_id", columnList = "group_id")
+    @Index(name = "idx_group_id", columnList = "group_id"),
+    @Index(name = "idx_source", columnList = "source_type, source_id")
 }, uniqueConstraints = {
-    @UniqueConstraint(name = "uk_cognito_sub_name", columnNames = {"cognito_sub", "name"})
+    @UniqueConstraint(name = "uk_cognito_sub_name", columnNames = {"cognito_sub", "name"}),
+    @UniqueConstraint(name = "uk_user_source", columnNames = {"cognito_sub", "source_type", "source_id"})
 })
 @Getter
 @Setter
@@ -42,7 +44,22 @@ public class Category {
     private String icon;
 
     @Column(name = "is_default", nullable = false)
+    @Builder.Default
     private Boolean isDefault = false;
+
+    /**
+     * 외부 시스템 타입 (Phase 1.1: 과목별 카테고리 자동 생성)
+     * 예: "CANVAS_COURSE", "GOOGLE_CALENDAR"
+     */
+    @Column(name = "source_type", length = 50)
+    private String sourceType;
+
+    /**
+     * 외부 시스템 ID (Phase 1.1: 과목별 카테고리 중복 방지)
+     * 예: courseId "10"
+     */
+    @Column(name = "source_id", length = 255)
+    private String sourceId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

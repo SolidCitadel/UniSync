@@ -34,13 +34,13 @@ public class AssignmentEventListener {
     private final AssignmentService assignmentService;
     private final ObjectMapper objectMapper;
 
-    @Value("${aws.sqs.endpoint:}")
+    @Value("${aws.sqs.endpoint}")
     private String sqsEndpoint;
 
     @Value("${aws.region}")
     private String region;
 
-    @Value("${sqs.assignment-to-schedule-queue}")
+    @Value("${aws.sqs.queues.assignment-to-schedule}")
     private String queueName;
 
     private ScheduledExecutorService scheduler;

@@ -166,19 +166,20 @@ class IntegrationControllerTest {
                 .syncedAt("2025-01-22T10:30:00")
                 .build();
 
-        given(canvasSyncService.syncCanvas(COGNITO_SUB))
+        given(canvasSyncService.syncCanvas(COGNITO_SUB, "full"))
                 .willReturn(response);
 
         // When & Then
         mockMvc.perform(post("/v1/integrations/canvas/sync")
-                        .header("X-Cognito-Sub", COGNITO_SUB))
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("mode", "full"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Canvas sync started"))
                 .andExpect(jsonPath("$.coursesCount").value(5))
                 .andExpect(jsonPath("$.assignmentsCount").value(12));
 
-        then(canvasSyncService).should().syncCanvas(COGNITO_SUB);
+        then(canvasSyncService).should().syncCanvas(COGNITO_SUB, "full");
     }
 
     // Note: X-Cognito-Sub 헤더 검증은 API Gateway에서 처리하므로

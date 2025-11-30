@@ -88,25 +88,28 @@ class AssignmentServiceTest {
             .updatedAt(LocalDateTime.now())
             .build();
 
-        // Mock Enrollments 생성 (3명의 수강생)
+        // Mock Enrollments 생성 (3명의 수강생, sync 활성)
         mockEnrollments = Arrays.asList(
             Enrollment.builder()
                 .id(1L)
                 .cognitoSub("user-1")
                 .course(mockCourse)
                 .isSyncLeader(true)
+                .isSyncEnabled(true)
                 .build(),
             Enrollment.builder()
                 .id(2L)
                 .cognitoSub("user-2")
                 .course(mockCourse)
                 .isSyncLeader(false)
+                .isSyncEnabled(true)
                 .build(),
             Enrollment.builder()
                 .id(3L)
                 .cognitoSub("user-3")
                 .course(mockCourse)
                 .isSyncLeader(false)
+                .isSyncEnabled(true)
                 .build()
         );
     }
@@ -133,7 +136,7 @@ class AssignmentServiceTest {
                     .submissionTypes(arg.getSubmissionTypes())
                     .build();
             });
-        given(enrollmentRepository.findAllByCourseId(mockCourse.getId()))
+        given(enrollmentRepository.findAllByCourseIdAndIsSyncEnabled(mockCourse.getId()))
             .willReturn(mockEnrollments);
 
         // when
@@ -143,7 +146,7 @@ class AssignmentServiceTest {
         then(assignmentRepository).should(times(1)).existsByCanvasAssignmentId(anyLong());
         then(courseRepository).should(times(1)).findByCanvasCourseId(anyLong());
         then(assignmentRepository).should(times(1)).save(any(Assignment.class));
-        then(enrollmentRepository).should(times(1)).findAllByCourseId(anyLong());
+        then(enrollmentRepository).should(times(1)).findAllByCourseIdAndIsSyncEnabled(anyLong());
         then(assignmentEventPublisher).should(times(1)).publishAssignmentEvents(anyList());
     }
 
@@ -169,7 +172,7 @@ class AssignmentServiceTest {
                     .submissionTypes(arg.getSubmissionTypes())
                     .build();
             });
-        given(enrollmentRepository.findAllByCourseId(mockCourse.getId()))
+        given(enrollmentRepository.findAllByCourseIdAndIsSyncEnabled(mockCourse.getId()))
             .willReturn(mockEnrollments);
 
         // when
@@ -243,7 +246,7 @@ class AssignmentServiceTest {
             .willReturn(Optional.of(existingAssignment));
         given(assignmentRepository.save(any(Assignment.class)))
             .willReturn(existingAssignment);
-        given(enrollmentRepository.findAllByCourseId(mockCourse.getId()))
+        given(enrollmentRepository.findAllByCourseIdAndIsSyncEnabled(mockCourse.getId()))
             .willReturn(mockEnrollments);
 
         // when
@@ -252,7 +255,7 @@ class AssignmentServiceTest {
         // then
         then(assignmentRepository).should(times(1)).findByCanvasAssignmentId(anyLong());
         then(assignmentRepository).should(times(1)).save(any(Assignment.class));
-        then(enrollmentRepository).should(times(1)).findAllByCourseId(anyLong());
+        then(enrollmentRepository).should(times(1)).findAllByCourseIdAndIsSyncEnabled(anyLong());
         then(assignmentEventPublisher).should(times(1)).publishAssignmentEvents(anyList());
     }
 
@@ -275,7 +278,7 @@ class AssignmentServiceTest {
             .willReturn(Optional.of(existingAssignment));
         given(assignmentRepository.save(any(Assignment.class)))
             .willReturn(existingAssignment);
-        given(enrollmentRepository.findAllByCourseId(mockCourse.getId()))
+        given(enrollmentRepository.findAllByCourseIdAndIsSyncEnabled(mockCourse.getId()))
             .willReturn(mockEnrollments);
 
         // when

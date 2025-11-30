@@ -70,7 +70,7 @@ class CanvasSyncServiceTest {
                 .willReturn(invokeResponse);
 
         // When
-        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub);
+        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub, "full");
 
         // Then
         assertThat(response.getSuccess()).isTrue();
@@ -116,7 +116,7 @@ class CanvasSyncServiceTest {
                 .willReturn(invokeResponse);
 
         // When & Then
-        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub))
+        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub, "full"))
                 .isInstanceOf(CanvasSyncException.class)
                 .hasMessageContaining("Lambda returned non-200 status: 500");
     }
@@ -131,7 +131,7 @@ class CanvasSyncServiceTest {
                         .build());
 
         // When & Then
-        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub))
+        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub, "full"))
                 .isInstanceOf(CanvasSyncException.class)
                 .hasMessageContaining("Canvas sync failed");
     }
@@ -155,7 +155,7 @@ class CanvasSyncServiceTest {
                 .willReturn(invokeResponse);
 
         // When & Then
-        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub))
+        assertThatThrownBy(() -> canvasSyncService.syncCanvas(cognitoSub, "full"))
                 .isInstanceOf(CanvasSyncException.class)
                 .hasMessageContaining("Canvas sync failed");
     }
@@ -184,7 +184,7 @@ class CanvasSyncServiceTest {
                 .willReturn(invokeResponse);
 
         // When
-        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub);
+        CanvasSyncResponse response = canvasSyncService.syncCanvas(cognitoSub, "full");
 
         // Then
         assertThat(response.getSuccess()).isTrue();
@@ -216,7 +216,7 @@ class CanvasSyncServiceTest {
                 .willReturn(invokeResponse);
 
         // When
-        canvasSyncService.syncCanvas(cognitoSub);
+        canvasSyncService.syncCanvas(cognitoSub, "full");
 
         // Then
         ArgumentCaptor<InvokeRequest> requestCaptor = ArgumentCaptor.forClass(InvokeRequest.class);
@@ -227,6 +227,7 @@ class CanvasSyncServiceTest {
         // JSON 형식 확인
         assertThat(payload).contains("\"cognitoSub\"");
         assertThat(payload).contains("\"" + cognitoSub + "\"");
+        assertThat(payload).contains("\"syncMode\"").contains("\"full\"");
 
         // 파싱 가능한지 확인
         assertThatNoException().isThrownBy(() -> objectMapper.readTree(payload));

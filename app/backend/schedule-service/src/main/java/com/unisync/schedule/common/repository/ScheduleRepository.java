@@ -44,6 +44,9 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     // 카테고리로 조회
     List<Schedule> findByCategoryIdAndCognitoSub(Long categoryId, String cognitoSub);
 
+    // 카테고리 기반 일정 삭제 (Phase 1.1: 과목 비활성화 시)
+    void deleteAllByCognitoSubAndCategoryId(String cognitoSub, Long categoryId);
+
     // 상태로 조회
     List<Schedule> findByCognitoSubAndStatus(String cognitoSub, ScheduleStatus status);
 

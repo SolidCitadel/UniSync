@@ -630,8 +630,9 @@ jobs:
 | 폴더 | 테스트 파일 | 테스트 수 | 검증 항목 |
 |------|------------|----------|----------|
 | `user_to_lambda/` | `test_canvas_sync_trigger.py` | 3 | User-Service → Lambda 호출, 에러 처리 |
-| `lambda_to_course/` | `test_canvas_sync.py` | 5 | Lambda → SQS → Course-Service 전체 플로우 |
+| `lambda_to_course/` | `test_canvas_sync.py` | 4 | Lambda → SQS → Course-Service 전체 플로우 |
 | `lambda_to_course/` | `test_assignment_event_flow.py` | 4 | 과제 이벤트 CRUD 플로우 |
+| `lambda_to_course/` | `test_disabled_enrollments.py` | 1 | 활성 수강이 없으면 동기화 스킵 |
 | `course_to_schedule/` | `test_assignment_to_schedule.py` | 5 | Course-Service → Schedule-Service 연동 |
 
 ### Scenario Tests 상세
@@ -641,14 +642,15 @@ jobs:
 | `test_full_user_journey.py` | 전체 사용자 여정 | 회원가입 → Canvas 연동 → 동기화 → 일정 확인 |
 | `test_todo_journey.py` | Todo 관리 | 카테고리 생성 → Todo/서브태스크 생성 → 진행률/상태 관리 → 정리 |
 | `test_category_management.py` | 카테고리 관리 | 다중 카테고리 생성 → 일정/할일 분류 → 색상 커스터마이징 |
+| `test_sync_disable_flow.py` | 비활성 과목 차단 | 과목 비활성화 후 동기화 시 스케줄/카테고리 미생성 확인 |
 
 ### 총 테스트 현황
 
 | 구분 | 테스트 수 |
 |------|---------|
 | Unit Tests | 156 |
-| System Tests | 86 |
-| **Total** | **242** |
+| System Tests | 129 |
+| **Total** | **285** |
 
 ---
 
