@@ -37,6 +37,12 @@ public class CategoryResponse {
     @Schema(description = "기본 카테고리 여부", example = "false")
     private Boolean isDefault;
 
+    @Schema(description = "카테고리 출처 타입", example = "USER_CREATED")
+    private String sourceType;
+
+    @Schema(description = "카테고리 출처 ID (연동 카테고리인 경우)", example = "12345")
+    private String sourceId;
+
     @Schema(description = "생성 일시", example = "2025-01-15T10:30:00")
     private LocalDateTime createdAt;
 
@@ -52,6 +58,8 @@ public class CategoryResponse {
                 .color(category.getColor())
                 .icon(category.getIcon())
                 .isDefault(category.getIsDefault())
+                .sourceType(category.getSourceType())
+                .sourceId(category.getSourceId())
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();

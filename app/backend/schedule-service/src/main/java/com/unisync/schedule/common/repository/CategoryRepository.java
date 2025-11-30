@@ -47,6 +47,8 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
             String sourceId
     );
 
+    List<Category> findByCognitoSubAndSourceType(String cognitoSub, String sourceType);
+
     /**
      * 외부 소스 중복 체크
      */

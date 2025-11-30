@@ -235,7 +235,12 @@ class TestSyncDisableApiFlow:
                     seen_enabled.add(course_name)
 
         # 8-3) 카테고리 확인: 활성 과목별 카테고리가 생성되었는지 검증
-        categories_resp = requests.get(f"{gateway}/api/v1/categories", headers=headers, timeout=10)
+        categories_resp = requests.get(
+            f"{gateway}/api/v1/categories",
+            headers=headers,
+            params={"sourceType": "CANVAS_COURSE"},
+            timeout=10,
+        )
         assert categories_resp.status_code == 200, f"카테고리 조회 실패: {categories_resp.status_code}"
         categories = categories_resp.json()
 
@@ -250,6 +255,8 @@ class TestSyncDisableApiFlow:
             assert "id" in cat or "categoryId" in cat, f"category에 id 필드 누락: {cat}"
             assert "name" in cat, f"category에 name 필드 누락: {cat}"
             assert isinstance(cat.get("name"), str), f"category name이 문자열이 아님: {cat}"
+            assert cat.get("sourceType") == "CANVAS_COURSE", f"Canvas 연동 카테고리가 아님: {cat}"
+            assert cat.get("sourceId"), f"Canvas 카테고리 sourceId 누락: {cat}"
 
             # 예상치 못한 필드 검증
             actual_fields = set(cat.keys())

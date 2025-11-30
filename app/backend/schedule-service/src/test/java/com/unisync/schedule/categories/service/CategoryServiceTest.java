@@ -4,6 +4,7 @@ import com.unisync.schedule.categories.dto.CategoryRequest;
 import com.unisync.schedule.categories.dto.CategoryResponse;
 import com.unisync.schedule.categories.exception.CategoryNotFoundException;
 import com.unisync.schedule.categories.exception.DuplicateCategoryException;
+import com.unisync.schedule.categories.model.CategorySourceType;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
@@ -59,6 +60,7 @@ class CategoryServiceTest {
         testCategory.setColor("#FF5733");
         testCategory.setIcon("📚");
         testCategory.setIsDefault(false);
+        testCategory.setSourceType(CategorySourceType.USER_CREATED.name());
 
         defaultCategory = new Category();
         defaultCategory.setCategoryId(100L);
@@ -67,6 +69,7 @@ class CategoryServiceTest {
         defaultCategory.setColor("#000000");
         defaultCategory.setIcon("📌");
         defaultCategory.setIsDefault(true);
+        defaultCategory.setSourceType(CategorySourceType.USER_CREATED.name());
     }
 
     @Test
@@ -86,6 +89,7 @@ class CategoryServiceTest {
         assertThat(response.getColor()).isEqualTo("#FF5733");
         assertThat(response.getIcon()).isEqualTo("📚");
         assertThat(response.getCognitoSub()).isEqualTo(cognitoSub);
+        assertThat(response.getSourceType()).isEqualTo(CategorySourceType.USER_CREATED.name());
 
         then(categoryRepository).should().existsByCognitoSubAndName(cognitoSub, "학업");
         then(categoryRepository).should().save(any(Category.class));
@@ -142,7 +146,7 @@ class CategoryServiceTest {
         given(categoryRepository.findByCognitoSub(cognitoSub)).willReturn(categories);
 
         // when
-        List<CategoryResponse> responses = categoryService.getCategoriesByUserId(cognitoSub);
+        List<CategoryResponse> responses = categoryService.getCategoriesByUserId(cognitoSub, null);
 
         // then
         assertThat(responses).hasSize(2);
@@ -172,6 +176,25 @@ class CategoryServiceTest {
         assertThat(response).isNotNull();
         then(categoryRepository).should().findById(categoryId);
         then(categoryRepository).should().save(any(Category.class));
+    }
+
+    @Test
+    @DisplayName("연동 카테고리는 수정/삭제가 거부된다")
+    void linkedCategory_IsProtected() {
+        Category linked = new Category();
+        linked.setCategoryId(999L);
+        linked.setCognitoSub(cognitoSub);
+        linked.setName("Canvas");
+        linked.setIsDefault(true);
+        linked.setSourceType(CategorySourceType.CANVAS_COURSE.name());
+
+        given(categoryRepository.findById(999L)).willReturn(Optional.of(linked));
+
+        assertThatThrownBy(() -> categoryService.updateCategory(999L, testRequest, cognitoSub))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        assertThatThrownBy(() -> categoryService.deleteCategory(999L, cognitoSub))
+                .isInstanceOf(UnauthorizedAccessException.class);
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.unisync.schedule.categories.dto.CategoryRequest;
 import com.unisync.schedule.categories.dto.CategoryResponse;
 import com.unisync.schedule.categories.exception.CategoryNotFoundException;
 import com.unisync.schedule.categories.exception.DuplicateCategoryException;
+import com.unisync.schedule.categories.model.CategorySourceType;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
@@ -23,6 +24,9 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
+
+    private static final String USER_CREATED = CategorySourceType.USER_CREATED.name();
+    private static final String CANVAS_COURSE = CategorySourceType.CANVAS_COURSE.name();
 
     /**
      * 카테고리 생성
@@ -53,6 +57,8 @@ public class CategoryService {
                 .name(request.getName())
                 .color(request.getColor())
                 .icon(request.getIcon())
+                .sourceType(USER_CREATED)
+                .sourceId(null)
                 .isDefault(false) // 사용자 생성 카테고리는 기본값이 아님
                 .build();
 
@@ -79,10 +85,13 @@ public class CategoryService {
      * 사용자의 모든 카테고리 조회
      */
     @Transactional(readOnly = true)
-    public List<CategoryResponse> getCategoriesByUserId(String cognitoSub) {
-        log.info("사용자 카테고리 전체 조회 - cognitoSub: {}", cognitoSub);
+    public List<CategoryResponse> getCategoriesByUserId(String cognitoSub, CategorySourceType sourceType) {
+        log.info("사용자 카테고리 조회 - cognitoSub: {}, sourceType: {}", cognitoSub,
+                sourceType != null ? sourceType.name() : "ALL");
 
-        List<Category> categories = categoryRepository.findByCognitoSub(cognitoSub);
+        List<Category> categories = sourceType == null
+                ? categoryRepository.findByCognitoSub(cognitoSub)
+                : categoryRepository.findByCognitoSubAndSourceType(cognitoSub, sourceType.name());
 
         return categories.stream()
                 .map(CategoryResponse::from)
@@ -101,6 +110,11 @@ public class CategoryService {
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
         validateCategoryOwnership(category, cognitoSub);
+
+        // 연동 카테고리는 수정 불가
+        if (isLinkedCategory(category)) {
+            throw new UnauthorizedAccessException("연동된 카테고리는 수정할 수 없습니다.");
+        }
 
         // 기본 카테고리는 수정 불가
         if (category.getIsDefault()) {
@@ -146,6 +160,11 @@ public class CategoryService {
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
         validateCategoryOwnership(category, cognitoSub);
+
+        // 연동 카테고리는 삭제 불가
+        if (isLinkedCategory(category)) {
+            throw new UnauthorizedAccessException("연동된 카테고리는 삭제할 수 없습니다.");
+        }
 
         // 기본 카테고리는 삭제 불가
         if (category.getIsDefault()) {
@@ -204,7 +223,7 @@ public class CategoryService {
      */
     @Transactional
     public Long getOrCreateCourseCategory(String cognitoSub, Long courseId, String courseName) {
-        String sourceType = "CANVAS_COURSE";
+        String sourceType = CANVAS_COURSE;
         String sourceId = courseId.toString();
 
         // 기존 과목 카테고리 조회 (source_type + source_id로)
@@ -251,6 +270,13 @@ public class CategoryService {
         // courseId를 색상 개수로 나눈 나머지로 색상 선택
         int index = (int) (courseId % colors.length);
         return colors[index];
+    }
+
+    /**
+     * 연동(비사용자) 카테고리 여부
+     */
+    private boolean isLinkedCategory(Category category) {
+        return category.getSourceType() != null && !USER_CREATED.equals(category.getSourceType());
     }
 
     /**
