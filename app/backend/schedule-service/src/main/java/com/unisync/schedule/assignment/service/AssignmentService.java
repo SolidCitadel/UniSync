@@ -55,6 +55,13 @@ public class AssignmentService {
      * Assignment 생성 시 Schedule 생성
      */
     private void createScheduleFromAssignment(AssignmentToScheduleMessage message) {
+        // dueAt이 null인 경우 일정 생성 건너뛰기 (마감일 없는 과제는 캘린더에 표시하지 않음)
+        if (message.getDueAt() == null) {
+            log.info("Skipping assignment without due date: assignmentId={}, title={}",
+                    message.getAssignmentId(), message.getTitle());
+            return;
+        }
+
         // sourceId로 중복 체크 (canvasAssignmentId-cognitoSub 조합)
         String sourceId = buildSourceId(message.getCanvasAssignmentId(), message.getCognitoSub());
 
@@ -94,6 +101,17 @@ public class AssignmentService {
      */
     private void updateScheduleFromAssignment(AssignmentToScheduleMessage message) {
         String sourceId = buildSourceId(message.getCanvasAssignmentId(), message.getCognitoSub());
+
+        // dueAt이 null로 변경되면 일정 삭제 (마감일 없는 과제는 캘린더에 표시하지 않음)
+        if (message.getDueAt() == null) {
+            scheduleRepository.findBySourceAndSourceId(ScheduleSource.CANVAS, sourceId)
+                    .ifPresent(schedule -> {
+                        scheduleRepository.delete(schedule);
+                        log.info("✅ Deleted schedule due to null dueAt: scheduleId={}, sourceId={}",
+                                schedule.getScheduleId(), sourceId);
+                    });
+            return;
+        }
 
         Schedule schedule = scheduleRepository.findBySourceAndSourceId(ScheduleSource.CANVAS, sourceId)
                 .orElseThrow(() -> new IllegalArgumentException(

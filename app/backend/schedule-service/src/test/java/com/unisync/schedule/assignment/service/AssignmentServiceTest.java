@@ -283,7 +283,78 @@ class AssignmentServiceTest {
         then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
 
         Schedule savedSchedule = scheduleCaptor.getValue();
-        assertThat(savedSchedule.getStartTime()).isEqualTo(dueAt.minusHours(24));
-        assertThat(savedSchedule.getEndTime()).isEqualTo(dueAt);
+        LocalDateTime expectedTime = LocalDateTime.of(2025, 11, 20, 0, 0, 0);
+        assertThat(savedSchedule.getStartTime()).isEqualTo(expectedTime);
+        assertThat(savedSchedule.getEndTime()).isEqualTo(expectedTime);  // start와 end가 동일
+        assertThat(savedSchedule.getIsAllDay()).isTrue();
+    }
+
+    @Test
+    @DisplayName("dueAt이 null인 경우 일정 생성을 건너뜀")
+    void test_createSchedule_dueAtNull_skipsCreation() {
+        // given
+        validMessage.setDueAt(null);
+
+        // when
+        assignmentService.processAssignmentEvent(validMessage);
+
+        // then
+        then(scheduleRepository).should(never()).existsBySourceAndSourceId(any(), anyString());
+        then(categoryService).should(never()).getOrCreateCanvasCategory(anyString());
+        then(scheduleRepository).should(never()).save(any(Schedule.class));
+    }
+
+    @Test
+    @DisplayName("ASSIGNMENT_UPDATED 시 dueAt이 null이면 일정 삭제")
+    void test_updateSchedule_dueAtNull_deletesSchedule() {
+        // given
+        validMessage.setEventType("ASSIGNMENT_UPDATED");
+        validMessage.setDueAt(null);
+
+        Schedule existingSchedule = Schedule.builder()
+            .scheduleId(1L)
+            .cognitoSub("user-123")
+            .categoryId(canvasCategoryId)
+            .title("[데이터구조] 기존 제목")
+            .description("기존 설명")
+            .startTime(LocalDateTime.of(2025, 11, 10, 23, 59, 59))
+            .endTime(LocalDateTime.of(2025, 11, 11, 23, 59, 59))
+            .isAllDay(false)
+            .status(ScheduleStatus.TODO)
+            .source(ScheduleSource.CANVAS)
+            .sourceId("canvas-assignment-456-user-123")
+            .build();
+
+        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
+            .willReturn(Optional.of(existingSchedule));
+
+        // when
+        assignmentService.processAssignmentEvent(validMessage);
+
+        // then
+        then(scheduleRepository).should(times(1)).findBySourceAndSourceId(
+            eq(ScheduleSource.CANVAS),
+            eq("canvas-assignment-456-user-123")
+        );
+        then(scheduleRepository).should(times(1)).delete(existingSchedule);
+        then(scheduleRepository).should(never()).save(any(Schedule.class));
+    }
+
+    @Test
+    @DisplayName("ASSIGNMENT_UPDATED 시 dueAt이 null이고 일정이 없어도 예외 발생하지 않음")
+    void test_updateSchedule_dueAtNull_scheduleNotFound_noException() {
+        // given
+        validMessage.setEventType("ASSIGNMENT_UPDATED");
+        validMessage.setDueAt(null);
+
+        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
+            .willReturn(Optional.empty());
+
+        // when & then (예외 발생하지 않아야 함)
+        assignmentService.processAssignmentEvent(validMessage);
+
+        then(scheduleRepository).should(times(1)).findBySourceAndSourceId(any(), anyString());
+        then(scheduleRepository).should(never()).delete(any(Schedule.class));
+        then(scheduleRepository).should(never()).save(any(Schedule.class));
     }
 }
