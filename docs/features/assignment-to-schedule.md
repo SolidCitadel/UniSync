@@ -179,9 +179,9 @@ Assignment:
 
 Schedule:
   - title: "[데이터구조] 중간고사 프로젝트"
-  - start_time: "2025-11-20T00:00:00Z" (dueAt 날짜의 00:00:00)
-  - end_time: "2025-11-20T00:00:00Z" (start와 동일)
-  - is_all_day: true
+  - start_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - end_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - is_all_day: false
   - source: CANVAS
   - source_id: "canvas-assignment-123456-user-cognito-sub"
   - category_id: [Canvas 기본 카테고리 - 모든 과목 공통]
@@ -207,9 +207,9 @@ Assignment:
 
 Schedule:
   - title: "[데이터구조] 중간고사 프로젝트"
-  - start_time: "2025-11-20T00:00:00Z" (dueAt 날짜의 00:00:00)
-  - end_time: "2025-11-20T00:00:00Z" (start와 동일)
-  - is_all_day: true
+  - start_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - end_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - is_all_day: false
   - source: CANVAS
   - source_id: "canvas-assignment-123456-user-cognito-sub"
   - category_id: [과목별 카테고리 - "데이터구조"]
@@ -235,22 +235,24 @@ source_id = courseId.toString()  // "10"
 - **UPDATE 시**: dueAt이 null로 변경되면 기존 일정 삭제
   - 이유: 마감일이 제거된 과제는 일정에서 제거
 
-**기본 시간 설정** (하루 종일 이벤트):
-- `is_all_day`: `true` (Canvas 과제는 하루 종일 이벤트)
-- `start_time`: dueAt 날짜의 `00:00:00`
-- `end_time`: dueAt 날짜의 `00:00:00` (start와 동일)
+**기본 시간 설정** (점 이벤트 - Point Event):
+- `is_all_day`: `false` (시간 정보 보존)
+- `start_time`: dueAt 원본 시간 (예: `2025-11-20T23:59:59Z`)
+- `end_time`: dueAt 원본 시간 (start와 동일)
 - 시간대: UTC (Canvas API 기본값)
 - 예시:
   ```
   dueAt: "2025-11-20T23:59:59Z"
-  → startTime: "2025-11-20T00:00:00Z"
-  → endTime: "2025-11-20T00:00:00Z" (동일)
+  → startTime: "2025-11-20T23:59:59Z"
+  → endTime: "2025-11-20T23:59:59Z" (동일)
   ```
 
-**하루 종일 이벤트를 사용하는 이유**:
-- Canvas 과제는 특정 시간이 아닌 날짜가 중요
-- start와 end를 동일하게 설정하여 타임존 변환 문제 방지
-- UTC 시간을 한국 시간으로 변환해도 동일한 날짜로 표시됨
+**점 이벤트(Point Event)를 사용하는 이유**:
+- Canvas 과제는 "기간" 이벤트가 아닌 **마감 시점(deadline)**
+- 일부 과제는 정각이 아닌 의미있는 마감 시간을 가짐 (예: 14:30)
+- 백엔드는 정확한 시간 정보를 보존하고, 프론트엔드가 렌더링 방식 결정
+  - 프론트엔드는 점 이벤트를 하루 종일 이벤트처럼 표시하거나, 특정 시간 마커로 표시 가능
+- 의미 없는 00:00 시작 시간을 만들지 않아 데이터 무결성 유지
 
 ### 중복 처리
 
@@ -529,7 +531,7 @@ python -m pytest tests/integration/test_assignment_to_schedule_integration.py -v
 - [x] AssignmentService: 변환 로직
 - [x] CategoryService: "Canvas" 기본 카테고리 생성
 - [x] ScheduleService: Schedule 저장 로직
-- [x] 하루 종일 이벤트 처리 (start=end, is_all_day=true)
+- [ ] 점 이벤트 처리 (start=end=dueAt 원본, is_all_day=false) - **수정 필요**
 - [x] dueAt null 처리 (CREATE: 건너뛰기, UPDATE: 삭제)
 - [x] 단위 테스트: AssignmentServiceTest
 

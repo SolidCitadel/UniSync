@@ -125,7 +125,8 @@ class TestAssignmentEventFlow:
                             assert 'startTime' in schedule
                             assert 'endTime' in schedule
                             assert 'categoryId' in schedule
-                            assert schedule.get('isAllDay') is True  # Phase 1.1: all-day 이벤트
+                            assert schedule.get('isAllDay') is False  # Canvas 과제는 점 이벤트 (dueAt 그대로)
+                            assert schedule.get('startTime') == schedule.get('endTime'), "점 이벤트는 start=end 이어야 함"
 
                         break
             except Exception as e:

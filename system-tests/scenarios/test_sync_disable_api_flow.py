@@ -97,7 +97,8 @@ class TestSyncDisableApiFlow:
             assert "source" in s, f"schedule에 source 필드 누락: {s}"
             assert s["source"] == "CANVAS", f"schedule source가 CANVAS가 아님: {s}"
             assert "isAllDay" in s, f"schedule에 isAllDay 필드 누락: {s}"
-            assert s["isAllDay"] is True, f"Canvas 과제는 isAllDay=true여야 함: {s}"
+            assert s["isAllDay"] is False, f"Canvas 과제는 점 이벤트여야 함: {s}"
+            assert s["startTime"] == s["endTime"], f"start/end가 동일한 점 이벤트여야 함: {s}"
             assert "categoryId" in s, f"schedule에 categoryId 필드 누락: {s}"
 
             # 예상치 못한 필드 검증 (API 계약 외 필드 추가 시 실패)

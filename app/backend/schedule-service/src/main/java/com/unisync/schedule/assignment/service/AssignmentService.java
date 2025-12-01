@@ -103,8 +103,6 @@ public class AssignmentService {
                                               Long categoryId,
                                               LocalDateTime dueAt,
                                               String sourceId) {
-        LocalDateTime allDayTime = calculateAllDayStartTime(dueAt);
-
         return Schedule.builder()
                 .cognitoSub(cognitoSub)
                 .groupId(null)
@@ -112,9 +110,9 @@ public class AssignmentService {
                 .title(buildScheduleTitle(payload))
                 .description(payload.getDescription())
                 .location(null)
-                .startTime(allDayTime)
-                .endTime(allDayTime)
-                .isAllDay(true)
+                .startTime(dueAt)
+                .endTime(dueAt)
+                .isAllDay(false)
                 .status(ScheduleStatus.TODO)
                 .recurrenceRule(null)
                 .source(ScheduleSource.CANVAS)
@@ -125,12 +123,11 @@ public class AssignmentService {
     private void updateScheduleFromPayload(Schedule schedule,
                                            AssignmentPayload payload,
                                            LocalDateTime dueAt) {
-        LocalDateTime allDayTime = calculateAllDayStartTime(dueAt);
         schedule.setTitle(buildScheduleTitle(payload));
         schedule.setDescription(payload.getDescription());
-        schedule.setStartTime(allDayTime);
-        schedule.setEndTime(allDayTime);
-        schedule.setIsAllDay(true);
+        schedule.setStartTime(dueAt);
+        schedule.setEndTime(dueAt);
+        schedule.setIsAllDay(false);
     }
 
     private String buildSourceId(Long canvasAssignmentId, String cognitoSub) {
@@ -139,13 +136,6 @@ public class AssignmentService {
 
     private String buildScheduleTitle(AssignmentPayload payload) {
         return String.format("[%s] %s", payload.getCourseName(), payload.getTitle());
-    }
-
-    private LocalDateTime calculateAllDayStartTime(LocalDateTime dueAt) {
-        if (dueAt == null) {
-            return LocalDateTime.now().toLocalDate().atStartOfDay();
-        }
-        return dueAt.toLocalDate().atStartOfDay();
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {
