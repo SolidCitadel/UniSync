@@ -135,7 +135,7 @@ public class AssignmentService {
     }
 
     private String buildScheduleTitle(AssignmentPayload payload) {
-        return String.format("[%s] %s", payload.getCourseName(), payload.getTitle());
+        return payload.getTitle();
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {

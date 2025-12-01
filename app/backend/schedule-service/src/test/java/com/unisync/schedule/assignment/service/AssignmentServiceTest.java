@@ -123,7 +123,7 @@ class AssignmentServiceTest {
         assertThat(saved).hasSize(2);
         assertThat(saved.get(0).getSource()).isEqualTo(ScheduleSource.CANVAS);
         assertThat(saved.get(0).getIsAllDay()).isFalse();
-        assertThat(saved.get(0).getTitle()).startsWith("[데이터구조]");
+        assertThat(saved.get(0).getTitle()).isEqualTo("중간고사 프로젝트");
         assertThat(saved.get(0).getStartTime()).isEqualTo(LocalDateTime.of(2025, 11, 15, 23, 59, 59));
         assertThat(saved.get(0).getEndTime()).isEqualTo(LocalDateTime.of(2025, 11, 15, 23, 59, 59));
     }
