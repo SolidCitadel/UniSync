@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-northeast-2"
 }
 
 variable "project_name" {
@@ -31,7 +31,7 @@ variable "private_subnet_cidrs" {
 variable "availability_zones" {
   description = "Availability zones for subnets"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
+  default     = ["ap-northeast-2a", "ap-northeast-2b"]
 }
 
 variable "ec2_cidr_blocks" {
@@ -104,12 +104,6 @@ variable "canvas_api_base_url" {
   description = "Canvas API base URL"
   type        = string
   default     = "https://khcanvas.khu.ac.kr/api/v1"
-}
-
-variable "lambda_execution_role_arn" {
-  description = "ARN of existing IAM Role for Lambda execution (LabRole)"
-  type        = string
-  default     = "arn:aws:iam::381492267817:role/LabRole"
 }
 
 variable "common_tags" {

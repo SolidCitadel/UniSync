@@ -16,6 +16,7 @@ CANVAS_API_BASE_URL = os.environ['CANVAS_API_BASE_URL']
 AWS_REGION = os.environ['AWS_REGION']
 SQS_ENDPOINT = os.environ.get('SQS_ENDPOINT')  # Optional: For LocalStack
 CANVAS_SYNC_API_KEY_SECRET_ARN = os.environ.get('CANVAS_SYNC_API_KEY_SECRET_ARN')
+SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')  # Optional: prefer explicit URL when available
 
 # AWS clients
 sqs = boto3.client('sqs', region_name=AWS_REGION, endpoint_url=SQS_ENDPOINT)
@@ -72,6 +73,21 @@ def lambda_handler(event, context):
     }
     """
     try:
+        # 0. 테스트 모드: Secrets + SQS만 검증
+        if event.get("testMode") == "SQS_ONLY":
+            print(event)
+            sync_message = {
+                "eventType": "CANVAS_SYNC_TEST",
+                "cognitoSub": event.get("cognitoSub", "test-sub"),
+                "syncedAt": datetime.utcnow().isoformat(),
+                "courses": []
+            }
+            send_to_sqs("lambda-to-courseservice-sync", sync_message)
+            return {
+                "statusCode": 200,
+                "body": {"test": "SQS_ONLY_OK"}
+            }
+
         # 1. 입력 정규화 (호출자별 형식 차이 흡수)
         cognito_sub = extract_cognito_sub(event)
 
@@ -280,6 +296,11 @@ def get_queue_url_cached(queue_name: str) -> str:
 
     Lambda 실행 중 동일한 큐는 한 번만 조회하여 성능 향상
     """
+    # 1) 환경변수에 URL이 있으면 그걸 바로 사용
+    if SQS_QUEUE_URL:
+        return SQS_QUEUE_URL
+
+    # 2) 아니면 기존 방식대로 이름으로 조회
     if queue_name not in _queue_url_cache:
         response = sqs.get_queue_url(QueueName=queue_name)
         _queue_url_cache[queue_name] = response['QueueUrl']

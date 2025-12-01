@@ -1,47 +1,115 @@
 # Lambda Module - Canvas Sync Lambda with VPC
 
-# Data source for Lambda code archive
+# Prepare Lambda package: install dependencies into src/ and zip src directory
+resource "null_resource" "canvas_sync_lambda_dependencies" {
+  # 재실행 기준: requirements.txt 내용이 바뀔 때
+  triggers = {
+    requirements_hash = filesha1("${path.module}/../../../app/serverless/canvas-sync-lambda/requirements.txt")
+  }
+
+  provisioner "local-exec" {
+    working_dir = "${path.module}/../../../app/serverless/canvas-sync-lambda/src"
+    # requirements.txt는 상위 디렉터리에 있으므로 상대 경로로 지정
+    command     = "pip install -r ../requirements.txt -t ."
+  }
+}
+
+# Data source for Lambda code archive (after dependencies installation)
 data "archive_file" "canvas_sync_lambda" {
+  depends_on = [null_resource.canvas_sync_lambda_dependencies]
+
   type        = "zip"
-  source_dir  = "${path.module}/../../../app/serverless/canvas-sync-lambda"
+  source_dir  = "${path.module}/../../../app/serverless/canvas-sync-lambda/src"
   output_path = "${path.module}/canvas-sync-lambda.zip"
   excludes    = ["__pycache__", "*.pyc", "tests", "conftest.py"]
 }
 
 # IAM Role for Lambda Execution
-# Note: IAM Role 생성 권한이 없어서 기존 LabRole 사용
-# LabRole에 다음 권한이 필요:
-# - AWSLambdaBasicExecutionRole (CloudWatch Logs)
-# - AWSLambdaVPCAccessExecutionRole (VPC 접근)
-# - SQS SendMessage 권한
-# - Secrets Manager GetSecretValue 권한
-#
-# resource "aws_iam_role" "lambda_execution" {
-#   name = "${var.project_name}-lambda-execution-role"
-#   ...
-# }
-#
-# resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
-#   ...
-# }
-#
-# resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
-#   ...
-# }
-#
-# resource "aws_iam_role_policy" "lambda_sqs" {
-#   ...
-# }
-#
-# resource "aws_iam_role_policy" "lambda_secrets" {
-#   ...
-# }
+resource "aws_iam_role" "lambda_execution" {
+  name = "${var.project_name}-lambda-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-lambda-execution-role"
+    }
+  )
+}
+
+# IAM Policy for Lambda Basic Execution
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# IAM Policy for VPC Access
+resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
+  role       = aws_iam_role.lambda_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+# IAM Policy for SQS Access
+resource "aws_iam_role_policy" "lambda_sqs" {
+  name = "${var.project_name}-lambda-sqs-policy"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
+        ]
+        Resource = [
+          var.sqs_queue_arns.lambda_to_courseservice_sync
+        ]
+      }
+    ]
+  })
+}
+
+# IAM Policy for Secrets Manager Access
+resource "aws_iam_role_policy" "lambda_secrets" {
+  name = "${var.project_name}-lambda-secrets-policy"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          var.canvas_sync_api_key_secret_arn
+        ]
+      }
+    ]
+  })
+}
 
 # Lambda Function - Canvas Sync
 resource "aws_lambda_function" "canvas_sync" {
   filename         = data.archive_file.canvas_sync_lambda.output_path
   function_name    = "${var.project_name}-canvas-sync-lambda"
-  role            = var.lambda_execution_role_arn
+  role            = aws_iam_role.lambda_execution.arn
   handler         = "handler.lambda_handler"
   runtime         = "python3.11"
   timeout         = 120
@@ -57,7 +125,6 @@ resource "aws_lambda_function" "canvas_sync" {
 
   environment {
     variables = {
-      # AWS_REGION은 Lambda 예약 변수이므로 제거 (Lambda가 자동 제공)
       USER_SERVICE_URL              = var.user_service_url
       CANVAS_API_BASE_URL           = var.canvas_api_base_url
       CANVAS_SYNC_API_KEY_SECRET_ARN = var.canvas_sync_api_key_secret_arn
@@ -72,9 +139,8 @@ resource "aws_lambda_function" "canvas_sync" {
     }
   )
 
-  # LabRole 사용 시 depends_on 제거 (IAM Role이 Terraform 밖에서 관리됨)
-  # depends_on = [
-  #   aws_iam_role_policy_attachment.lambda_vpc_execution
-  # ]
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_vpc_execution
+  ]
 }
 

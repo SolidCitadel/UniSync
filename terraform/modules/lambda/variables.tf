@@ -3,11 +3,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "lambda_execution_role_arn" {
-  description = "ARN of existing IAM Role for Lambda execution (LabRole)"
-  type        = string
-}
-
 variable "aws_region" {
   description = "AWS region"
   type        = string

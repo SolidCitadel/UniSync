@@ -27,7 +27,6 @@ rds_deletion_protection = true
 canvas_sync_api_key = "YOUR_CANVAS_SYNC_API_KEY_HERE"
 user_service_url = "http://user-service:8081"  # ECS 전환 후 업데이트 필요
 canvas_api_base_url = "https://khcanvas.khu.ac.kr/api/v1"
-lambda_execution_role_arn = "arn:aws:iam::381492267817:role/LabRole"  # 기존 LabRole 사용
 
 # Common Tags
 common_tags = {
