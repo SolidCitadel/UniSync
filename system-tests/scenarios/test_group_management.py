@@ -1133,9 +1133,48 @@ class TestScheduleCoordinationFlow:
         print(f"  ✅ 공강 시간 발견: {found_slot['startTime']} ~ {found_slot['endTime']} ({found_slot['durationMinutes']}분)")
 
         # =================================================================
-        # STEP 5: 그룹 미팅 일정 생성
+        # STEP 5: 특정 멤버만 선택해서 공강 조회
         # =================================================================
-        print(f"\n[STEP 5/6] 그룹 미팅 일정 생성")
+        print(f"\n[STEP 5/7] 특정 멤버만 선택해서 공강 조회 (Leader만)")
+
+        leader_only_response = requests.post(
+            f"{gateway_url}/api/v1/schedules/find-free-slots",
+            headers=leader['headers'],
+            json={
+                "groupId": group_id,
+                "userIds": [leader['cognitoSub']],  # Leader만 선택
+                "startDate": "2025-12-08",
+                "endDate": "2025-12-08",
+                "minDurationMinutes": 120,
+                "workingHoursStart": "09:00",
+                "workingHoursEnd": "20:00"
+            },
+            timeout=5
+        )
+
+        assert leader_only_response.status_code == 200
+        leader_only_data = leader_only_response.json()
+
+        assert leader_only_data["groupId"] == group_id
+        assert leader_only_data["memberCount"] == 1  # Leader만
+        assert len(leader_only_data["freeSlots"]) > 0
+
+        # Leader는 12:00-20:00이 공강이어야 함 (09:00-12:00만 수업)
+        leader_found_slot = None
+        for slot in leader_only_data["freeSlots"]:
+            if "12:00:00" in slot["startTime"] and slot["durationMinutes"] >= 120:
+                leader_found_slot = slot
+                break
+
+        assert leader_found_slot is not None, "Leader의 공강이 발견되지 않음"
+
+        print(f"  ✅ Leader 공강 발견: {leader_found_slot['startTime']} ~ {leader_found_slot['endTime']} ({leader_found_slot['durationMinutes']}분)")
+        print(f"  ✅ userIds 필드 테스트 성공: cognitoSub 배열로 특정 멤버만 선택 가능")
+
+        # =================================================================
+        # STEP 6: 그룹 미팅 일정 생성
+        # =================================================================
+        print(f"\n[STEP 6/7] 그룹 미팅 일정 생성")
 
         # 그룹 카테고리 생성
         group_cat_response = requests.post(
@@ -1170,9 +1209,9 @@ class TestScheduleCoordinationFlow:
         print(f"  ✅ 그룹 미팅 일정 생성 성공 (scheduleId: {meeting_schedule_id})")
 
         # =================================================================
-        # STEP 6: 모든 멤버가 그룹 일정 조회 가능 확인
+        # STEP 7: 모든 멤버가 그룹 일정 조회 가능 확인
         # =================================================================
-        print(f"\n[STEP 6/6] 모든 멤버 그룹 일정 조회 확인")
+        print(f"\n[STEP 7/7] 모든 멤버 그룹 일정 조회 확인")
 
         # Leader 조회
         leader_schedule_check = requests.get(
@@ -1207,7 +1246,8 @@ class TestScheduleCoordinationFlow:
         print(f"✅ STEP 1: 사용자 준비 (Leader, Member)")
         print(f"✅ STEP 2: 그룹 생성 및 멤버 초대")
         print(f"✅ STEP 3: 각자 개인 일정 등록")
-        print(f"✅ STEP 4: 공강 시간 조회 (API Gateway)")
-        print(f"✅ STEP 5: 발견된 공강 시간에 그룹 미팅 일정 생성")
-        print(f"✅ STEP 6: 모든 멤버 그룹 일정 조회 가능 확인")
+        print(f"✅ STEP 4: 공강 시간 조회 (전체 멤버)")
+        print(f"✅ STEP 5: 특정 멤버만 선택 공강 조회 (userIds 필드 테스트)")
+        print(f"✅ STEP 6: 발견된 공강 시간에 그룹 미팅 일정 생성")
+        print(f"✅ STEP 7: 모든 멤버 그룹 일정 조회 가능 확인")
         print("=" * 100 + "\n")
