@@ -8,6 +8,7 @@ import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.ScheduleRepository;
+import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
@@ -41,6 +42,9 @@ class ScheduleServiceTest {
 
     @Mock
     private GroupPermissionService groupPermissionService;
+
+    @Mock
+    private UserServiceClient userServiceClient;
 
     @InjectMocks
     private ScheduleService scheduleService;
@@ -168,7 +172,7 @@ class ScheduleServiceTest {
         given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(schedules);
 
         // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub);
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub, null);
 
         // then
         assertThat(responses).hasSize(1);
@@ -189,13 +193,153 @@ class ScheduleServiceTest {
                 .willReturn(schedules);
 
         // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate);
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate, null);
 
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
 
         then(scheduleRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
+    }
+
+    @Test
+    @DisplayName("개인 + 그룹 일정 통합 조회 - 날짜 미지정")
+    void getSchedulesIncludingGroups_NoDate() {
+        // given
+        Long groupId = 50L;
+        Schedule groupSchedule = new Schedule();
+        groupSchedule.setScheduleId(400L);
+        groupSchedule.setGroupId(groupId);
+        groupSchedule.setCategoryId(categoryId);
+        groupSchedule.setTitle("그룹 일정");
+        groupSchedule.setStartTime(LocalDateTime.of(2025, 11, 20, 9, 0));
+        groupSchedule.setEndTime(LocalDateTime.of(2025, 11, 20, 10, 0));
+        groupSchedule.setStatus(ScheduleStatus.TODO);
+        groupSchedule.setSource(ScheduleSource.USER);
+
+        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule));
+        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of(groupId));
+        given(scheduleRepository.findByGroupIdIn(List.of(groupId))).willReturn(List.of(groupSchedule));
+
+        // when
+        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, null);
+
+        // then
+        assertThat(responses).hasSize(2);
+        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
+        then(scheduleRepository).should().findByGroupIdIn(List.of(groupId));
+    }
+
+    @Test
+    @DisplayName("개인 + 그룹 일정 통합 조회 - 날짜/상태 필터")
+    void getSchedulesIncludingGroups_DateAndStatus() {
+        // given
+        LocalDateTime startDate = LocalDateTime.of(2025, 11, 1, 0, 0);
+        LocalDateTime endDate = LocalDateTime.of(2025, 11, 30, 23, 59);
+        Long groupId = 60L;
+
+        Schedule groupDone = new Schedule();
+        groupDone.setScheduleId(500L);
+        groupDone.setGroupId(groupId);
+        groupDone.setCategoryId(categoryId);
+        groupDone.setTitle("완료 그룹 일정");
+        groupDone.setStartTime(LocalDateTime.of(2025, 11, 15, 9, 0));
+        groupDone.setEndTime(LocalDateTime.of(2025, 11, 15, 10, 0));
+        groupDone.setStatus(ScheduleStatus.DONE);
+        groupDone.setSource(ScheduleSource.USER);
+
+        testSchedule.setStatus(ScheduleStatus.DONE);
+
+        given(scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, startDate, endDate))
+                .willReturn(List.of(testSchedule));
+        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of(groupId));
+        given(scheduleRepository.findByGroupIdsAndDateRange(List.of(groupId), startDate, endDate))
+                .willReturn(List.of(groupDone));
+
+        // when
+        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, startDate, endDate, ScheduleStatus.DONE);
+
+        // then
+        assertThat(responses).hasSize(2);
+        assertThat(responses).allMatch(res -> res.getStatus() == ScheduleStatus.DONE);
+        then(scheduleRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
+        then(scheduleRepository).should().findByGroupIdsAndDateRange(List.of(groupId), startDate, endDate);
+    }
+
+    @Test
+    @DisplayName("개인 + 그룹 일정 통합 조회 - 그룹 없음 시 개인 일정만 반환")
+    void getSchedulesIncludingGroups_NoGroups() {
+        // given
+        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule));
+        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of());
+
+        // when
+        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, ScheduleStatus.TODO);
+
+        // then
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
+        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
+        then(scheduleRepository).should(never()).findByGroupIdIn(any());
+    }
+
+    @Test
+    @DisplayName("사용자 일정 조회 - 상태 필터 적용")
+    void getSchedulesByUserId_WithStatusFilter() {
+        // given
+        Schedule doneSchedule = new Schedule();
+        doneSchedule.setScheduleId(200L);
+        doneSchedule.setCognitoSub(cognitoSub);
+        doneSchedule.setCategoryId(categoryId);
+        doneSchedule.setTitle("완료 일정");
+        doneSchedule.setStartTime(LocalDateTime.of(2025, 11, 12, 10, 0));
+        doneSchedule.setEndTime(LocalDateTime.of(2025, 11, 12, 11, 0));
+        doneSchedule.setStatus(ScheduleStatus.DONE);
+        doneSchedule.setSource(ScheduleSource.USER);
+
+        testSchedule.setStatus(ScheduleStatus.TODO);
+
+        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule, doneSchedule));
+
+        // when
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub, ScheduleStatus.TODO);
+
+        // then
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getStatus()).isEqualTo(ScheduleStatus.TODO);
+        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
+    }
+
+    @Test
+    @DisplayName("그룹 일정 조회 - 권한 검증 및 상태 필터 적용")
+    void getSchedulesByGroupId_StatusFilter() {
+        // given
+        Long groupId = 20L;
+        Schedule groupDone = new Schedule();
+        groupDone.setScheduleId(300L);
+        groupDone.setGroupId(groupId);
+        groupDone.setCategoryId(categoryId);
+        groupDone.setCognitoSub(cognitoSub);
+        groupDone.setTitle("완료 그룹 일정");
+        groupDone.setStartTime(LocalDateTime.of(2025, 11, 15, 9, 0));
+        groupDone.setEndTime(LocalDateTime.of(2025, 11, 15, 10, 0));
+        groupDone.setStatus(ScheduleStatus.DONE);
+        groupDone.setSource(ScheduleSource.USER);
+
+        testSchedule.setGroupId(groupId);
+        testSchedule.setStatus(ScheduleStatus.TODO);
+
+        willDoNothing().given(groupPermissionService).validateReadPermission(groupId, cognitoSub);
+        given(scheduleRepository.findByGroupId(groupId)).willReturn(List.of(testSchedule, groupDone));
+
+        // when
+        List<ScheduleResponse> responses = scheduleService.getSchedulesByGroupId(groupId, cognitoSub, ScheduleStatus.DONE);
+
+        // then
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getStatus()).isEqualTo(ScheduleStatus.DONE);
+        then(groupPermissionService).should().validateReadPermission(groupId, cognitoSub);
+        then(scheduleRepository).should().findByGroupId(groupId);
     }
 
     @Test

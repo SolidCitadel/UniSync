@@ -97,4 +97,31 @@ public class UserServiceClient {
             return Collections.emptyList();
         }
     }
+
+    /**
+     * 사용자가 속한 그룹 ID 목록 조회
+     *
+     * @param cognitoSub 사용자 Cognito Sub
+     * @return 그룹 ID 목록 (조회 실패 시 빈 리스트)
+     */
+    public List<Long> getUserGroupIds(String cognitoSub) {
+        String url = userServiceUrl + "/api/internal/groups/memberships/" + cognitoSub;
+
+        try {
+            log.debug("User-Service 사용자 그룹 목록 조회: cognitoSub={}", cognitoSub);
+            ResponseEntity<List<Long>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Long>>() {}
+            );
+            List<Long> groupIds = response.getBody();
+            log.debug("User-Service 사용자 그룹 목록 조회 결과: cognitoSub={}, groupCount={}",
+                    cognitoSub, groupIds != null ? groupIds.size() : 0);
+            return groupIds != null ? groupIds : Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("User-Service 사용자 그룹 목록 조회 실패: cognitoSub={}, error={}", cognitoSub, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
 }

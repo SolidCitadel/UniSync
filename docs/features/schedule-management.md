@@ -353,9 +353,32 @@ Schedule-Service가 SQS 구독
 ### 5.1 Schedule-Service API
 
 #### 일정(Schedule) 관리
-- `GET /api/v1/schedules` - 일정 목록 조회
-  - Query Params: `startDate`, `endDate`, `categoryId`, `groupId`, `status`
+- `GET /api/v1/schedules` - 일정 목록 조회 (개인/그룹/통합)
+  - **개인 일정만 조회**: 파라미터 없이 호출
+  - **특정 그룹 일정 조회**: `?groupId=123` ✅ 구현 완료
+  - **개인 + 모든 그룹 일정 통합 조회**: `?includeGroups=true` (계획)
+  - Query Params:
+    - `groupId` (선택): 특정 그룹의 일정 조회
+    - `includeGroups` (선택): true이면 개인 + 모든 그룹 일정 통합 조회
+    - `startDate` (선택): 시작 날짜 필터 (ISO 8601)
+    - `endDate` (선택): 종료 날짜 필터 (ISO 8601)
+    - `categoryId` (선택): 카테고리 필터
+    - `status` (선택): 상태 필터
   - Response: 캘린더 뷰용 일정 목록
+  - **예시**:
+    ```bash
+    # 개인 일정만
+    GET /api/v1/schedules
+
+    # 특정 그룹 일정 (✅ 구현 완료)
+    GET /api/v1/schedules?groupId=123
+
+    # 개인 + 모든 그룹 일정 통합 (계획)
+    GET /api/v1/schedules?includeGroups=true
+
+    # 날짜 범위 필터링
+    GET /api/v1/schedules?groupId=123&startDate=2025-12-01T00:00:00&endDate=2025-12-31T23:59:59
+    ```
 
 - `POST /api/v1/schedules` - 일정 생성
   - Request Body:
@@ -540,6 +563,9 @@ Schedule-Service가 SQS 구독
 - [x] DB 스키마 생성 (Schedules, Todos, Categories)
 - [x] JPA Entity 및 Repository 구현
 - [x] Schedule CRUD API 구현
+  - [x] 개인 일정 CRUD
+  - [x] 그룹 일정 CRUD (생성/수정/삭제 시 권한 검증)
+  - [x] 그룹 일정 목록 조회 (`GET /api/v1/schedules?groupId=123`)
 - [x] Todo CRUD API 구현
 - [x] Category CRUD API 구현
 - [x] 단위 테스트 작성

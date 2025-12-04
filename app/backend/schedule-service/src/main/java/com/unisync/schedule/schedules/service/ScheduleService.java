@@ -6,20 +6,25 @@ import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.ScheduleRepository;
+import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.internal.service.GroupPermissionService;
 import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
 import com.unisync.schedule.schedules.exception.InvalidScheduleException;
 import com.unisync.schedule.schedules.exception.ScheduleNotFoundException;
-import com.unisync.schedule.categories.exception.CategoryNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.unisync.schedule.categories.exception.CategoryNotFoundException;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,7 @@ public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
+    private final UserServiceClient userServiceClient;
 
     /**
      * 일정 생성
@@ -87,13 +93,56 @@ public class ScheduleService {
      */
     @Transactional(readOnly = true)
     public List<ScheduleResponse> getSchedulesByUserId(String cognitoSub) {
-        log.info("사용자 일정 전체 조회 - cognitoSub: {}", cognitoSub);
+        return getSchedulesByUserId(cognitoSub, null);
+    }
+
+    /**
+     * 사용자의 모든 일정 조회 (상태 필터 포함)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByUserId(String cognitoSub, ScheduleStatus status) {
+        log.info("사용자 일정 전체 조회 - cognitoSub: {}, status: {}", cognitoSub, status);
 
         List<Schedule> schedules = scheduleRepository.findByCognitoSub(cognitoSub);
 
         return schedules.stream()
+                .filter(schedule -> status == null || status.equals(schedule.getStatus()))
                 .map(ScheduleResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 개인 + 사용자가 속한 모든 그룹 일정 통합 조회
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesIncludingGroups(String cognitoSub, ScheduleStatus status) {
+        log.info("개인 + 그룹 일정 통합 조회 - cognitoSub: {}, status: {}", cognitoSub, status);
+        List<Schedule> personal = scheduleRepository.findByCognitoSub(cognitoSub);
+        List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
+
+        List<Schedule> groups = groupIds.isEmpty()
+                ? List.of()
+                : scheduleRepository.findByGroupIdIn(groupIds);
+
+        return mergeAndFilter(personal, groups, status);
+    }
+
+    /**
+     * 개인 + 사용자가 속한 모든 그룹 일정 통합 조회 (기간 필터)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesIncludingGroups(String cognitoSub, LocalDateTime start, LocalDateTime end, ScheduleStatus status) {
+        log.info("개인 + 그룹 일정 통합 기간별 조회 - cognitoSub: {}, start: {}, end: {}, status: {}", cognitoSub, start, end, status);
+        validateScheduleDates(start, end);
+
+        List<Schedule> personal = scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, start, end);
+        List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
+
+        List<Schedule> groups = groupIds.isEmpty()
+                ? List.of()
+                : scheduleRepository.findByGroupIdsAndDateRange(groupIds, start, end);
+
+        return mergeAndFilter(personal, groups, status);
     }
 
     /**
@@ -101,6 +150,14 @@ public class ScheduleService {
      */
     @Transactional(readOnly = true)
     public List<ScheduleResponse> getSchedulesByDateRange(String cognitoSub, LocalDateTime start, LocalDateTime end) {
+        return getSchedulesByDateRange(cognitoSub, start, end, null);
+    }
+
+    /**
+     * 특정 기간의 일정 조회 (상태 필터 포함)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByDateRange(String cognitoSub, LocalDateTime start, LocalDateTime end, ScheduleStatus status) {
         log.info("기간별 일정 조회 - cognitoSub: {}, start: {}, end: {}", cognitoSub, start, end);
 
         // 날짜 유효성 검증
@@ -109,6 +166,62 @@ public class ScheduleService {
         List<Schedule> schedules = scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, start, end);
 
         return schedules.stream()
+                .filter(schedule -> status == null || status.equals(schedule.getStatus()))
+                .map(ScheduleResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 그룹 일정 조회
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByGroupId(Long groupId, String cognitoSub) {
+        return getSchedulesByGroupId(groupId, cognitoSub, null);
+    }
+
+    /**
+     * 그룹 일정 조회 (상태 필터 포함)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByGroupId(Long groupId, String cognitoSub, ScheduleStatus status) {
+        log.info("그룹 일정 전체 조회 - groupId: {}, cognitoSub: {}, status: {}", groupId, cognitoSub, status);
+
+        // 그룹 읽기 권한 검증
+        groupPermissionService.validateReadPermission(groupId, cognitoSub);
+
+        List<Schedule> schedules = scheduleRepository.findByGroupId(groupId);
+
+        return schedules.stream()
+                .filter(schedule -> status == null || status.equals(schedule.getStatus()))
+                .map(ScheduleResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 그룹의 특정 기간 일정 조회
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByGroupIdAndDateRange(Long groupId, String cognitoSub, LocalDateTime start, LocalDateTime end) {
+        return getSchedulesByGroupIdAndDateRange(groupId, cognitoSub, start, end, null);
+    }
+
+    /**
+     * 그룹의 특정 기간 일정 조회 (상태 필터 포함)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> getSchedulesByGroupIdAndDateRange(Long groupId, String cognitoSub, LocalDateTime start, LocalDateTime end, ScheduleStatus status) {
+        log.info("그룹 기간별 일정 조회 - groupId: {}, cognitoSub: {}, start: {}, end: {}", groupId, cognitoSub, start, end);
+
+        // 그룹 읽기 권한 검증
+        groupPermissionService.validateReadPermission(groupId, cognitoSub);
+
+        // 날짜 유효성 검증
+        validateScheduleDates(start, end);
+
+        List<Schedule> schedules = scheduleRepository.findByGroupIdAndDateRange(groupId, start, end);
+
+        return schedules.stream()
+                .filter(schedule -> status == null || status.equals(schedule.getStatus()))
                 .map(ScheduleResponse::from)
                 .collect(Collectors.toList());
     }
@@ -225,5 +338,21 @@ public class ScheduleService {
 
         // 추가적으로 카테고리가 해당 사용자 또는 그룹에 속하는지 검증 가능
         // 현재는 존재 여부만 확인
+    }
+
+    private List<ScheduleResponse> mergeAndFilter(List<Schedule> personal, List<Schedule> groups, ScheduleStatus status) {
+        return Stream.concat(personal.stream(), groups.stream())
+                .filter(schedule -> status == null || status.equals(schedule.getStatus()))
+                .sorted(Comparator.comparing(Schedule::getStartTime))
+                .collect(Collectors.toMap(
+                        Schedule::getScheduleId,
+                        Function.identity(),
+                        (existing, duplicate) -> existing,
+                        LinkedHashMap::new
+                ))
+                .values()
+                .stream()
+                .map(ScheduleResponse::from)
+                .collect(Collectors.toList());
     }
 }

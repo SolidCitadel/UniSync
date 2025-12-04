@@ -27,18 +27,40 @@ public class ScheduleController {
     private final ScheduleService scheduleService;
 
     @GetMapping
-    @Operation(summary = "일정 목록 조회", description = "사용자의 일정 목록을 조회합니다.")
+    @Operation(summary = "일정 목록 조회", description = "사용자의 개인 일정 또는 그룹 일정 목록을 조회합니다. groupId가 있으면 그룹 일정, 없으면 개인 일정을 조회합니다.")
     public ResponseEntity<List<ScheduleResponse>> getSchedules(
             @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @Parameter(description = "그룹 ID (선택)") @RequestParam(required = false) Long groupId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(required = false) ScheduleStatus status,
+            @RequestParam(required = false, defaultValue = "false") boolean includeGroups
     ) {
         List<ScheduleResponse> schedules;
-        if (startDate != null && endDate != null) {
-            schedules = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate);
+
+        if (groupId != null) {
+            // 그룹 일정 조회
+            if (startDate != null && endDate != null) {
+                schedules = scheduleService.getSchedulesByGroupIdAndDateRange(groupId, cognitoSub, startDate, endDate, status);
+            } else {
+                schedules = scheduleService.getSchedulesByGroupId(groupId, cognitoSub, status);
+            }
+        } else if (includeGroups) {
+            // 개인 + 사용자의 모든 그룹 일정 통합 조회
+            if (startDate != null && endDate != null) {
+                schedules = scheduleService.getSchedulesIncludingGroups(cognitoSub, startDate, endDate, status);
+            } else {
+                schedules = scheduleService.getSchedulesIncludingGroups(cognitoSub, status);
+            }
         } else {
-            schedules = scheduleService.getSchedulesByUserId(cognitoSub);
+            // 개인 일정 조회
+            if (startDate != null && endDate != null) {
+                schedules = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate, status);
+            } else {
+                schedules = scheduleService.getSchedulesByUserId(cognitoSub, status);
+            }
         }
+
         return ResponseEntity.ok(schedules);
     }
 

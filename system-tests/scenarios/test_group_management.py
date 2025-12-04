@@ -474,6 +474,226 @@ class TestGroupPermissionFlow:
         print("=" * 100 + "\n")
 
 
+class TestGroupScheduleIncludeFlow:
+    """그룹 일정 + 개인 일정 통합 조회 플로우"""
+
+    def test_include_groups_schedule_query(self, jwt_auth_tokens, service_urls, clean_user_database):
+        """
+        includeGroups=true 시나리오:
+        1. 그룹 생성 후 그룹 카테고리/일정 생성
+        2. 개인 카테고리/일정 생성
+        3. includeGroups=true로 개인+그룹 일정 모두 조회
+        4. groupId 필터로 그룹 일정만 조회
+        5. status 필터 적용 확인
+        6. 그룹이 없는 사용자의 includeGroups 동작 확인
+        """
+        gateway_url = service_urls.get("gateway", "http://localhost:8080")
+
+        print("\n" + "=" * 100)
+        print("그룹 일정 + 개인 일정 통합 조회 (includeGroups=true) 시나리오")
+        print("=" * 100)
+
+        # 사용자 준비 (OWNER)
+        owner_tokens = jwt_auth_tokens
+        owner_headers = {
+            "Authorization": f"Bearer {owner_tokens['id_token']}",
+            "Content-Type": "application/json"
+        }
+
+        # 1) 그룹 생성
+        group_resp = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            headers=owner_headers,
+            json={"name": "통합 조회 그룹", "description": "includeGroups 테스트"},
+            timeout=5
+        )
+        assert group_resp.status_code == 201, f"그룹 생성 실패: {group_resp.text}"
+        group_id = group_resp.json()["groupId"]
+        print(f"  ✅ 그룹 생성 (groupId={group_id})")
+
+        # 2) 개인/그룹 카테고리 생성
+        personal_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner_headers,
+            json={"name": f"개인카테고리-{uuid.uuid4().hex[:6]}", "color": "#123456"},
+            timeout=5
+        )
+        assert personal_cat_resp.status_code == 201, f"개인 카테고리 생성 실패: {personal_cat_resp.text}"
+        personal_cat_id = personal_cat_resp.json()["categoryId"]
+
+        group_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner_headers,
+            json={
+                "name": f"그룹카테고리-{uuid.uuid4().hex[:6]}",
+                "color": "#FF8844",
+                "groupId": group_id
+            },
+            timeout=5
+        )
+        assert group_cat_resp.status_code == 201, f"그룹 카테고리 생성 실패: {group_cat_resp.text}"
+        group_cat_id = group_cat_resp.json()["categoryId"]
+        print(f"  ✅ 카테고리 생성 (personal={personal_cat_id}, group={group_cat_id})")
+
+        # 3) 개인 일정 생성
+        personal_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            json={
+                "title": f"개인 일정 {uuid.uuid4().hex[:4]}",
+                "categoryId": personal_cat_id,
+                "startTime": "2025-12-10T09:00:00",
+                "endTime": "2025-12-10T10:00:00"
+            },
+            timeout=5
+        )
+        assert personal_schedule_resp.status_code == 201, f"개인 일정 생성 실패: {personal_schedule_resp.text}"
+        personal_schedule = personal_schedule_resp.json()
+        print(f"  ✅ 개인 일정 생성 (scheduleId={personal_schedule['scheduleId']})")
+
+        # 4) 그룹 일정 생성
+        group_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            json={
+                "title": f"그룹 일정 {uuid.uuid4().hex[:4]}",
+                "categoryId": group_cat_id,
+                "groupId": group_id,
+                "startTime": "2025-12-11T11:00:00",
+                "endTime": "2025-12-11T12:00:00"
+            },
+            timeout=5
+        )
+        assert group_schedule_resp.status_code == 201, f"그룹 일정 생성 실패: {group_schedule_resp.text}"
+        group_schedule = group_schedule_resp.json()
+        print(f"  ✅ 그룹 일정 생성 (scheduleId={group_schedule['scheduleId']})")
+
+        # 5) includeGroups=true 조회 (개인+그룹 일정 모두 포함)
+        include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert include_resp.status_code == 200, f"includeGroups 조회 실패: {include_resp.text}"
+        schedules = include_resp.json()
+        assert any(s["scheduleId"] == personal_schedule["scheduleId"] for s in schedules), "개인 일정이 포함되지 않음"
+        assert any(s["scheduleId"] == group_schedule["scheduleId"] and s.get("groupId") == group_id for s in schedules), "그룹 일정이 포함되지 않음"
+        print(f"  ✅ includeGroups=true 조회: 개인+그룹 일정 모두 포함 (total={len(schedules)})")
+
+        # 6) groupId 필터로 그룹 일정만 조회
+        group_only_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert group_only_resp.status_code == 200, f"그룹 일정 조회 실패: {group_only_resp.text}"
+        group_only = group_only_resp.json()
+        assert all(s.get("groupId") == group_id for s in group_only), "groupId 필터에 다른 일정 포함"
+        print(f"  ✅ groupId 필터 조회: 그룹 일정만 포함 (total={len(group_only)})")
+
+        # 7) includeGroups + status 필터(DONE) 검증 (완료 일정만 있는 사용자로 설정)
+        # 개인 일정 상태 변경
+        status_update_resp = requests.patch(
+            f"{gateway_url}/api/v1/schedules/{personal_schedule['scheduleId']}/status",
+            headers=owner_headers,
+            json={"status": "DONE"},
+            timeout=5
+        )
+        assert status_update_resp.status_code == 200, f"개인 일정 상태 변경 실패: {status_update_resp.text}"
+
+        status_filtered_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "includeGroups": "true",
+                "status": "DONE",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert status_filtered_resp.status_code == 200, f"status 필터 조회 실패: {status_filtered_resp.text}"
+        status_schedules = status_filtered_resp.json()
+        assert all(s.get("status") == "DONE" for s in status_schedules), "status=DONE 필터가 적용되지 않음"
+        print(f"  ✅ includeGroups + status=DONE 필터 적용 확인 (total={len(status_schedules)})")
+
+        # 8) includeGroups + groupId 동시 전달 시 groupId 우선 동작 확인
+        group_and_include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "groupId": str(group_id),
+                "includeGroups": "true"
+            },
+            timeout=5
+        )
+        assert group_and_include_resp.status_code == 200, f"groupId+includeGroups 조회 실패: {group_and_include_resp.text}"
+        group_only_again = group_and_include_resp.json()
+        assert all(s.get("groupId") == group_id for s in group_only_again), "groupId 우선 동작이 적용되지 않음"
+        print(f"  ✅ groupId 우선 동작 확인 (total={len(group_only_again)})")
+
+        # 9) 그룹이 없는 사용자의 includeGroups=true 호출 → 개인 일정만 포함
+        solo_user = create_test_user(gateway_url, "Solo User")
+        solo_headers = solo_user["headers"]
+
+        # 개인 카테고리/일정 생성
+        solo_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=solo_headers,
+            json={"name": f"솔로카테-{uuid.uuid4().hex[:6]}", "color": "#888888"},
+            timeout=5
+        )
+        assert solo_cat_resp.status_code == 201, f"솔로 카테고리 생성 실패: {solo_cat_resp.text}"
+        solo_cat_id = solo_cat_resp.json()["categoryId"]
+
+        solo_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=solo_headers,
+            json={
+                "title": "솔로 일정",
+                "categoryId": solo_cat_id,
+                "startTime": "2025-12-15T09:00:00",
+                "endTime": "2025-12-15T10:00:00"
+            },
+            timeout=5
+        )
+        assert solo_schedule_resp.status_code == 201, f"솔로 일정 생성 실패: {solo_schedule_resp.text}"
+        solo_schedule = solo_schedule_resp.json()
+
+        solo_include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=solo_headers,
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert solo_include_resp.status_code == 200, f"솔로 includeGroups 조회 실패: {solo_include_resp.text}"
+        solo_schedules = solo_include_resp.json()
+        assert len(solo_schedules) == 1 and solo_schedules[0]["scheduleId"] == solo_schedule["scheduleId"], "그룹 없는 사용자의 개인 일정만 반환되지 않음"
+        print(f"  ✅ 그룹 없는 사용자의 includeGroups=true: 개인 일정만 반환 (total={len(solo_schedules)})")
+
+        # Cleanup: 그룹 삭제(그룹 일정/카테고리 cascade), 개인 일정/카테고리 삭제
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_id}", headers=owner_headers, timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/schedules/{personal_schedule['scheduleId']}", headers=owner_headers, timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/categories/{personal_cat_id}", headers=owner_headers, timeout=5)
+
+        print("\n" + "=" * 100)
+        print("[PASS] includeGroups=true 통합 조회 시나리오 성공")
+        print("=" * 100 + "\n")
+
 class TestGroupUpdateFlow:
     """그룹 수정 플로우 통합 테스트"""
 
