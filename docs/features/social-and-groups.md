@@ -10,9 +10,10 @@
 2. [친구 관리](#2-친구-관리)
 3. [그룹 관리](#3-그룹-관리)
 4. [그룹-일정 연동](#4-그룹-일정-연동)
-5. [API 설계](#5-api-설계)
-6. [데이터 모델](#6-데이터-모델)
-7. [테스트](#7-테스트)
+5. [그룹 일정/할일/카테고리 조회](#5-그룹-일정할일카테고리-조회)
+6. [API 설계](#6-api-설계)
+7. [데이터 모델](#7-데이터-모델)
+8. [테스트](#8-테스트)
 
 ---
 
@@ -171,9 +172,102 @@ Response:
 
 ---
 
-## 5. API 설계
+## 5. 그룹 일정/할일/카테고리 조회
 
-### 5.1 친구 API
+### 5.1 조회 파라미터
+
+모든 Schedule-Service API(일정, 할일, 카테고리)는 일관된 그룹 조회 파라미터를 지원합니다:
+
+| 파라미터 | 설명 | 우선순위 |
+|---------|------|---------|
+| `groupId` | 특정 그룹의 데이터만 조회 | 최우선 (이 파라미터가 있으면 `includeGroups`는 무시됨) |
+| `includeGroups` | 개인 + 사용자가 속한 모든 그룹의 데이터 통합 조회 | 2순위 |
+| 파라미터 없음 | 개인 데이터만 조회 | 기본값 |
+
+### 5.2 일정 조회 (Schedules)
+
+```bash
+# 개인 일정만
+GET /api/v1/schedules
+
+# 특정 그룹 일정
+GET /api/v1/schedules?groupId=123
+
+# 개인 + 모든 그룹 일정 통합
+GET /api/v1/schedules?includeGroups=true
+
+# includeGroups + 상태 필터
+GET /api/v1/schedules?includeGroups=true&status=DONE
+```
+
+**동작 방식**:
+- `groupId` 파라미터가 있는 경우:
+  - User-Service Internal API로 그룹 멤버십 확인 (읽기 권한)
+  - 해당 그룹의 일정만 조회 (`group_id = {groupId}`)
+
+- `includeGroups=true`인 경우:
+  - User-Service Internal API로 사용자가 속한 모든 그룹 목록 조회
+  - 개인 일정 (`cognito_sub = {cognitoSub} AND group_id IS NULL`) + 모든 그룹 일정 (`group_id IN (...)`) 통합 조회
+
+### 5.3 할일 조회 (Todos)
+
+```bash
+# 개인 할일만
+GET /api/v1/todos
+
+# 특정 그룹 할일
+GET /api/v1/todos?groupId=123
+
+# 개인 + 모든 그룹 할일 통합
+GET /api/v1/todos?includeGroups=true
+
+# includeGroups + 우선순위 필터
+GET /api/v1/todos?includeGroups=true&priority=HIGH
+```
+
+**동작 방식**: 일정 조회와 동일
+
+### 5.4 카테고리 조회 (Categories)
+
+```bash
+# 개인 카테고리만
+GET /api/v1/categories
+
+# 특정 그룹 카테고리
+GET /api/v1/categories?groupId=123
+
+# 개인 + 모든 그룹 카테고리 통합
+GET /api/v1/categories?includeGroups=true
+
+# includeGroups + sourceType 필터
+GET /api/v1/categories?includeGroups=true&sourceType=USER_CREATED
+```
+
+**동작 방식**: 일정 조회와 동일
+
+### 5.5 권한 검증
+
+| 역할 | 조회 권한 | 생성/수정/삭제 권한 |
+|------|---------|-------------------|
+| **OWNER** | ✅ | ✅ |
+| **ADMIN** | ✅ | ✅ |
+| **MEMBER** | ✅ | ❌ (읽기 전용) |
+| 비멤버 | ❌ | ❌ |
+
+**권한 검증 플로우**:
+```
+Schedule-Service
+  → User-Service Internal API: GET /api/internal/groups/{groupId}/members/{cognitoSub}
+  → Response: { "member": true, "role": "MEMBER" }
+  → 읽기: member=true이면 허용
+  → 쓰기: role이 OWNER 또는 ADMIN이면 허용
+```
+
+---
+
+## 6. API 설계
+
+### 6.1 친구 API
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
@@ -186,7 +280,7 @@ Response:
 | DELETE | `/v1/friends/{friendshipId}` | 친구 삭제 |
 | POST | `/v1/friends/{cognitoSub}/block` | 차단 |
 
-### 5.2 그룹 API
+### 6.2 그룹 API
 
 | Method | Endpoint | 권한 | 설명 |
 |--------|----------|------|------|
@@ -203,9 +297,9 @@ Response:
 
 ---
 
-## 6. 데이터 모델
+## 7. 데이터 모델
 
-### 6.1 Friendships
+### 7.1 Friendships
 
 ```sql
 CREATE TABLE friendships (
@@ -219,7 +313,7 @@ CREATE TABLE friendships (
 );
 ```
 
-### 6.2 Groups
+### 7.2 Groups
 
 ```sql
 CREATE TABLE groups (
@@ -232,7 +326,7 @@ CREATE TABLE groups (
 );
 ```
 
-### 6.3 Group_Members
+### 7.3 Group_Members
 
 ```sql
 CREATE TABLE group_members (
@@ -248,9 +342,9 @@ CREATE TABLE group_members (
 
 ---
 
-## 7. 테스트
+## 8. 테스트
 
-### 7.1 단위 테스트 (Spring Boot)
+### 8.1 단위 테스트 (Spring Boot)
 
 | 파일 | 테스트 내용 |
 |------|------------|
@@ -259,7 +353,7 @@ CREATE TABLE group_members (
 | `GroupPermissionServiceTest.java` | 읽기/쓰기 권한 검증 |
 | `InternalGroupServiceTest.java` | 그룹 데이터 삭제 |
 
-### 7.2 통합 테스트 (System Tests)
+### 8.2 통합 테스트 (System Tests)
 
 | 파일 | 테스트 내용 |
 |------|------------|
@@ -267,7 +361,7 @@ CREATE TABLE group_members (
 | `test_group_management.py` | 그룹 플로우 전체, 권한 검증 |
 | `test_group_schedule_integration.py` | Internal API, cascade 삭제 |
 
-### 7.3 시나리오 테스트
+### 8.3 시나리오 테스트
 
 | 클래스 | 테스트 |
 |--------|--------|
@@ -277,7 +371,7 @@ CREATE TABLE group_members (
 | `TestOwnerLeaveFlow` | OWNER 탈퇴 시나리오 |
 | `TestGroupScheduleCascadeFlow` | 그룹 삭제 cascade 삭제 |
 
-### 7.4 테스트 실행
+### 8.4 테스트 실행
 
 ```bash
 # 단위 테스트
