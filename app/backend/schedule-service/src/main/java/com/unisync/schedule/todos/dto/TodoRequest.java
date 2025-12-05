@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -32,6 +33,9 @@ public class TodoRequest {
     @NotNull(message = "Due date is required")
     @Schema(description = "마감 날짜", example = "2025-04-15", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate dueDate;
+
+    @Schema(description = "최종 마감일시 (선택)", example = "2025-04-15T23:59:00")
+    private LocalDateTime deadline;
 
     @NotNull(message = "Category ID is required")
     @Schema(description = "카테고리 ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)

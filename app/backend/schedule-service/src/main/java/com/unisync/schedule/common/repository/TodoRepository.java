@@ -52,6 +52,16 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     // 서브태스크 조회
     List<Todo> findByParentTodoId(Long parentTodoId);
 
+    // 일정 기반 할일 조회 (루트 Todo)
+    List<Todo> findByScheduleIdAndParentTodoIdIsNull(Long scheduleId);
+
+    // 개인 + 여러 그룹의 Todo 조회
+    @Query("SELECT t FROM Todo t WHERE (t.cognitoSub = :cognitoSub AND t.groupId IS NULL) OR t.groupId IN :groupIds")
+    List<Todo> findByCognitoSubOrGroupIdIn(
+            @Param("cognitoSub") String cognitoSub,
+            @Param("groupIds") List<Long> groupIds
+    );
+
     // 서브태스크 개수 조회
     long countByParentTodoId(Long parentTodoId);
 

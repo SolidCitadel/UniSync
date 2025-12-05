@@ -8,6 +8,7 @@ import com.unisync.schedule.categories.model.CategorySourceType;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
+import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.internal.service.GroupPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
+    private final UserServiceClient userServiceClient;
 
     private static final String USER_CREATED = CategorySourceType.USER_CREATED.name();
     private static final String CANVAS_COURSE = CategorySourceType.CANVAS_COURSE.name();
@@ -92,6 +94,36 @@ public class CategoryService {
         List<Category> categories = sourceType == null
                 ? categoryRepository.findByCognitoSub(cognitoSub)
                 : categoryRepository.findByCognitoSubAndSourceType(cognitoSub, sourceType.name());
+
+        return categories.stream()
+                .map(CategoryResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 개인/그룹/통합 카테고리 조회
+     */
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getCategories(String cognitoSub, Long groupId, Boolean includeGroups, CategorySourceType sourceType) {
+        List<Category> categories;
+
+        if (groupId != null) {
+            groupPermissionService.validateReadPermission(groupId, cognitoSub);
+            categories = categoryRepository.findByGroupId(groupId);
+        } else if (Boolean.TRUE.equals(includeGroups)) {
+            List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
+            categories = groupIds.isEmpty()
+                    ? categoryRepository.findByCognitoSub(cognitoSub)
+                    : categoryRepository.findByCognitoSubOrGroupIdIn(cognitoSub, groupIds);
+        } else {
+            categories = categoryRepository.findByCognitoSub(cognitoSub);
+        }
+
+        if (sourceType != null) {
+            categories = categories.stream()
+                    .filter(category -> sourceType.name().equals(category.getSourceType()))
+                    .collect(Collectors.toList());
+        }
 
         return categories.stream()
                 .map(CategoryResponse::from)

@@ -30,15 +30,22 @@ public class TodoController {
     @Operation(summary = "할일 목록 조회")
     public ResponseEntity<List<TodoResponse>> getTodos(
             @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @RequestParam(required = false) Long groupId,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeGroups,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String priority
     ) {
-        List<TodoResponse> todos;
-        if (startDate != null && endDate != null) {
-            todos = todoService.getTodosByDateRange(cognitoSub, startDate, endDate);
-        } else {
-            todos = todoService.getTodosByUserId(cognitoSub);
-        }
+        List<TodoResponse> todos = todoService.getTodos(
+                cognitoSub,
+                groupId,
+                includeGroups,
+                startDate,
+                endDate,
+                status,
+                priority
+        );
         return ResponseEntity.ok(todos);
     }
 

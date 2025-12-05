@@ -66,8 +66,11 @@ public class ScheduleController {
 
     @GetMapping("/{scheduleId}")
     @Operation(summary = "일정 상세 조회")
-    public ResponseEntity<ScheduleResponse> getScheduleById(@PathVariable Long scheduleId) {
-        return ResponseEntity.ok(scheduleService.getScheduleById(scheduleId));
+    public ResponseEntity<ScheduleResponse> getScheduleById(
+            @PathVariable Long scheduleId,
+            @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub
+    ) {
+        return ResponseEntity.ok(scheduleService.getScheduleById(scheduleId, cognitoSub));
     }
 
     @PostMapping

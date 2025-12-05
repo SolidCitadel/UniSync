@@ -12,6 +12,8 @@ import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
 import com.unisync.schedule.schedules.exception.InvalidScheduleException;
 import com.unisync.schedule.schedules.exception.ScheduleNotFoundException;
+import com.unisync.schedule.todos.dto.TodoWithSubtasksResponse;
+import com.unisync.schedule.todos.service.TodoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class ScheduleService {
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
     private final UserServiceClient userServiceClient;
+    private final TodoService todoService;
 
     /**
      * 일정 생성
@@ -79,13 +82,17 @@ public class ScheduleService {
      * 일정 ID로 조회
      */
     @Transactional(readOnly = true)
-    public ScheduleResponse getScheduleById(Long scheduleId) {
-        log.info("일정 조회 - scheduleId: {}", scheduleId);
+    public ScheduleResponse getScheduleById(Long scheduleId, String cognitoSub) {
+        log.info("일정 조회 - scheduleId: {}, cognitoSub: {}", scheduleId, cognitoSub);
 
         Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new ScheduleNotFoundException("일정을 찾을 수 없습니다. ID: " + scheduleId));
 
-        return ScheduleResponse.from(schedule);
+        validateScheduleReadPermission(schedule, cognitoSub);
+
+        List<TodoWithSubtasksResponse> todos = todoService.getTodosByScheduleIdWithSubtasks(scheduleId);
+
+        return ScheduleResponse.from(schedule, todos);
     }
 
     /**
@@ -338,6 +345,14 @@ public class ScheduleService {
 
         // 추가적으로 카테고리가 해당 사용자 또는 그룹에 속하는지 검증 가능
         // 현재는 존재 여부만 확인
+    }
+
+    private void validateScheduleReadPermission(Schedule schedule, String cognitoSub) {
+        if (schedule.getGroupId() != null) {
+            groupPermissionService.validateReadPermission(schedule.getGroupId(), cognitoSub);
+        } else if (!schedule.getCognitoSub().equals(cognitoSub)) {
+            throw new UnauthorizedAccessException("해당 일정에 접근할 권한이 없습니다.");
+        }
     }
 
     private List<ScheduleResponse> mergeAndFilter(List<Schedule> personal, List<Schedule> groups, ScheduleStatus status) {

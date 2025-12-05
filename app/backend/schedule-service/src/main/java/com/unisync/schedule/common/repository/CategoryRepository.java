@@ -2,6 +2,8 @@ package com.unisync.schedule.common.repository;
 
 import com.unisync.schedule.common.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,6 +20,13 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     // 사용자 또는 그룹의 모든 카테고리 조회
     List<Category> findByCognitoSubOrGroupId(String cognitoSub, Long groupId);
+
+    // 개인 + 여러 그룹의 카테고리 조회
+    @Query("SELECT c FROM Category c WHERE (c.cognitoSub = :cognitoSub AND c.groupId IS NULL) OR c.groupId IN :groupIds")
+    List<Category> findByCognitoSubOrGroupIdIn(
+            @Param("cognitoSub") String cognitoSub,
+            @Param("groupIds") List<Long> groupIds
+    );
 
     // 기본 카테고리 조회
     List<Category> findByCognitoSubAndIsDefault(String cognitoSub, Boolean isDefault);

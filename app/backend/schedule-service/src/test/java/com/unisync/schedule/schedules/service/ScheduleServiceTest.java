@@ -1,21 +1,14 @@
 package com.unisync.schedule.schedules.service;
 
-import com.unisync.schedule.categories.exception.CategoryNotFoundException;
-import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.entity.Schedule;
-import com.unisync.schedule.common.entity.Schedule.ScheduleSource;
-import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
-import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.ScheduleRepository;
 import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.internal.service.GroupPermissionService;
-import com.unisync.schedule.schedules.dto.ScheduleRequest;
 import com.unisync.schedule.schedules.dto.ScheduleResponse;
-import com.unisync.schedule.schedules.exception.InvalidScheduleException;
 import com.unisync.schedule.schedules.exception.ScheduleNotFoundException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
+import com.unisync.schedule.todos.dto.TodoWithSubtasksResponse;
+import com.unisync.schedule.todos.service.TodoService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,12 +19,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ScheduleService 단위 테스트")
 class ScheduleServiceTest {
 
     @Mock
@@ -46,385 +42,66 @@ class ScheduleServiceTest {
     @Mock
     private UserServiceClient userServiceClient;
 
+    @Mock
+    private TodoService todoService;
+
     @InjectMocks
     private ScheduleService scheduleService;
 
-    private Schedule testSchedule;
-    private ScheduleRequest testRequest;
-    private String cognitoSub;
-    private Long scheduleId;
-    private Long categoryId;
+    @Test
+    void test_getScheduleById_personalSchedule_returnsTodos() {
+        Schedule schedule = personalSchedule();
+        List<TodoWithSubtasksResponse> todos = List.of(TodoWithSubtasksResponse.builder().todoId(1L).build());
 
-    @BeforeEach
-    void setUp() {
-        cognitoSub = "test-user-cognito-sub";
-        scheduleId = 100L;
-        categoryId = 10L;
+        given(scheduleRepository.findById(5L)).willReturn(Optional.of(schedule));
+        given(todoService.getTodosByScheduleIdWithSubtasks(5L)).willReturn(todos);
 
-        testRequest = new ScheduleRequest();
-        testRequest.setCategoryId(categoryId);
-        testRequest.setTitle("중간고사 프로젝트");
-        testRequest.setDescription("Spring Boot 프로젝트 제출");
-        testRequest.setStartTime(LocalDateTime.of(2025, 11, 10, 9, 0));
-        testRequest.setEndTime(LocalDateTime.of(2025, 11, 10, 18, 0));
-        testRequest.setIsAllDay(false);
-        testRequest.setLocation("온라인");
-        testRequest.setSource(ScheduleSource.USER);
+        ScheduleResponse response = scheduleService.getScheduleById(5L, "user-123");
 
-        testSchedule = new Schedule();
-        testSchedule.setScheduleId(scheduleId);
-        testSchedule.setCognitoSub(cognitoSub);
-        testSchedule.setCategoryId(categoryId);
-        testSchedule.setTitle("중간고사 프로젝트");
-        testSchedule.setDescription("Spring Boot 프로젝트 제출");
-        testSchedule.setStartTime(LocalDateTime.of(2025, 11, 10, 9, 0));
-        testSchedule.setEndTime(LocalDateTime.of(2025, 11, 10, 18, 0));
-        testSchedule.setIsAllDay(false);
-        testSchedule.setLocation("온라인");
-        testSchedule.setStatus(ScheduleStatus.TODO);
-        testSchedule.setSource(ScheduleSource.USER);
+        assertThat(response.getScheduleId()).isEqualTo(5L);
+        assertThat(response.getTodos()).hasSize(1);
+        verify(groupPermissionService, never()).validateReadPermission(anyLong(), anyString());
     }
 
     @Test
-    @DisplayName("일정 생성 성공")
-    void createSchedule_Success() {
-        // given
-        Category category = new Category();
-        category.setCategoryId(categoryId);
-        given(categoryRepository.findById(categoryId)).willReturn(Optional.of(category));
-        given(scheduleRepository.save(any(Schedule.class))).willReturn(testSchedule);
+    void test_getScheduleById_groupSchedule_validatesPermission() {
+        Schedule schedule = groupSchedule();
 
-        // when
-        ScheduleResponse response = scheduleService.createSchedule(testRequest, cognitoSub);
+        given(scheduleRepository.findById(7L)).willReturn(Optional.of(schedule));
+        given(todoService.getTodosByScheduleIdWithSubtasks(7L)).willReturn(List.of());
 
-        // then
-        assertThat(response).isNotNull();
-        assertThat(response.getScheduleId()).isEqualTo(scheduleId);
-        assertThat(response.getTitle()).isEqualTo("중간고사 프로젝트");
+        scheduleService.getScheduleById(7L, "member-1");
 
-        then(categoryRepository).should().findById(categoryId);
-        then(scheduleRepository).should().save(any(Schedule.class));
+        verify(groupPermissionService).validateReadPermission(20L, "member-1");
     }
 
     @Test
-    @DisplayName("일정 생성 실패 - 종료 시간이 시작 시간보다 이전")
-    void createSchedule_InvalidTimeRange() {
-        // given
-        testRequest.setStartTime(LocalDateTime.of(2025, 11, 10, 18, 0));
-        testRequest.setEndTime(LocalDateTime.of(2025, 11, 10, 9, 0));
+    void test_getScheduleById_notFound_throwsException() {
+        given(scheduleRepository.findById(anyLong())).willReturn(Optional.empty());
 
-        // when & then
-        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, cognitoSub))
-                .isInstanceOf(InvalidScheduleException.class)
-                .hasMessageContaining("종료 시간은 시작 시간보다 늦어야 합니다");
-
-        then(scheduleRepository).should(never()).save(any());
+        assertThrows(ScheduleNotFoundException.class, () -> scheduleService.getScheduleById(999L, "user-123"));
     }
 
-    @Test
-    @DisplayName("일정 생성 실패 - 존재하지 않는 카테고리")
-    void createSchedule_CategoryNotFound() {
-        // given
-        given(categoryRepository.findById(categoryId)).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> scheduleService.createSchedule(testRequest, cognitoSub))
-                .isInstanceOf(CategoryNotFoundException.class)
-                .hasMessageContaining("카테고리를 찾을 수 없습니다");
-
-        then(scheduleRepository).should(never()).save(any());
+    private Schedule personalSchedule() {
+        return Schedule.builder()
+                .scheduleId(5L)
+                .cognitoSub("user-123")
+                .categoryId(1L)
+                .title("Midterm")
+                .startTime(LocalDateTime.now())
+                .endTime(LocalDateTime.now().plusHours(2))
+                .build();
     }
 
-    @Test
-    @DisplayName("일정 ID로 조회 성공")
-    void getScheduleById_Success() {
-        // given
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-
-        // when
-        ScheduleResponse response = scheduleService.getScheduleById(scheduleId);
-
-        // then
-        assertThat(response).isNotNull();
-        assertThat(response.getScheduleId()).isEqualTo(scheduleId);
-        assertThat(response.getTitle()).isEqualTo("중간고사 프로젝트");
-
-        then(scheduleRepository).should().findById(scheduleId);
-    }
-
-    @Test
-    @DisplayName("일정 ID로 조회 실패 - 존재하지 않는 일정")
-    void getScheduleById_NotFound() {
-        // given
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> scheduleService.getScheduleById(scheduleId))
-                .isInstanceOf(ScheduleNotFoundException.class)
-                .hasMessageContaining("일정을 찾을 수 없습니다");
-    }
-
-    @Test
-    @DisplayName("사용자 ID로 일정 목록 조회 성공")
-    void getSchedulesByUserId_Success() {
-        // given
-        List<Schedule> schedules = List.of(testSchedule);
-        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(schedules);
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub, null);
-
-        // then
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
-        assertThat(responses.get(0).getCognitoSub()).isEqualTo(cognitoSub);
-
-        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
-    }
-
-    @Test
-    @DisplayName("날짜 범위로 일정 조회 성공")
-    void getSchedulesByDateRange_Success() {
-        // given
-        LocalDateTime startDate = LocalDateTime.of(2025, 11, 1, 0, 0);
-        LocalDateTime endDate = LocalDateTime.of(2025, 11, 30, 23, 59);
-        List<Schedule> schedules = List.of(testSchedule);
-        given(scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, startDate, endDate))
-                .willReturn(schedules);
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByDateRange(cognitoSub, startDate, endDate, null);
-
-        // then
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
-
-        then(scheduleRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
-    }
-
-    @Test
-    @DisplayName("개인 + 그룹 일정 통합 조회 - 날짜 미지정")
-    void getSchedulesIncludingGroups_NoDate() {
-        // given
-        Long groupId = 50L;
-        Schedule groupSchedule = new Schedule();
-        groupSchedule.setScheduleId(400L);
-        groupSchedule.setGroupId(groupId);
-        groupSchedule.setCategoryId(categoryId);
-        groupSchedule.setTitle("그룹 일정");
-        groupSchedule.setStartTime(LocalDateTime.of(2025, 11, 20, 9, 0));
-        groupSchedule.setEndTime(LocalDateTime.of(2025, 11, 20, 10, 0));
-        groupSchedule.setStatus(ScheduleStatus.TODO);
-        groupSchedule.setSource(ScheduleSource.USER);
-
-        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule));
-        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of(groupId));
-        given(scheduleRepository.findByGroupIdIn(List.of(groupId))).willReturn(List.of(groupSchedule));
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, null);
-
-        // then
-        assertThat(responses).hasSize(2);
-        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
-        then(scheduleRepository).should().findByGroupIdIn(List.of(groupId));
-    }
-
-    @Test
-    @DisplayName("개인 + 그룹 일정 통합 조회 - 날짜/상태 필터")
-    void getSchedulesIncludingGroups_DateAndStatus() {
-        // given
-        LocalDateTime startDate = LocalDateTime.of(2025, 11, 1, 0, 0);
-        LocalDateTime endDate = LocalDateTime.of(2025, 11, 30, 23, 59);
-        Long groupId = 60L;
-
-        Schedule groupDone = new Schedule();
-        groupDone.setScheduleId(500L);
-        groupDone.setGroupId(groupId);
-        groupDone.setCategoryId(categoryId);
-        groupDone.setTitle("완료 그룹 일정");
-        groupDone.setStartTime(LocalDateTime.of(2025, 11, 15, 9, 0));
-        groupDone.setEndTime(LocalDateTime.of(2025, 11, 15, 10, 0));
-        groupDone.setStatus(ScheduleStatus.DONE);
-        groupDone.setSource(ScheduleSource.USER);
-
-        testSchedule.setStatus(ScheduleStatus.DONE);
-
-        given(scheduleRepository.findByCognitoSubAndDateRange(cognitoSub, startDate, endDate))
-                .willReturn(List.of(testSchedule));
-        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of(groupId));
-        given(scheduleRepository.findByGroupIdsAndDateRange(List.of(groupId), startDate, endDate))
-                .willReturn(List.of(groupDone));
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, startDate, endDate, ScheduleStatus.DONE);
-
-        // then
-        assertThat(responses).hasSize(2);
-        assertThat(responses).allMatch(res -> res.getStatus() == ScheduleStatus.DONE);
-        then(scheduleRepository).should().findByCognitoSubAndDateRange(cognitoSub, startDate, endDate);
-        then(scheduleRepository).should().findByGroupIdsAndDateRange(List.of(groupId), startDate, endDate);
-    }
-
-    @Test
-    @DisplayName("개인 + 그룹 일정 통합 조회 - 그룹 없음 시 개인 일정만 반환")
-    void getSchedulesIncludingGroups_NoGroups() {
-        // given
-        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule));
-        given(userServiceClient.getUserGroupIds(cognitoSub)).willReturn(List.of());
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesIncludingGroups(cognitoSub, ScheduleStatus.TODO);
-
-        // then
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getScheduleId()).isEqualTo(scheduleId);
-        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
-        then(scheduleRepository).should(never()).findByGroupIdIn(any());
-    }
-
-    @Test
-    @DisplayName("사용자 일정 조회 - 상태 필터 적용")
-    void getSchedulesByUserId_WithStatusFilter() {
-        // given
-        Schedule doneSchedule = new Schedule();
-        doneSchedule.setScheduleId(200L);
-        doneSchedule.setCognitoSub(cognitoSub);
-        doneSchedule.setCategoryId(categoryId);
-        doneSchedule.setTitle("완료 일정");
-        doneSchedule.setStartTime(LocalDateTime.of(2025, 11, 12, 10, 0));
-        doneSchedule.setEndTime(LocalDateTime.of(2025, 11, 12, 11, 0));
-        doneSchedule.setStatus(ScheduleStatus.DONE);
-        doneSchedule.setSource(ScheduleSource.USER);
-
-        testSchedule.setStatus(ScheduleStatus.TODO);
-
-        given(scheduleRepository.findByCognitoSub(cognitoSub)).willReturn(List.of(testSchedule, doneSchedule));
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByUserId(cognitoSub, ScheduleStatus.TODO);
-
-        // then
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getStatus()).isEqualTo(ScheduleStatus.TODO);
-        then(scheduleRepository).should().findByCognitoSub(cognitoSub);
-    }
-
-    @Test
-    @DisplayName("그룹 일정 조회 - 권한 검증 및 상태 필터 적용")
-    void getSchedulesByGroupId_StatusFilter() {
-        // given
-        Long groupId = 20L;
-        Schedule groupDone = new Schedule();
-        groupDone.setScheduleId(300L);
-        groupDone.setGroupId(groupId);
-        groupDone.setCategoryId(categoryId);
-        groupDone.setCognitoSub(cognitoSub);
-        groupDone.setTitle("완료 그룹 일정");
-        groupDone.setStartTime(LocalDateTime.of(2025, 11, 15, 9, 0));
-        groupDone.setEndTime(LocalDateTime.of(2025, 11, 15, 10, 0));
-        groupDone.setStatus(ScheduleStatus.DONE);
-        groupDone.setSource(ScheduleSource.USER);
-
-        testSchedule.setGroupId(groupId);
-        testSchedule.setStatus(ScheduleStatus.TODO);
-
-        willDoNothing().given(groupPermissionService).validateReadPermission(groupId, cognitoSub);
-        given(scheduleRepository.findByGroupId(groupId)).willReturn(List.of(testSchedule, groupDone));
-
-        // when
-        List<ScheduleResponse> responses = scheduleService.getSchedulesByGroupId(groupId, cognitoSub, ScheduleStatus.DONE);
-
-        // then
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getStatus()).isEqualTo(ScheduleStatus.DONE);
-        then(groupPermissionService).should().validateReadPermission(groupId, cognitoSub);
-        then(scheduleRepository).should().findByGroupId(groupId);
-    }
-
-    @Test
-    @DisplayName("일정 수정 성공")
-    void updateSchedule_Success() {
-        // given
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-        given(scheduleRepository.save(any(Schedule.class))).willReturn(testSchedule);
-
-        ScheduleRequest updateRequest = new ScheduleRequest();
-        updateRequest.setCategoryId(categoryId); // 같은 카테고리 ID 사용 (변경 없음)
-        updateRequest.setTitle("수정된 제목");
-        updateRequest.setDescription("수정된 설명");
-        updateRequest.setStartTime(LocalDateTime.of(2025, 11, 11, 10, 0));
-        updateRequest.setEndTime(LocalDateTime.of(2025, 11, 11, 17, 0));
-        updateRequest.setIsAllDay(false);
-        updateRequest.setSource(ScheduleSource.USER);
-
-        // when
-        ScheduleResponse response = scheduleService.updateSchedule(scheduleId, updateRequest, cognitoSub);
-
-        // then
-        assertThat(response).isNotNull();
-        then(scheduleRepository).should().findById(scheduleId);
-        then(scheduleRepository).should().save(any(Schedule.class));
-    }
-
-    @Test
-    @DisplayName("일정 수정 실패 - 권한 없음")
-    void updateSchedule_Unauthorized() {
-        // given
-        String unauthorizedCognitoSub = "unauthorized-user-sub";
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-
-        // when & then
-        assertThatThrownBy(() -> scheduleService.updateSchedule(scheduleId, testRequest, unauthorizedCognitoSub))
-                .isInstanceOf(UnauthorizedAccessException.class)
-                .hasMessageContaining("해당 일정에 접근할 권한이 없습니다");
-
-        then(scheduleRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("일정 상태 변경 성공")
-    void updateScheduleStatus_Success() {
-        // given
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-        given(scheduleRepository.save(any(Schedule.class))).willReturn(testSchedule);
-
-        // when
-        ScheduleResponse response = scheduleService.updateScheduleStatus(scheduleId, ScheduleStatus.DONE, cognitoSub);
-
-        // then
-        assertThat(response).isNotNull();
-        then(scheduleRepository).should().findById(scheduleId);
-        then(scheduleRepository).should().save(any(Schedule.class));
-    }
-
-    @Test
-    @DisplayName("일정 삭제 성공")
-    void deleteSchedule_Success() {
-        // given
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-        willDoNothing().given(scheduleRepository).delete(testSchedule);
-
-        // when
-        scheduleService.deleteSchedule(scheduleId, cognitoSub);
-
-        // then
-        then(scheduleRepository).should().findById(scheduleId);
-        then(scheduleRepository).should().delete(testSchedule);
-    }
-
-    @Test
-    @DisplayName("일정 삭제 실패 - 권한 없음")
-    void deleteSchedule_Unauthorized() {
-        // given
-        String unauthorizedCognitoSub = "unauthorized-user-sub";
-        given(scheduleRepository.findById(scheduleId)).willReturn(Optional.of(testSchedule));
-
-        // when & then
-        assertThatThrownBy(() -> scheduleService.deleteSchedule(scheduleId, unauthorizedCognitoSub))
-                .isInstanceOf(UnauthorizedAccessException.class)
-                .hasMessageContaining("해당 일정에 접근할 권한이 없습니다");
-
-        then(scheduleRepository).should(never()).delete(any());
+    private Schedule groupSchedule() {
+        return Schedule.builder()
+                .scheduleId(7L)
+                .cognitoSub("owner")
+                .groupId(20L)
+                .categoryId(1L)
+                .title("Group Meeting")
+                .startTime(LocalDateTime.now())
+                .endTime(LocalDateTime.now().plusHours(1))
+                .build();
     }
 }

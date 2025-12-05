@@ -1433,26 +1433,133 @@ class TestScheduleCoordinationFlow:
         # =================================================================
         print(f"\n[STEP 7/7] 모든 멤버 그룹 일정 조회 확인")
 
-        # Leader 조회
+        # Leader 개별 조회 (GET /schedules/{id})
         leader_schedule_check = requests.get(
             f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
             headers=leader['headers'],
             timeout=5
         )
         assert leader_schedule_check.status_code == 200
-        assert leader_schedule_check.json()["groupId"] == group_id
+        leader_schedule_data = leader_schedule_check.json()
+        assert leader_schedule_data["scheduleId"] == meeting_schedule_id
+        assert leader_schedule_data["groupId"] == group_id
+        assert leader_schedule_data["categoryId"] == group_cat_id
+        assert leader_schedule_data["title"] == "Team Project Kickoff Meeting"
+        assert leader_schedule_data["description"] == "Discuss project requirements"
+        assert leader_schedule_data["location"] == "Engineering Building Room 301"
+        assert leader_schedule_data["startTime"] == found_slot["startTime"]
+        assert leader_schedule_data["endTime"] == "2025-12-08T18:00:00"
+        assert leader_schedule_data["source"] == "USER"
 
-        # Member 조회
+        print(f"  ✅ Leader 개별 조회 성공 (핵심 필드 검증 완료)")
+
+        # Member 개별 조회 (GET /schedules/{id})
         member_schedule_check = requests.get(
             f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
             headers=member['headers'],
             timeout=5
         )
         assert member_schedule_check.status_code == 200
-        assert member_schedule_check.json()["title"] == "Team Project Kickoff Meeting"
+        member_schedule_data = member_schedule_check.json()
+        assert member_schedule_data["scheduleId"] == meeting_schedule_id
+        assert member_schedule_data["groupId"] == group_id
+        assert member_schedule_data["categoryId"] == group_cat_id
+        assert member_schedule_data["title"] == "Team Project Kickoff Meeting"
+        assert member_schedule_data["description"] == "Discuss project requirements"
+        assert member_schedule_data["location"] == "Engineering Building Room 301"
+        assert member_schedule_data["startTime"] == found_slot["startTime"]
+        assert member_schedule_data["endTime"] == "2025-12-08T18:00:00"
+        assert member_schedule_data["source"] == "USER"
 
-        print(f"  ✅ Leader 조회 성공")
-        print(f"  ✅ Member 조회 성공")
+        print(f"  ✅ Member 개별 조회 성공 (핵심 필드 검증 완료)")
+
+        # Leader 목록 조회 (GET /schedules with includeGroups=true)
+        leader_schedules_list = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert leader_schedules_list.status_code == 200
+        leader_schedules = leader_schedules_list.json()
+
+        # 그룹 일정이 목록에 포함되어 있는지 확인
+        group_schedule_in_leader_list = next(
+            (s for s in leader_schedules if s["scheduleId"] == meeting_schedule_id),
+            None
+        )
+        assert group_schedule_in_leader_list is not None, "Leader의 일정 목록에 그룹 일정이 없음"
+        assert group_schedule_in_leader_list["groupId"] == group_id
+        assert group_schedule_in_leader_list["categoryId"] == group_cat_id
+        assert group_schedule_in_leader_list["title"] == "Team Project Kickoff Meeting"
+        assert group_schedule_in_leader_list["startTime"] == found_slot["startTime"]
+        assert group_schedule_in_leader_list["endTime"] == "2025-12-08T18:00:00"
+
+        print(f"  ✅ Leader 목록 조회 성공 (그룹 일정 포함, 핵심 필드 검증 완료)")
+
+        # Member 목록 조회 (GET /schedules with includeGroups=true)
+        member_schedules_list = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=member['headers'],
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert member_schedules_list.status_code == 200
+        member_schedules = member_schedules_list.json()
+
+        # 그룹 일정이 목록에 포함되어 있는지 확인
+        group_schedule_in_member_list = next(
+            (s for s in member_schedules if s["scheduleId"] == meeting_schedule_id),
+            None
+        )
+        assert group_schedule_in_member_list is not None, "Member의 일정 목록에 그룹 일정이 없음"
+        assert group_schedule_in_member_list["groupId"] == group_id
+        assert group_schedule_in_member_list["categoryId"] == group_cat_id
+        assert group_schedule_in_member_list["title"] == "Team Project Kickoff Meeting"
+        assert group_schedule_in_member_list["startTime"] == found_slot["startTime"]
+        assert group_schedule_in_member_list["endTime"] == "2025-12-08T18:00:00"
+
+        print(f"  ✅ Member 목록 조회 성공 (그룹 일정 포함, 핵심 필드 검증 완료)")
+
+        # groupId 필터로 그룹 일정만 조회 (Leader)
+        leader_group_only = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert leader_group_only.status_code == 200
+        leader_group_schedules = leader_group_only.json()
+        assert any(s["scheduleId"] == meeting_schedule_id for s in leader_group_schedules), "Leader의 groupId 필터 조회에 그룹 일정이 없음"
+
+        # groupId 필터로 그룹 일정만 조회 (Member)
+        member_group_only = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=member['headers'],
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert member_group_only.status_code == 200
+        member_group_schedules = member_group_only.json()
+        assert any(s["scheduleId"] == meeting_schedule_id for s in member_group_schedules), "Member의 groupId 필터 조회에 그룹 일정이 없음"
+
+        print(f"  ✅ Leader/Member groupId 필터 조회 성공")
 
         # Cleanup
         requests.delete(f"{gateway_url}/api/v1/groups/{group_id}", headers=leader['headers'], timeout=5)
@@ -1470,4 +1577,8 @@ class TestScheduleCoordinationFlow:
         print(f"✅ STEP 5: 특정 멤버만 선택 공강 조회 (userIds 필드 테스트)")
         print(f"✅ STEP 6: 발견된 공강 시간에 그룹 미팅 일정 생성")
         print(f"✅ STEP 7: 모든 멤버 그룹 일정 조회 가능 확인")
+        print(f"   - Leader/Member 개별 조회 (GET /schedules/{{id}})")
+        print(f"   - Leader/Member 목록 조회 (GET /schedules with includeGroups=true)")
+        print(f"   - Leader/Member groupId 필터 조회")
+        print(f"   - 핵심 필드 검증: groupId, categoryId, title, startTime, endTime, description, location, source")
         print("=" * 100 + "\n")

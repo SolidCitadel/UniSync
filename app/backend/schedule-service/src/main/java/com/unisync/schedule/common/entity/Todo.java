@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_status", columnList = "status"),
     @Index(name = "idx_priority", columnList = "priority"),
     @Index(name = "idx_due_date", columnList = "due_date"),
+    @Index(name = "idx_deadline", columnList = "deadline"),
     @Index(name = "idx_parent_todo_id", columnList = "parent_todo_id"),
     @Index(name = "idx_schedule_id", columnList = "schedule_id")
 })
@@ -51,6 +52,9 @@ public class Todo {
 
     @Column(name = "due_date", nullable = false)
     private LocalDate dueDate;
+
+    @Column(name = "deadline")
+    private LocalDateTime deadline;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

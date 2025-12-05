@@ -27,9 +27,12 @@ public class CategoryController {
     @Operation(summary = "카테고리 목록 조회")
     public ResponseEntity<List<CategoryResponse>> getCategories(
             @Parameter(hidden = true) @RequestHeader("X-Cognito-Sub") String cognitoSub,
+            @RequestParam(required = false) Long groupId,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeGroups,
             @RequestParam(value = "sourceType", required = false) CategorySourceType sourceType
     ) {
-        return ResponseEntity.ok(categoryService.getCategoriesByUserId(cognitoSub, sourceType));
+        List<CategoryResponse> categories = categoryService.getCategories(cognitoSub, groupId, includeGroups, sourceType);
+        return ResponseEntity.ok(categories);
     }
 
     @GetMapping("/{categoryId}")

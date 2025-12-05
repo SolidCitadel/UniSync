@@ -105,7 +105,7 @@ public class UserServiceClient {
      * @return 그룹 ID 목록 (조회 실패 시 빈 리스트)
      */
     public List<Long> getUserGroupIds(String cognitoSub) {
-        String url = userServiceUrl + "/api/internal/groups/memberships/" + cognitoSub;
+        String url = userServiceUrl + "/api/internal/users/" + cognitoSub + "/groups";
 
         try {
             log.debug("User-Service 사용자 그룹 목록 조회: cognitoSub={}", cognitoSub);

@@ -1,13 +1,16 @@
 package com.unisync.schedule.todos.service;
 
 import com.unisync.schedule.common.entity.Todo;
+import com.unisync.schedule.common.entity.Todo.TodoPriority;
 import com.unisync.schedule.common.entity.Todo.TodoStatus;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
 import com.unisync.schedule.common.repository.TodoRepository;
 import com.unisync.schedule.internal.service.GroupPermissionService;
+import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.todos.dto.TodoRequest;
 import com.unisync.schedule.todos.dto.TodoResponse;
+import com.unisync.schedule.todos.dto.TodoWithSubtasksResponse;
 import com.unisync.schedule.todos.exception.InvalidTodoException;
 import com.unisync.schedule.todos.exception.TodoNotFoundException;
 import com.unisync.schedule.categories.exception.CategoryNotFoundException;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +32,7 @@ public class TodoService {
     private final TodoRepository todoRepository;
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
+    private final UserServiceClient userServiceClient;
 
     /**
      * 할일 생성
@@ -41,6 +46,7 @@ public class TodoService {
 
         // 날짜 유효성 검증
         validateTodoDates(request.getStartDate(), request.getDueDate());
+        validateDeadline(request.getDueDate(), request.getDeadline());
 
         // 카테고리 존재 여부 확인
         validateCategoryAccess(request.getCategoryId(), cognitoSub);
@@ -59,6 +65,7 @@ public class TodoService {
                 .description(request.getDescription())
                 .startDate(request.getStartDate())
                 .dueDate(request.getDueDate())
+                .deadline(request.getDeadline())
                 .status(TodoStatus.TODO)
                 .priority(request.getPriority())
                 .progressPercentage(0)
@@ -106,6 +113,42 @@ public class TodoService {
     }
 
     /**
+     * 사용자/그룹/통합 조회
+     */
+    @Transactional(readOnly = true)
+    public List<TodoResponse> getTodos(
+            String cognitoSub,
+            Long groupId,
+            Boolean includeGroups,
+            LocalDate startDate,
+            LocalDate endDate,
+            String status,
+            String priority
+    ) {
+        List<Todo> todos;
+
+        if (groupId != null) {
+            groupPermissionService.validateReadPermission(groupId, cognitoSub);
+            todos = todoRepository.findByGroupId(groupId);
+        } else if (Boolean.TRUE.equals(includeGroups)) {
+            List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
+            if (groupIds.isEmpty()) {
+                todos = todoRepository.findByCognitoSub(cognitoSub);
+            } else {
+                todos = todoRepository.findByCognitoSubOrGroupIdIn(cognitoSub, groupIds);
+            }
+        } else {
+            todos = todoRepository.findByCognitoSub(cognitoSub);
+        }
+
+        List<Todo> filtered = applyFilters(todos, startDate, endDate, status, priority);
+
+        return filtered.stream()
+                .map(TodoResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 특정 기간의 할일 조회
      */
     @Transactional(readOnly = true)
@@ -141,6 +184,27 @@ public class TodoService {
     }
 
     /**
+     * 일정에 연결된 할일(서브태스크 포함) 조회
+     */
+    @Transactional(readOnly = true)
+    public List<TodoWithSubtasksResponse> getTodosByScheduleIdWithSubtasks(Long scheduleId) {
+        List<Todo> mainTodos = todoRepository.findByScheduleIdAndParentTodoIdIsNull(scheduleId);
+
+        return mainTodos.stream()
+                .map(this::buildTodoWithSubtasks)
+                .collect(Collectors.toList());
+    }
+
+    private TodoWithSubtasksResponse buildTodoWithSubtasks(Todo todo) {
+        List<Todo> subtasks = todoRepository.findByParentTodoId(todo.getTodoId());
+        List<TodoWithSubtasksResponse> subtaskResponses = subtasks.stream()
+                .map(this::buildTodoWithSubtasks)
+                .collect(Collectors.toList());
+
+        return TodoWithSubtasksResponse.from(todo, subtaskResponses);
+    }
+
+    /**
      * 할일 수정
      */
     @Transactional
@@ -155,6 +219,7 @@ public class TodoService {
 
         // 날짜 유효성 검증
         validateTodoDates(request.getStartDate(), request.getDueDate());
+        validateDeadline(request.getDueDate(), request.getDeadline());
 
         // 카테고리 변경 시 존재 여부 확인
         if (!todo.getCategoryId().equals(request.getCategoryId())) {
@@ -166,6 +231,7 @@ public class TodoService {
         todo.setDescription(request.getDescription());
         todo.setStartDate(request.getStartDate());
         todo.setDueDate(request.getDueDate());
+        todo.setDeadline(request.getDeadline());
         todo.setCategoryId(request.getCategoryId());
         todo.setGroupId(request.getGroupId());
         todo.setPriority(request.getPriority());
@@ -319,6 +385,40 @@ public class TodoService {
         log.info("부모 할일 진행률 재계산 완료 - parentTodoId: {}, progress: {}%", parentTodoId, averageProgress);
     }
 
+    private List<Todo> applyFilters(List<Todo> todos, LocalDate startDate, LocalDate endDate, String status, String priority) {
+        TodoStatus statusFilter = parseStatus(status);
+        TodoPriority priorityFilter = parsePriority(priority);
+
+        return todos.stream()
+                .filter(todo -> startDate == null || !todo.getStartDate().isBefore(startDate))
+                .filter(todo -> endDate == null || !todo.getDueDate().isAfter(endDate))
+                .filter(todo -> statusFilter == null || statusFilter.equals(todo.getStatus()))
+                .filter(todo -> priorityFilter == null || priorityFilter.equals(todo.getPriority()))
+                .collect(Collectors.toList());
+    }
+
+    private TodoStatus parseStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        try {
+            return TodoStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidTodoException("유효하지 않은 상태 값입니다: " + status);
+        }
+    }
+
+    private TodoPriority parsePriority(String priority) {
+        if (priority == null) {
+            return null;
+        }
+        try {
+            return TodoPriority.valueOf(priority.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidTodoException("유효하지 않은 우선순위 값입니다: " + priority);
+        }
+    }
+
     /**
      * 날짜 유효성 검증
      */
@@ -329,6 +429,20 @@ public class TodoService {
 
         if (dueDate.isBefore(startDate)) {
             throw new InvalidTodoException("마감 날짜는 시작 날짜보다 늦어야 합니다.");
+        }
+    }
+
+    /**
+     * 목표 완료일과 최종 마감일시 검증
+     */
+    private void validateDeadline(LocalDate dueDate, LocalDateTime deadline) {
+        if (deadline == null || dueDate == null) {
+            return;
+        }
+
+        LocalDate deadlineDate = deadline.toLocalDate();
+        if (dueDate.isAfter(deadlineDate)) {
+            throw new InvalidTodoException("목표 완료일(dueDate)은 최종 마감일(deadline)보다 빠르거나 같아야 합니다.");
         }
     }
 

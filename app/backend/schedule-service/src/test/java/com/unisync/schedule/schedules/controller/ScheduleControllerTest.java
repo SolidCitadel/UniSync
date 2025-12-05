@@ -296,28 +296,30 @@ class ScheduleControllerTest {
                 .source(ScheduleSource.USER)
                 .build();
 
-        given(scheduleService.getScheduleById(1L))
+        given(scheduleService.getScheduleById(1L, COGNITO_SUB))
                 .willReturn(schedule);
 
         // When & Then
-        mockMvc.perform(get("/v1/schedules/1"))
+        mockMvc.perform(get("/v1/schedules/1")
+                        .header("X-Cognito-Sub", COGNITO_SUB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.scheduleId").value(1))
                 .andExpect(jsonPath("$.title").value("중간고사 프로젝트"))
                 .andExpect(jsonPath("$.description").value("Spring Boot 프로젝트 제출"));
 
-        then(scheduleService).should().getScheduleById(1L);
+        then(scheduleService).should().getScheduleById(1L, COGNITO_SUB);
     }
 
     @Test
     @DisplayName("GET /v1/schedules/{scheduleId} - 존재하지 않는 일정 404")
     void getScheduleById_NotFound() throws Exception {
         // Given
-        given(scheduleService.getScheduleById(999L))
+        given(scheduleService.getScheduleById(999L, COGNITO_SUB))
                 .willThrow(new ScheduleNotFoundException("일정을 찾을 수 없습니다: 999"));
 
         // When & Then
-        mockMvc.perform(get("/v1/schedules/999"))
+        mockMvc.perform(get("/v1/schedules/999")
+                        .header("X-Cognito-Sub", COGNITO_SUB))
                 .andExpect(status().isNotFound());
     }
 
