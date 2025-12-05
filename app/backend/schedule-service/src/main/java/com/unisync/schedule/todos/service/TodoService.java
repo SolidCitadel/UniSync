@@ -129,16 +129,16 @@ public class TodoService {
 
         if (groupId != null) {
             groupPermissionService.validateReadPermission(groupId, cognitoSub);
-            todos = todoRepository.findByGroupId(groupId);
+            todos = fetchGroupTodos(groupId);
         } else if (Boolean.TRUE.equals(includeGroups)) {
             List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
             if (groupIds.isEmpty()) {
-                todos = todoRepository.findByCognitoSub(cognitoSub);
+                todos = fetchPersonalTodos(cognitoSub);
             } else {
                 todos = todoRepository.findByCognitoSubOrGroupIdIn(cognitoSub, groupIds);
             }
         } else {
-            todos = todoRepository.findByCognitoSub(cognitoSub);
+            todos = fetchPersonalTodos(cognitoSub);
         }
 
         List<Todo> filtered = applyFilters(todos, startDate, endDate, status, priority);
@@ -146,6 +146,14 @@ public class TodoService {
         return filtered.stream()
                 .map(TodoResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    private List<Todo> fetchPersonalTodos(String cognitoSub) {
+        return todoRepository.findByCognitoSub(cognitoSub);
+    }
+
+    private List<Todo> fetchGroupTodos(Long groupId) {
+        return todoRepository.findByGroupId(groupId);
     }
 
     /**

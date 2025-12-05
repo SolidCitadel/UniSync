@@ -12,8 +12,9 @@ import java.util.Optional;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    // 사용자 ID로 조회
-    List<Category> findByCognitoSub(String cognitoSub);
+    // 개인 카테고리 조회
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL")
+    List<Category> findByCognitoSub(@Param("cognitoSub") String cognitoSub);
 
     // 그룹 ID로 조회
     List<Category> findByGroupId(Long groupId);
@@ -28,8 +29,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
             @Param("groupIds") List<Long> groupIds
     );
 
-    // 기본 카테고리 조회
-    List<Category> findByCognitoSubAndIsDefault(String cognitoSub, Boolean isDefault);
+    // 기본 카테고리 조회 (개인)
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL AND c.isDefault = :isDefault")
+    List<Category> findByCognitoSubAndIsDefault(@Param("cognitoSub") String cognitoSub, @Param("isDefault") Boolean isDefault);
 
     // 카테고리명 중복 체크 (사용자)
     boolean existsByCognitoSubAndName(String cognitoSub, String name);
@@ -56,7 +58,8 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
             String sourceId
     );
 
-    List<Category> findByCognitoSubAndSourceType(String cognitoSub, String sourceType);
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL AND c.sourceType = :sourceType")
+    List<Category> findByCognitoSubAndSourceType(@Param("cognitoSub") String cognitoSub, @Param("sourceType") String sourceType);
 
     /**
      * 외부 소스 중복 체크

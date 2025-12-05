@@ -1582,3 +1582,344 @@ class TestScheduleCoordinationFlow:
         print(f"   - Leader/Member groupId 필터 조회")
         print(f"   - 핵심 필드 검증: groupId, categoryId, title, startTime, endTime, description, location, source")
         print("=" * 100 + "\n")
+
+
+class TestGroupCategoryQueryFlow:
+    """그룹 카테고리 조회 파라미터 테스트 (groupId, includeGroups)"""
+
+    def test_category_group_query_parameters_comprehensive(self, service_urls, clean_user_database):
+        """
+        카테고리 그룹 조회 파라미터 종합 테스트:
+        1. 개인 카테고리만 조회 (기본)
+        2. 특정 그룹 카테고리만 조회 (groupId)
+        3. 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups)
+        4. 다중 그룹 시나리오
+        5. Member도 그룹 카테고리 조회 가능
+        6. sourceType 필터 조합
+        7. 데이터 격리 검증
+        """
+        gateway_url = service_urls.get("gateway", "http://localhost:8080")
+
+        # =================================================================
+        # STEP 1: 사용자 준비 (Owner, Member, Outsider)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 1/9] 사용자 준비: Owner, Member, Outsider 생성")
+        print("=" * 100)
+
+        owner = create_test_user(gateway_url, "Category Owner")
+        member = create_test_user(gateway_url, "Category Member")
+        outsider = create_test_user(gateway_url, "Category Outsider")
+
+        print(f"  ✅ Owner: {owner['email']}")
+        print(f"  ✅ Member: {member['email']}")
+        print(f"  ✅ Outsider: {outsider['email']}")
+
+        # =================================================================
+        # STEP 2: 그룹 2개 생성 및 멤버 초대
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 2/9] 그룹 2개 생성 및 Member 초대")
+        print("=" * 100)
+
+        # Group A 생성 (Owner가 소유, Member 초대)
+        group_a_response = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            json={"name": f"Group A {uuid.uuid4().hex[:8]}", "description": "First group"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        assert group_a_response.status_code == 201
+        group_a_id = group_a_response.json()["groupId"]
+        print(f"  ✅ Group A 생성 (groupId: {group_a_id})")
+
+        # Member를 Group A에 초대
+        requests.post(
+            f"{gateway_url}/api/v1/groups/{group_a_id}/members",
+            json={"cognitoSub": member['cognitoSub'], "role": "MEMBER"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        print(f"  ✅ Member를 Group A에 초대")
+
+        # Group B 생성 (Owner가 소유, Member는 초대 안함)
+        group_b_response = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            json={"name": f"Group B {uuid.uuid4().hex[:8]}", "description": "Second group"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        assert group_b_response.status_code == 201
+        group_b_id = group_b_response.json()["groupId"]
+        print(f"  ✅ Group B 생성 (groupId: {group_b_id})")
+
+        # =================================================================
+        # STEP 3: 카테고리 생성
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 3/9] 카테고리 생성 (개인, Group A, Group B)")
+        print("=" * 100)
+
+        # Owner 개인 카테고리
+        owner_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Owner Personal {uuid.uuid4().hex[:8]}", "color": "#FF0000"},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        owner_personal_cat_id = owner_personal_cat["categoryId"]
+        print(f"  ✅ Owner 개인 카테고리 생성 (categoryId: {owner_personal_cat_id})")
+
+        # Group A 카테고리 (Owner 생성)
+        group_a_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Group A Category {uuid.uuid4().hex[:8]}", "color": "#00FF00", "groupId": group_a_id},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        group_a_cat_id = group_a_cat["categoryId"]
+        print(f"  ✅ Group A 카테고리 생성 (categoryId: {group_a_cat_id})")
+
+        # Group B 카테고리 (Owner 생성)
+        group_b_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Group B Category {uuid.uuid4().hex[:8]}", "color": "#0000FF", "groupId": group_b_id},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        group_b_cat_id = group_b_cat["categoryId"]
+        print(f"  ✅ Group B 카테고리 생성 (categoryId: {group_b_cat_id})")
+
+        # Member 개인 카테고리
+        member_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Member Personal {uuid.uuid4().hex[:8]}", "color": "#FFFF00"},
+            headers=member['headers'],
+            timeout=5
+        ).json()
+        member_personal_cat_id = member_personal_cat["categoryId"]
+        print(f"  ✅ Member 개인 카테고리 생성 (categoryId: {member_personal_cat_id})")
+
+        # Outsider 개인 카테고리
+        outsider_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Outsider Personal {uuid.uuid4().hex[:8]}", "color": "#FF00FF"},
+            headers=outsider['headers'],
+            timeout=5
+        ).json()
+        outsider_personal_cat_id = outsider_personal_cat["categoryId"]
+        print(f"  ✅ Outsider 개인 카테고리 생성 (categoryId: {outsider_personal_cat_id})")
+
+        # =================================================================
+        # STEP 4: Owner - 개인 카테고리만 조회 (기본 동작)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 4/9] Owner: 개인 카테고리만 조회 (파라미터 없음)")
+        print("=" * 100)
+
+        owner_personal_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+
+        owner_personal_cat_ids = {cat["categoryId"] for cat in owner_personal_only}
+        assert owner_personal_cat_id in owner_personal_cat_ids, "Owner 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id not in owner_personal_cat_ids, "Group A 카테고리가 개인 조회에 포함됨"
+        assert group_b_cat_id not in owner_personal_cat_ids, "Group B 카테고리가 개인 조회에 포함됨"
+        assert member_personal_cat_id not in owner_personal_cat_ids, "Member 개인 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Owner 개인 카테고리만 조회됨 (total: {len(owner_personal_only)}개)")
+
+        # =================================================================
+        # STEP 5: Owner - Group A 카테고리만 조회 (groupId 파라미터)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 5/9] Owner: Group A 카테고리만 조회 (groupId 파라미터)")
+        print("=" * 100)
+
+        owner_group_a_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        ).json()
+
+        owner_group_a_cat_ids = {cat["categoryId"] for cat in owner_group_a_only}
+        assert group_a_cat_id in owner_group_a_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert owner_personal_cat_id not in owner_group_a_cat_ids, "개인 카테고리가 Group A 조회에 포함됨"
+        assert group_b_cat_id not in owner_group_a_cat_ids, "Group B 카테고리가 Group A 조회에 포함됨"
+
+        print(f"  ✅ Group A 카테고리만 조회됨 (total: {len(owner_group_a_only)}개)")
+
+        # =================================================================
+        # STEP 6: Owner - 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 6/9] Owner: 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups=true)")
+        print("=" * 100)
+
+        owner_all_categories = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        owner_all_cat_ids = {cat["categoryId"] for cat in owner_all_categories}
+        assert owner_personal_cat_id in owner_all_cat_ids, "Owner 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id in owner_all_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert group_b_cat_id in owner_all_cat_ids, "Group B 카테고리가 조회되지 않음"
+        assert member_personal_cat_id not in owner_all_cat_ids, "Member 개인 카테고리가 조회됨 (격리 실패)"
+        assert outsider_personal_cat_id not in owner_all_cat_ids, "Outsider 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Owner 개인 + 모든 그룹 카테고리 통합 조회 성공 (total: {len(owner_all_categories)}개)")
+        print(f"     - Owner 개인: {owner_personal_cat_id}")
+        print(f"     - Group A: {group_a_cat_id}")
+        print(f"     - Group B: {group_b_cat_id}")
+
+        # =================================================================
+        # STEP 7: Member - 그룹 카테고리 조회 (Member도 가능해야 함)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 7/9] Member: 그룹 카테고리 조회 (읽기 권한 검증)")
+        print("=" * 100)
+
+        # Member 개인만 조회
+        member_personal_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            timeout=5
+        ).json()
+
+        member_personal_cat_ids = {cat["categoryId"] for cat in member_personal_only}
+        assert member_personal_cat_id in member_personal_cat_ids
+        assert group_a_cat_id not in member_personal_cat_ids
+        assert owner_personal_cat_id not in member_personal_cat_ids
+
+        print(f"  ✅ Member 개인 카테고리만 조회됨 (total: {len(member_personal_only)}개)")
+
+        # Member - Group A 카테고리 조회 (groupId)
+        member_group_a = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        ).json()
+
+        member_group_a_cat_ids = {cat["categoryId"] for cat in member_group_a}
+        assert group_a_cat_id in member_group_a_cat_ids, "Member가 Group A 카테고리를 조회하지 못함"
+        assert member_personal_cat_id not in member_group_a_cat_ids
+
+        print(f"  ✅ Member도 Group A 카테고리 조회 가능 (total: {len(member_group_a)}개)")
+
+        # Member - includeGroups (개인 + Group A만, Group B는 제외되어야 함)
+        member_all = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        member_all_cat_ids = {cat["categoryId"] for cat in member_all}
+        assert member_personal_cat_id in member_all_cat_ids, "Member 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id in member_all_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert group_b_cat_id not in member_all_cat_ids, "Member가 속하지 않은 Group B 카테고리가 조회됨"
+        assert owner_personal_cat_id not in member_all_cat_ids, "Owner 개인 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Member includeGroups 성공 (개인 + Group A만, total: {len(member_all)}개)")
+
+        # =================================================================
+        # STEP 8: Outsider - 그룹 카테고리 접근 불가 검증
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 8/9] Outsider: 그룹 카테고리 접근 불가 검증")
+        print("=" * 100)
+
+        # Outsider - Group A 조회 시도 (권한 없음, 빈 배열 또는 403)
+        outsider_group_a_resp = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=outsider['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        )
+
+        # 권한 없으면 403 또는 빈 배열 반환 (구현에 따라 다름)
+        if outsider_group_a_resp.status_code == 200:
+            outsider_group_a = outsider_group_a_resp.json()
+            assert len(outsider_group_a) == 0, "Outsider가 Group A 카테고리를 조회함 (권한 없어야 함)"
+        else:
+            assert outsider_group_a_resp.status_code == 403, "Outsider 접근 시 403 에러 예상"
+
+        print(f"  ✅ Outsider는 Group A 카테고리 조회 불가")
+
+        # Outsider - includeGroups (개인만 조회되어야 함)
+        outsider_all = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=outsider['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        outsider_all_cat_ids = {cat["categoryId"] for cat in outsider_all}
+        assert outsider_personal_cat_id in outsider_all_cat_ids
+        assert group_a_cat_id not in outsider_all_cat_ids
+        assert group_b_cat_id not in outsider_all_cat_ids
+        assert owner_personal_cat_id not in outsider_all_cat_ids
+        assert member_personal_cat_id not in outsider_all_cat_ids
+
+        print(f"  ✅ Outsider includeGroups는 개인만 조회됨 (total: {len(outsider_all)}개)")
+
+        # =================================================================
+        # STEP 9: sourceType 필터 조합 테스트
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 9/9] sourceType 필터와 groupId/includeGroups 조합 테스트")
+        print("=" * 100)
+
+        # Owner - includeGroups + sourceType=USER_CREATED
+        owner_user_created = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"includeGroups": "true", "sourceType": "USER_CREATED"},
+            timeout=5
+        ).json()
+
+        # 모든 카테고리가 USER_CREATED 타입이어야 함
+        for cat in owner_user_created:
+            assert cat.get("sourceType") == "USER_CREATED", f"sourceType 필터 실패: {cat}"
+
+        print(f"  ✅ sourceType=USER_CREATED 필터 성공 (total: {len(owner_user_created)}개)")
+
+        # Owner - groupId + sourceType=CANVAS_COURSE (Canvas 카테고리는 없으므로 빈 배열)
+        owner_canvas = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"groupId": str(group_a_id), "sourceType": "CANVAS_COURSE"},
+            timeout=5
+        ).json()
+
+        assert len(owner_canvas) == 0, "CANVAS_COURSE 카테고리가 없는데 조회됨"
+
+        print(f"  ✅ sourceType=CANVAS_COURSE 필터 성공 (빈 배열)")
+
+        # Cleanup
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_a_id}", headers=owner['headers'], timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_b_id}", headers=owner['headers'], timeout=5)
+
+        # =================================================================
+        # 최종 요약
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[PASS] 카테고리 그룹 조회 파라미터 종합 테스트 성공!")
+        print("=" * 100)
+        print(f"✅ STEP 1: 사용자 3명 준비 (Owner, Member, Outsider)")
+        print(f"✅ STEP 2: 그룹 2개 생성 (Group A: Owner+Member, Group B: Owner만)")
+        print(f"✅ STEP 3: 카테고리 5개 생성 (Owner개인, Member개인, Outsider개인, Group A, Group B)")
+        print(f"✅ STEP 4: Owner 개인 카테고리만 조회 (기본 동작)")
+        print(f"✅ STEP 5: Owner Group A 카테고리만 조회 (groupId 파라미터)")
+        print(f"✅ STEP 6: Owner 개인+모든 그룹 통합 조회 (includeGroups=true)")
+        print(f"✅ STEP 7: Member 그룹 카테고리 조회 (읽기 권한, includeGroups)")
+        print(f"✅ STEP 8: Outsider 그룹 접근 불가 검증")
+        print(f"✅ STEP 9: sourceType 필터 조합 (includeGroups + sourceType, groupId + sourceType)")
+        print("=" * 100 + "\n")
