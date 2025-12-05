@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+## Getting Started
+- At the start of each chat session with the assistant, read `.claude/` and `docs/` to understand the architecture, features, and conventions before making changes.
+
 ## Project Structure & Modules
 - Backend services live under `app/backend/` (course-service, schedule-service, user-service, api-gateway). Tests: `app/backend/*/src/test/java`.
 - Lambda code is in `app/serverless/canvas-sync-lambda/`.
