@@ -4,6 +4,8 @@
 resource "random_password" "db_password" {
   length  = 32
   special = true
+  # Exclude characters not allowed by RDS: /, @, ", and space
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # Secrets Manager Secret for RDS password

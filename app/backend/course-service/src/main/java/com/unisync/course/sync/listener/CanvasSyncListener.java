@@ -2,9 +2,13 @@ package com.unisync.course.sync.listener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.unisync.course.assignment.dto.AssignmentToScheduleEventDto;
+import com.unisync.course.assignment.publisher.AssignmentEventPublisher;
 import com.unisync.course.assignment.service.AssignmentService;
+import com.unisync.course.common.entity.Assignment;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.entity.Enrollment;
+import com.unisync.course.common.repository.AssignmentRepository;
 import com.unisync.course.common.repository.CourseRepository;
 import com.unisync.course.common.repository.EnrollmentRepository;
 import com.unisync.course.sync.dto.CanvasSyncMessage;
@@ -19,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,11 +38,14 @@ public class CanvasSyncListener {
 
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final AssignmentRepository assignmentRepository;
     private final AssignmentService assignmentService;
+    private final AssignmentEventPublisher assignmentEventPublisher;
     private final ObjectMapper objectMapper;
 
     /**
      * lambda-to-courseservice-sync 큐에서 통합 동기화 메시지 수신
+     * 단일 Course (CANVAS_COURSE_SYNCED) 또는 다중 Courses (CANVAS_SYNC_COMPLETED) 지원
      *
      * @param messageBody JSON 형식의 CanvasSyncMessage
      */
@@ -48,35 +56,57 @@ public class CanvasSyncListener {
 
         try {
             CanvasSyncMessage syncMessage = objectMapper.readValue(messageBody, CanvasSyncMessage.class);
-
-            log.info("   - cognitoSub={}, courses={}, syncedAt={}",
-                    syncMessage.getCognitoSub(),
-                    syncMessage.getCourses().size(),
-                    syncMessage.getSyncedAt());
-
             String cognitoSub = syncMessage.getCognitoSub();
             int totalAssignments = 0;
+            int totalCourses = 0;
 
-            // 각 Course 처리
-            for (CourseData courseData : syncMessage.getCourses()) {
-                // 1. Course 생성/업데이트
+            // 단일 Course 형식 지원 (CANVAS_COURSE_SYNCED)
+            if (syncMessage.getCourse() != null) {
+                CourseData courseData = syncMessage.getCourse();
                 Course course = processCourse(courseData);
-
-                // 2. Enrollment 생성
-                processEnrollment(cognitoSub, course, courseData);
-
-                // 3. Assignments 처리
-                for (AssignmentData assignmentData : courseData.getAssignments()) {
-                    processAssignment(course, assignmentData);
-                    totalAssignments++;
+                
+                // Assignment를 먼저 처리 (DB에 저장)
+                if (courseData.getAssignments() != null) {
+                    for (AssignmentData assignmentData : courseData.getAssignments()) {
+                        processAssignment(course, assignmentData);
+                        totalAssignments++;
+                    }
                 }
-
+                
+                // Enrollment 생성 후 Schedule 이벤트 발행 (이제 Assignment가 DB에 있음)
+                processEnrollment(cognitoSub, course, courseData);
+                
+                totalCourses = 1;
                 log.info("   ✅ Processed course: id={}, name={}, assignments={}",
-                        course.getId(), course.getName(), courseData.getAssignments().size());
+                        course.getId(), course.getName(), 
+                        courseData.getAssignments() != null ? courseData.getAssignments().size() : 0);
+            }
+            
+            // 배열 형식 지원 (CANVAS_SYNC_COMPLETED)
+            if (syncMessage.getCourses() != null && !syncMessage.getCourses().isEmpty()) {
+                for (CourseData courseData : syncMessage.getCourses()) {
+                    Course course = processCourse(courseData);
+
+                    // Assignment를 먼저 처리 (DB에 저장)
+                    if (courseData.getAssignments() != null) {
+                        for (AssignmentData assignmentData : courseData.getAssignments()) {
+                            processAssignment(course, assignmentData);
+                            totalAssignments++;
+                        }
+                    }
+                    
+                    // Enrollment 생성 후 Schedule 이벤트 발행 (이제 Assignment가 DB에 있음)
+                    processEnrollment(cognitoSub, course, courseData);
+                    
+                    totalCourses++;
+                    log.info("   ✅ Processed course: id={}, name={}, assignments={}",
+                            course.getId(), course.getName(),
+                            courseData.getAssignments() != null ? courseData.getAssignments().size() : 0);
+                }
             }
 
             log.info("✅ Successfully processed Canvas sync: {} courses, {} assignments",
-                    syncMessage.getCourses().size(), totalAssignments);
+                    totalCourses, totalAssignments);
 
         } catch (JsonProcessingException e) {
             log.error("❌ Failed to parse Canvas sync message: {}", messageBody, e);
@@ -124,6 +154,7 @@ public class CanvasSyncListener {
 
     /**
      * Enrollment 생성 (중복 체크)
+     * 새 Enrollment일 경우, 해당 Course의 기존 Assignment에 대해 Schedule 이벤트 발행
      */
     private void processEnrollment(String cognitoSub, Course course, CourseData courseData) {
         if (!enrollmentRepository.existsByCognitoSubAndCourseId(cognitoSub, course.getId())) {
@@ -139,7 +170,44 @@ public class CanvasSyncListener {
                     .build();
 
             enrollmentRepository.save(enrollment);
+            log.info("📝 Created enrollment: cognitoSub={}, courseId={}", cognitoSub, course.getId());
+
+            // 새 Enrollment일 경우, 해당 Course의 기존 Assignment에 대해 Schedule 이벤트 발행
+            publishExistingAssignmentsToSchedule(course, cognitoSub);
         }
+    }
+
+    /**
+     * 새 사용자에게 기존 Assignment들에 대한 Schedule 이벤트 발행
+     */
+    private void publishExistingAssignmentsToSchedule(Course course, String cognitoSub) {
+        List<Assignment> existingAssignments = assignmentRepository.findAllByCourseId(course.getId());
+
+        if (existingAssignments.isEmpty()) {
+            log.debug("No existing assignments for course: courseId={}", course.getId());
+            return;
+        }
+
+        List<AssignmentToScheduleEventDto> events = existingAssignments.stream()
+                .map(assignment -> AssignmentToScheduleEventDto.builder()
+                        .eventType("ASSIGNMENT_CREATED")
+                        .assignmentId(assignment.getId())
+                        .cognitoSub(cognitoSub)
+                        .canvasAssignmentId(assignment.getCanvasAssignmentId())
+                        .canvasCourseId(course.getCanvasCourseId())
+                        .title(assignment.getTitle())
+                        .description(assignment.getDescription())
+                        .dueAt(assignment.getDueAt())
+                        .pointsPossible(assignment.getPointsPossible())
+                        .courseId(course.getId())
+                        .courseName(course.getName())
+                        .build())
+                .toList();
+
+        assignmentEventPublisher.publishAssignmentEvents(events);
+
+        log.info("📤 Published {} schedule events for existing assignments to user: cognitoSub={}, courseId={}",
+                events.size(), cognitoSub, course.getId());
     }
 
     /**

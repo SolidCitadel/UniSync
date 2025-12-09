@@ -9,9 +9,9 @@ spring:
     name: course-service
 
   datasource:
-    url: ${COURSE_SERVICE_DATABASE_URL}
-    username: ${COURSE_SERVICE_DB_USER}
-    password: ${COURSE_SERVICE_DB_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -24,12 +24,16 @@ spring:
   cloud:
     aws:
       region:
-        static: ${AWS_REGION}
+        static: ${AWS_REGION:ap-northeast-2}
       credentials:
-        access-key: ${AWS_ACCESS_KEY_ID}
-        secret-key: ${AWS_SECRET_ACCESS_KEY}
+        access-key: ${AWS_ACCESS_KEY_ID:}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:}
       sqs:
-        endpoint: ${AWS_SQS_ENDPOINT}
+        endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
+
+# SQS Queues
+sqs:
+  assignment-to-schedule-queue: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE:}
 
 # Swagger/OpenAPI
 springdoc:

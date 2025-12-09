@@ -9,9 +9,9 @@ spring:
     name: schedule-service
 
   datasource:
-    url: ${SCHEDULE_SERVICE_DATABASE_URL}
-    username: ${SCHEDULE_SERVICE_DB_USER}
-    password: ${SCHEDULE_SERVICE_DB_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -24,18 +24,22 @@ spring:
 # AWS SQS Configuration
 aws:
   sqs:
-    endpoint: ${AWS_SQS_ENDPOINT}
-    region: ${AWS_REGION}
+    endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
+    region: ${AWS_REGION:ap-northeast-2}
     queues:
-      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
-      task-creation: ${SQS_TASK_CREATION_QUEUE}
+      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE:unisync-assignment-events}
+      task-creation: ${SQS_TASK_CREATION_QUEUE:unisync-task-creation}
+
+# SQS Queues (absolute queue URLs)
+sqs:
+  assignment-to-schedule-queue: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE:}
 
 # External Service URLs
 services:
   user-service:
-    url: ${USER_SERVICE_URL}
+    url: ${USER_SERVICE_URL:http://user-service.unisync.local:8081}
   course-service:
-    url: ${COURSE_SERVICE_URL}
+    url: ${COURSE_SERVICE_URL:http://course-service.unisync.local:8082}
 
 # Swagger/OpenAPI
 springdoc:

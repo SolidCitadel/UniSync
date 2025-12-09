@@ -39,7 +39,7 @@ public class AwsLambdaConfig {
         // HTTP 클라이언트 설정: 타임아웃 증가
         SdkHttpClient httpClient = ApacheHttpClient.builder()
                 .socketTimeout(Duration.ofSeconds(150))  // Lambda timeout(120초) + 여유
-                .connectionTimeout(Duration.ofSeconds(10))
+                .connectionTimeout(Duration.ofSeconds(30))  // NAT Gateway 경유 지연 대응
                 .build();
 
         // 클라이언트 오버라이드 설정
@@ -50,9 +50,7 @@ public class AwsLambdaConfig {
 
         var builder = LambdaClient.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-                ))
+                .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
                 .httpClient(httpClient)
                 .overrideConfiguration(clientConfig);
 

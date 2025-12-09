@@ -7,13 +7,17 @@
 ```
 terraform/
 ├── modules/
-│   ├── network/          # VPC, Subnets, IGW, NAT Gateway
+│   ├── network/          # VPC, Subnets, IGW, NAT Gateway (Single NAT 비용 최적화)
 │   ├── security-groups/  # Security Groups (ALB, ECS, RDS, Lambda)
-│   ├── rds/             # RDS MySQL with Secrets Manager
+│   ├── rds/             # RDS MySQL with Secrets Manager (Graviton)
 │   ├── sqs/             # SQS Queues (DLQ 포함)
 │   ├── secrets/         # Secrets Manager (Canvas Sync API Key)
+│   ├── cognito/         # Cognito User Pool and App Client
 │   ├── lambda/          # Lambda Functions (Canvas Sync)
-│   └── eventbridge/     # EventBridge Rules (스케줄링)
+│   ├── eventbridge/     # EventBridge Rules (스케줄링)
+│   ├── ecr/             # ECR Container Registry (4개 서비스)
+│   ├── ecs/             # ECS Fargate Cluster (ARM64, Auto Scaling)
+│   └── alb/             # Application Load Balancer (Path-based Routing)
 ├── main.tf               # 메인 Terraform 설정
 ├── variables.tf          # 변수 정의
 ├── outputs.tf            # 출력 값
@@ -105,6 +109,14 @@ aws secretsmanager get-secret-value \
 ### Secrets Module
 - Canvas Sync API Key 저장 (`unisync/canvas-sync-api-key`)
 
+### Cognito Module
+- AWS Cognito User Pool (`unisync-user-pool`)
+- App Client (`unisync-app-client`)
+- 비밀번호 정책: 최소 8자, 대문자/소문자/숫자 필수
+- MFA: OFF (내부 테스트용)
+- 자동 검증: email
+- 토큰 만료: Access/ID Token 1시간, Refresh Token 30일
+
 ### Lambda Module
 - Canvas Sync Lambda 함수
 - Python 3.11 런타임
@@ -118,10 +130,12 @@ aws secretsmanager get-secret-value \
 
 ## 다음 단계
 
-### Phase 1 완료 (RDS)
+### Phase 1 완료 (RDS, SQS, Cognito)
 1. RDS 생성 후 `.env.local` 파일 업데이트
 2. Docker Compose에서 MySQL 컨테이너 제거
-3. 애플리케이션 재시작 및 테스트
+3. Cognito User Pool ID 및 Client ID 확인
+4. `.env.local`에서 `COGNITO_ENDPOINT` 제거 (AWS Cognito 사용)
+5. 애플리케이션 재시작 및 테스트
 
 ### Phase 2 완료 (Lambda & SQS)
 1. SQS 큐 생성 확인

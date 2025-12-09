@@ -54,8 +54,9 @@ def get_canvas_sync_api_key() -> str:
 
 
 def lambda_handler(event, context):
+    print(f"DEBUG: Received event: {json.dumps(event)}")
     """
-    Canvas 동기화 핸들러 (Phase 1/2/3 공통)
+    Canvas 동기화 핸들러 (Phase 1/2/3 공통) - Force Refresh 2025
 
     호출자:
     - Phase 1: Spring (AWS SDK invoke) - 직접 호출
@@ -159,15 +160,16 @@ def lambda_handler(event, context):
 
             courses_data.append(course_data)
 
-        # 6. 단일 메시지 전송
-        sync_message = {
-            'eventType': 'CANVAS_SYNC_COMPLETED',
-            'cognitoSub': cognito_sub,
-            'syncedAt': datetime.utcnow().isoformat(),
-            'courses': courses_data
-        }
-
-        send_to_sqs('lambda-to-courseservice-sync', sync_message)
+        # 6. Course별로 개별 메시지 전송 (크기 제한 방지)
+        for course_data in courses_data:
+            sync_message = {
+                'eventType': 'CANVAS_COURSE_SYNCED',
+                'cognitoSub': cognito_sub,
+                'syncedAt': datetime.utcnow().isoformat(),
+                'course': course_data  # 단일 Course
+            }
+            send_to_sqs('lambda-to-courseservice-sync', sync_message)
+            print(f"  -> Sent course {course_data['canvasCourseId']} to SQS")
 
         print(f"✅ Canvas sync completed: {len(courses)} courses, {total_assignments} assignments")
 
@@ -313,12 +315,23 @@ def send_to_sqs(queue_name: str, message: Dict[str, Any]):
     """SQS 큐에 메시지 발행 (개별)"""
     queue_url = get_queue_url_cached(queue_name)
 
-    sqs.send_message(
-        QueueUrl=queue_url,
-        MessageBody=json.dumps(message)
-    )
+    print(f"DEBUG: sending to queue_url={queue_url}")
+    try:
+        # Check queue attributes
+        attrs = sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['FifoQueue'])
+        print(f"DEBUG: Queue attributes: {attrs}")
+    except Exception as e:
+        print(f"DEBUG: Failed to get queue attributes: {e}")
 
-    print(f"  -> SQS sent: {queue_name}")
+    try:
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps(message)
+        )
+        print(f"  -> SQS sent: {queue_name} (Standard)")
+    except Exception as e:
+        print(f"ERROR: SQS send failed: {e}")
+        raise
 
 
 def send_batch_to_sqs(queue_name: str, messages: List[Dict[str, Any]]):

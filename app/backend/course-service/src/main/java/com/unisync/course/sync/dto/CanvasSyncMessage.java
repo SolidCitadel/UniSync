@@ -27,8 +27,13 @@ public class CanvasSyncMessage {
     @JsonProperty("syncedAt")
     private String syncedAt;
 
+    // 배열 형식 (CANVAS_SYNC_COMPLETED)
     @JsonProperty("courses")
     private List<CourseData> courses;
+
+    // 단일 형식 (CANVAS_COURSE_SYNCED)
+    @JsonProperty("course")
+    private CourseData course;
 
     /**
      * Course 데이터 (assignments 포함)

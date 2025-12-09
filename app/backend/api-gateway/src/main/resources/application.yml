@@ -15,8 +15,8 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins:
-              - ${CORS_ALLOWED_ORIGIN}
+            allowedOriginPatterns:
+              - "${CORS_ALLOWED_ORIGIN:*}"
             allowedMethods:
               - GET
               - POST
@@ -32,18 +32,18 @@ spring:
 # Service URLs (환경변수로 주입 필수)
 services:
   user-service:
-    url: ${USER_SERVICE_URL}
+    url: ${USER_SERVICE_URL:http://user-service.unisync.local:8081}
   course-service:
-    url: ${COURSE_SERVICE_URL}
+    url: ${COURSE_SERVICE_URL:http://course-service.unisync.local:8082}
   schedule-service:
-    url: ${SCHEDULE_SERVICE_URL}
+    url: ${SCHEDULE_SERVICE_URL:http://schedule-service.unisync.local:8083}
 
 # AWS Cognito Configuration
 aws:
   cognito:
-    user-pool-id: ${COGNITO_USER_POOL_ID}
-    region: ${COGNITO_REGION}
-    endpoint: ${COGNITO_ENDPOINT}
+    user-pool-id: ${COGNITO_USER_POOL_ID:}
+    region: ${COGNITO_REGION:${AWS_REGION:ap-northeast-2}}
+    endpoint: ${COGNITO_ENDPOINT:}
 
 # JWT 검증 제외 경로 (원본 요청 경로 기준, RewritePath 실행 전)
 jwt:

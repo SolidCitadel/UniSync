@@ -2,13 +2,14 @@
 # docker-compose.yml (로컬 운영 환경) 및 실제 ECS 배포 시 사용됩니다.
 # 모든 환경 변수는 docker-compose.yml 또는 ECS Task Definition에서 주입됩니다.
 
-# Logging (운영 레벨)
+# Logging (DEBUG for troubleshooting)
 logging:
   level:
     root: INFO
-    com.unisync: INFO
-    org.springframework.web: INFO
-    org.springframework.cloud.gateway: INFO
+    com.unisync: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: DEBUG
 
 # Server
 server:

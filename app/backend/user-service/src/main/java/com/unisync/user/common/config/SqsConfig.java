@@ -25,24 +25,19 @@ public class SqsConfig {
     @Value("${aws.region}")
     private String awsRegion;
 
-    @Value("${aws.credentials.access-key}")
-    private String accessKey;
-
-    @Value("${aws.credentials.secret-key}")
-    private String secretKey;
-
     @Bean
     public SqsClient sqsClient() {
         log.info("Initializing SQS Client");
         log.info("  - Endpoint: {}", sqsEndpoint);
         log.info("  - Region: {}", awsRegion);
 
-        return SqsClient.builder()
-                .endpointOverride(URI.create(sqsEndpoint))
-                .region(Region.of(awsRegion))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)
-                ))
-                .build();
+        var builder = SqsClient.builder()
+                .region(Region.of(awsRegion));
+
+        if (sqsEndpoint != null && !sqsEndpoint.isBlank() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
+             builder.endpointOverride(URI.create(sqsEndpoint));
+        }
+
+        return builder.build();
     }
 }

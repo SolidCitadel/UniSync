@@ -5,7 +5,7 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: validate  # DB 안정성을 위해 스키마 검증만 수행
+      ddl-auto: update  # 테이블 자동 생성/업데이트 허용
     show-sql: false
 
 # AWS Configuration

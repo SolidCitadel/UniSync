@@ -3,8 +3,7 @@ package com.unisync.schedule.common.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 
@@ -23,22 +22,14 @@ public class SqsConsumerConfig {
     @Value("${aws.region}")
     private String region;
 
-    @Value("${aws.access-key-id}")
-    private String accessKeyId;
-
-    @Value("${aws.secret-access-key}")
-    private String secretAccessKey;
-
     @Bean
     public SqsAsyncClient sqsAsyncClient() {
         var builder = SqsAsyncClient.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-                ));
+                .credentialsProvider(DefaultCredentialsProvider.create());
 
-        // LocalStack 사용 시 endpoint 설정
-        if (sqsEndpoint != null && !sqsEndpoint.isEmpty()) {
+        // LocalStack 사용 시 endpoint 설정 (AWS 실제 엔드포인트가 아닐 때만)
+        if (sqsEndpoint != null && !sqsEndpoint.isBlank() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
             builder.endpointOverride(URI.create(sqsEndpoint));
         }
 

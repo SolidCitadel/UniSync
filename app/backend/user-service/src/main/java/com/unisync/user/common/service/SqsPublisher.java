@@ -59,8 +59,15 @@ public class SqsPublisher {
 
     /**
      * 큐 이름으로부터 큐 URL을 가져옵니다
+     * queueName이 전체 URL인 경우 그대로 반환
      */
     private String getQueueUrl(String queueName) {
+        // queueName이 이미 전체 URL인 경우 그대로 사용
+        if (queueName.startsWith("https://")) {
+            log.debug("Queue URL (direct): {}", queueName);
+            return queueName;
+        }
+        
         try {
             GetQueueUrlRequest getQueueUrlRequest = GetQueueUrlRequest.builder()
                     .queueName(queueName)

@@ -35,3 +35,7 @@ common_tags = {
   ManagedBy   = "Terraform"
 }
 
+# Cognito Configuration
+# No additional variables needed - uses default settings from LocalStack configuration
+# User Pool and App Client will be created automatically with standard settings
+

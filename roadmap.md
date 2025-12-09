@@ -19,7 +19,7 @@ Terraform 리소스:
 aws_sqs_queue (5개 큐)
 aws_sqs_queue_policy
 
-AWS Cognito (LocalStack Cognito 대체)
+AWS Cognito (LocalStack Cognito 대체) ✅ 완료
 이유: 프로덕션 인증
 난이도: 중간
 영향: JWT 검증 로직 확인 필요
@@ -39,10 +39,10 @@ aws_lambda_function (Canvas Sync, LLM)
 aws_lambda_permission
 aws_iam_role (Lambda 실행 역할)
 
-Phase 3: 컨테이너 서비스 (높은 우선순위)
+Phase 3: 컨테이너 서비스 (높은 우선순위) ✅ 완료
 목표: Spring Boot 서비스를 ECS로 전환
 
-ECS Fargate (컨테이너 서비스)
+ECS Fargate (컨테이너 서비스) ✅ 완료
 이유: 확장성, 자동 복구
 난이도: 높음
 영향: 큰 변경 (배포 파이프라인 필요)
@@ -52,7 +52,7 @@ aws_ecs_service (4개 서비스)
 aws_ecs_task_definition
 aws_ecr_repository (Docker 이미지 저장)
 
-Application Load Balancer (ALB)
+Application Load Balancer (ALB) ✅ 완료
 이유: 트래픽 분산, SSL 종료
 난이도: 중간
 영향: API Gateway 라우팅 설정 변경

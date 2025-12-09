@@ -9,9 +9,9 @@ spring:
     name: user-service
 
   datasource:
-    url: ${USER_SERVICE_DATABASE_URL}
-    username: ${USER_SERVICE_DB_USER}
-    password: ${USER_SERVICE_DB_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -23,29 +23,35 @@ spring:
 
 # AWS Configuration
 aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  sqs:
+    endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
   cognito:
-    user-pool-id: ${COGNITO_USER_POOL_ID}
-    client-id: ${COGNITO_CLIENT_ID}
-    region: ${COGNITO_REGION}
-    endpoint: ${COGNITO_ENDPOINT}
+    user-pool-id: ${COGNITO_USER_POOL_ID:}
+    client-id: ${COGNITO_CLIENT_ID:}
+    region: ${COGNITO_REGION:${AWS_REGION:ap-northeast-2}}
+    endpoint: ${COGNITO_ENDPOINT:}
   lambda:
-    canvas-sync-function-name: ${AWS_LAMBDA_CANVAS_SYNC_FUNCTION_NAME}
+    canvas-sync-function-name: ${AWS_LAMBDA_CANVAS_SYNC_FUNCTION_NAME:unisync-canvas-sync-lambda}
 
 # UniSync Configuration
 unisync:
   encryption:
-    key: ${ENCRYPTION_KEY}
+    key: ${ENCRYPTION_KEY:defaultEncryptionKey123456789012}
   api-keys:
-    canvas-sync-lambda: ${CANVAS_SYNC_API_KEY}
+    canvas-sync-lambda: ${CANVAS_SYNC_API_KEY:}
 
 # Internal Service URLs
 services:
   schedule-service:
-    url: ${SCHEDULE_SERVICE_URL}
+    url: ${SCHEDULE_SERVICE_URL:http://schedule-service.unisync.local:8083}
 
 # Canvas Configuration
 canvas:
-  base-url: ${CANVAS_BASE_URL}
+  base-url: ${CANVAS_BASE_URL:https://canvas.instructure.com}
 
 # Swagger/OpenAPI
 springdoc:

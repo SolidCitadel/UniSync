@@ -5,6 +5,7 @@ import com.unisync.gateway.service.CognitoJwtVerifier;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
+import java.util.List; // List import 추가
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpStatus;
@@ -32,59 +33,69 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            ServerHttpRequest request = exchange.getRequest();
-            String path = request.getPath().value();
-
-            log.debug("JWT 인증 필터 실행: {}", path);
-
-            // JWT 검증 제외 경로 확인
-            if (isExcludedPath(path)) {
-                log.debug("JWT 검증 제외 경로: {}", path);
-                return chain.filter(exchange);
-            }
-
-            // Authorization 헤더 추출
-            String authHeader = request.getHeaders().getFirst("Authorization");
-
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                log.warn("Authorization 헤더가 없거나 형식이 올바르지 않습니다: {}", path);
-                return onError(exchange, "Authorization 헤더가 필요합니다", HttpStatus.UNAUTHORIZED);
-            }
-
             try {
+                ServerHttpRequest request = exchange.getRequest();
+                String path = request.getPath().value();
+
+                log.debug("JWT 인증 필터 실행: {}", path);
+                
+                List<String> excludes = jwtConfig.getExcludePaths();
+                log.debug("JWT exclude-paths 설정: {}", excludes);
+
+                // JWT 검증 제외 경로 확인
+                if (isExcludedPath(path)) {
+                    log.debug("JWT 검증 제외 경로 매칭됨: {}", path);
+                    return chain.filter(exchange);
+                }
+
+                // Authorization 헤더 추출
+                String authHeader = request.getHeaders().getFirst("Authorization");
+
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    log.warn("Authorization 헤더가 없거나 형식이 올바르지 않습니다: {}", path);
+                    return onError(exchange, "Authorization 헤더가 필요합니다", HttpStatus.UNAUTHORIZED);
+                }
+
                 // Bearer 제거하고 토큰 추출
                 String token = authHeader.substring(7);
 
                 // JWT 검증
-                if (!jwtVerifier.isValid(token)) {
-                    return onError(exchange, "유효하지 않은 토큰 형식입니다", HttpStatus.UNAUTHORIZED);
+                // try-catch 내부의 try-catch 제거하고 상위에서 처리하도록 변경 가능하나, 
+                // 기존 로직 유지하면서 로깅 추가
+                try {
+                    if (!jwtVerifier.isValid(token)) {
+                        return onError(exchange, "유효하지 않은 토큰 형식입니다", HttpStatus.UNAUTHORIZED);
+                    }
+
+                    Map<String, Object> claims = jwtVerifier.verify(token);
+
+                    // Claims에서 사용자 정보 추출
+                    String cognitoSub = jwtVerifier.extractUserId(claims);
+                    String email = jwtVerifier.extractEmail(claims);
+                    String name = jwtVerifier.extractName(claims);
+
+                    log.debug("JWT 검증 성공: cognitoSub={}, email={}", cognitoSub, email);
+
+                    // 헤더에 사용자 정보 추가 (백엔드 서비스에서 사용)
+                    ServerHttpRequest modifiedRequest = request.mutate()
+                            .header("X-Cognito-Sub", cognitoSub)
+                            .header("X-User-Email", email)
+                            .header("X-User-Name", name)
+                            .build();
+
+                    ServerWebExchange modifiedExchange = exchange.mutate()
+                            .request(modifiedRequest)
+                            .build();
+
+                    return chain.filter(modifiedExchange);
+
+                } catch (Exception e) {
+                    log.error("JWT 검증 실패: {}", e.getMessage());
+                    return onError(exchange, "토큰 검증에 실패했습니다: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
                 }
-
-                Map<String, Object> claims = jwtVerifier.verify(token);
-
-                // Claims에서 사용자 정보 추출
-                String cognitoSub = jwtVerifier.extractUserId(claims);  // 실제로는 Cognito Sub
-                String email = jwtVerifier.extractEmail(claims);
-                String name = jwtVerifier.extractName(claims);
-
-                log.debug("JWT 검증 성공: cognitoSub={}, email={}", cognitoSub, email);
-
-                // 헤더에 사용자 정보 추가 (백엔드 서비스에서 사용)
-                ServerHttpRequest modifiedRequest = request.mutate()
-                        .header("X-Cognito-Sub", cognitoSub)  // Cognito User Pool의 sub (UUID)
-                        .header("X-User-Email", email)
-                        .header("X-User-Name", name)
-                        .build();
-
-                ServerWebExchange modifiedExchange = exchange.mutate()
-                        .request(modifiedRequest)
-                        .build();
-
-                return chain.filter(modifiedExchange);
-
-            } catch (Exception e) {
-                log.error("JWT 검증 실패: {}", e.getMessage());
-                return onError(exchange, "토큰 검증에 실패했습니다: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
+            } catch (Exception ex) {
+                log.error("JwtAuthenticationFilter 내부 치명적 오류 발생", ex);
+                return onError(exchange, "Internal Server Error in Filter: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
             }
         };
     }

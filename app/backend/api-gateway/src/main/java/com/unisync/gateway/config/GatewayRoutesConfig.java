@@ -26,6 +26,14 @@ public class GatewayRoutesConfig {
     @Value("${services.schedule-service.url}")
     private String scheduleServiceUrl;
 
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        System.out.println("GatewayRoutesConfig Initialized");
+        System.out.println("User Service URL: " + userServiceUrl);
+        System.out.println("Course Service URL: " + courseServiceUrl);
+        System.out.println("Schedule Service URL: " + scheduleServiceUrl);
+    }
+
     @Bean
     public RouteLocator customRoutes(RouteLocatorBuilder builder, JwtAuthenticationFilter jwtAuthFilter) {
         return builder.routes()

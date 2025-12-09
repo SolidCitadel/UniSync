@@ -126,3 +126,67 @@ output "eventbridge_rule_name" {
   value       = module.eventbridge.eventbridge_rule_name
 }
 
+# Cognito Outputs
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_arn" {
+  description = "Cognito User Pool ARN"
+  value       = module.cognito.user_pool_arn
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Cognito User Pool endpoint"
+  value       = module.cognito.user_pool_endpoint
+}
+
+output "cognito_app_client_id" {
+  description = "Cognito App Client ID"
+  value       = module.cognito.app_client_id
+}
+
+output "cognito_user_pool_name" {
+  description = "Cognito User Pool name"
+  value       = module.cognito.user_pool_name
+}
+
+# ECR Outputs
+output "ecr_repository_urls" {
+  description = "ECR repository URLs for each service"
+  value       = module.ecr.repository_urls
+}
+
+output "ecr_registry_id" {
+  description = "ECR registry ID"
+  value       = module.ecr.registry_id
+}
+
+# ALB Outputs
+output "alb_dns_name" {
+  description = "ALB DNS name for accessing services"
+  value       = module.alb.alb_dns_name
+}
+
+output "alb_arn" {
+  description = "ALB ARN"
+  value       = module.alb.alb_arn
+}
+
+# ECS Outputs
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = module.ecs.cluster_name
+}
+
+output "ecs_cluster_arn" {
+  description = "ECS cluster ARN"
+  value       = module.ecs.cluster_arn
+}
+
+output "ecs_service_names" {
+  description = "ECS service names"
+  value       = module.ecs.service_names
+}
+

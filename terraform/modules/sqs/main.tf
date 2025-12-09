@@ -15,7 +15,7 @@ resource "aws_sqs_queue" "dlq" {
 
 # Lambda to Course Service Sync Queue
 resource "aws_sqs_queue" "lambda_to_courseservice_sync" {
-  name                      = "${var.project_name}-lambda-to-courseservice-sync"
+  name                      = "lambda-to-courseservice-sync"
   message_retention_seconds = 345600 # 4 days
   visibility_timeout_seconds = 30
 

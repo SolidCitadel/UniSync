@@ -44,12 +44,49 @@ resource "aws_security_group" "ecs" {
   description = "Security group for ECS Fargate tasks"
   vpc_id      = var.vpc_id
 
+  # API Gateway port from ALB
   ingress {
-    description     = "Container port from ALB"
+    description     = "API Gateway port from ALB"
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+  }
+
+  # User Service port from ALB
+  ingress {
+    description     = "User Service port from ALB"
+    from_port       = 8081
+    to_port         = 8081
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # Course Service port from ALB
+  ingress {
+    description     = "Course Service port from ALB"
+    from_port       = 8082
+    to_port         = 8082
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # Schedule Service port from ALB
+  ingress {
+    description     = "Schedule Service port from ALB"
+    from_port       = 8083
+    to_port         = 8083
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # ECS 서비스 간 통신 (Service Discovery)
+  ingress {
+    description = "Inter-service communication"
+    from_port   = 8080
+    to_port     = 8083
+    protocol    = "tcp"
+    self        = true
   }
 
   egress {
@@ -68,6 +105,7 @@ resource "aws_security_group" "ecs" {
   )
 }
 
+
 # ECS to RDS egress rule (별도 리소스로 분리하여 순환 참조 방지)
 resource "aws_security_group_rule" "ecs_to_rds" {
   type                     = "egress"
@@ -85,15 +123,6 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS MySQL"
   vpc_id      = var.vpc_id
 
-  # EC2 접근 허용 (임시 - RDS 마이그레이션용)
-  ingress {
-    description = "MySQL from EC2 (temporary for migration)"
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = var.ec2_cidr_blocks
-  }
-
   # RDS는 클라이언트 연결을 받기만 하면 되므로 egress 규칙 불필요
 
   tags = merge(
@@ -102,6 +131,17 @@ resource "aws_security_group" "rds" {
       Name = "${var.project_name}-sg-rds"
     }
   )
+}
+
+# RDS ingress from EC2 (Temporary for migration - moved from inline block)
+resource "aws_security_group_rule" "rds_from_ec2" {
+  type              = "ingress"
+  from_port         = 3306
+  to_port           = 3306
+  protocol          = "tcp"
+  cidr_blocks       = var.ec2_cidr_blocks
+  security_group_id = aws_security_group.rds.id
+  description       = "MySQL from EC2 (temporary for migration)"
 }
 
 # RDS ingress from ECS (별도 리소스로 분리하여 순환 참조 방지)
@@ -161,3 +201,14 @@ resource "aws_security_group_rule" "lambda_to_rds" {
   description              = "MySQL access to RDS"
 }
 
+
+# Lambda to ECS ingress rule
+resource "aws_security_group_rule" "ecs_from_lambda" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8083
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda.id
+  security_group_id        = aws_security_group.ecs.id
+  description              = "Access from Lambda to ECS Services"
+}

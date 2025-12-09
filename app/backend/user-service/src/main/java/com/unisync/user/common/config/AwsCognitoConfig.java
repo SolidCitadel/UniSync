@@ -22,9 +22,7 @@ public class AwsCognitoConfig {
     public CognitoIdentityProviderClient cognitoClient() {
         var builder = CognitoIdentityProviderClient.builder()
                 .region(Region.of(cognitoProperties.getRegion()))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")
-                ));
+                .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create());
 
         // LocalStack을 사용하는 경우 endpoint 설정
         String endpoint = cognitoProperties.getEndpoint();

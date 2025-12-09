@@ -153,13 +153,19 @@ public class AssignmentEventListener {
      * SQS Queue URL 생성
      */
     private String getQueueUrl() {
-        // LocalStack: http://localhost:4566/000000000000/queue-name
-        // AWS: https://sqs.{region}.amazonaws.com/{accountId}/{queueName}
-        if (sqsEndpoint != null && !sqsEndpoint.isEmpty()) {
-            return String.format("%s/000000000000/%s", sqsEndpoint, queueName);
-        } else {
-            // AWS 실제 환경 (accountId는 별도 설정 필요)
-            return String.format("https://sqs.%s.amazonaws.com/000000000000/%s", region, queueName);
+        // queueName이 이미 전체 URL인 경우 그대로 사용
+        if (queueName.startsWith("https://")) {
+            return queueName;
         }
+        
+        // LocalStack: http://localhost:4566/000000000000/queue-name
+        if (sqsEndpoint != null && !sqsEndpoint.isEmpty() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
+            return String.format("%s/000000000000/%s", sqsEndpoint, queueName);
+        }
+        
+        // AWS 실제 환경 - queueName만 있으면 전체 URL 구성 불가 (accountId 필요)
+        // 환경변수로 전체 URL을 주입해야 함
+        log.warn("SQS queue URL cannot be constructed without full URL. Please set SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE with full URL.");
+        return queueName;
     }
 }

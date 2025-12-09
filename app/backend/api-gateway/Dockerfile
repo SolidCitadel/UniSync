@@ -1,18 +1,22 @@
 # Multi-stage build for API Gateway
 # Stage 1: Build
-FROM gradle:8.5-jdk21-alpine AS builder
+FROM gradle:8.5-jdk21 AS builder
 
 WORKDIR /workspace
 
-# Copy shared modules first
-COPY shared/java-common ./shared/java-common
+# Optimization: Cache dependencies
+COPY backend/api-gateway/build.gradle.kts backend/api-gateway/settings.gradle.kts ./backend/api-gateway/
+WORKDIR /workspace/backend/api-gateway
+RUN gradle dependencies --no-daemon
 
-# Copy api-gateway
+# Copy Rest of Source
+WORKDIR /workspace
+COPY shared/java-common ./shared/java-common
 COPY backend/api-gateway ./backend/api-gateway
 
 # Build
 WORKDIR /workspace/backend/api-gateway
-RUN gradle clean bootJar -x test --no-daemon
+RUN gradle bootJar -x test --no-daemon
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine

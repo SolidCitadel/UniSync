@@ -29,3 +29,9 @@ variable "tags" {
   default     = {}
 }
 
+variable "single_nat_gateway" {
+  description = "Use single NAT Gateway for cost optimization (saves ~$33/month)"
+  type        = bool
+  default     = true
+}
+

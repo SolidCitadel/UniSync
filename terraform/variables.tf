@@ -85,7 +85,7 @@ variable "rds_performance_insights_enabled" {
 variable "rds_deletion_protection" {
   description = "Enable deletion protection for RDS"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "canvas_sync_api_key" {
@@ -114,5 +114,37 @@ variable "common_tags" {
     Environment = "production"
     ManagedBy   = "Terraform"
   }
+}
+
+# Cost Optimization
+variable "single_nat_gateway" {
+  description = "Use single NAT Gateway for cost optimization (saves ~$33/month)"
+  type        = bool
+  default     = true
+}
+
+# ECS Configuration
+variable "ecs_desired_count" {
+  description = "Desired number of ECS tasks per service"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_min_capacity" {
+  description = "Minimum number of ECS tasks for auto scaling"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_max_capacity" {
+  description = "Maximum number of ECS tasks for auto scaling"
+  type        = number
+  default     = 3
+}
+
+variable "ecs_cpu_target_value" {
+  description = "Target CPU utilization for ECS auto scaling"
+  type        = number
+  default     = 70
 }
 
