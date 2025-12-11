@@ -4,9 +4,11 @@ import com.unisync.schedule.categories.dto.CategoryRequest;
 import com.unisync.schedule.categories.dto.CategoryResponse;
 import com.unisync.schedule.categories.exception.CategoryNotFoundException;
 import com.unisync.schedule.categories.exception.DuplicateCategoryException;
+import com.unisync.schedule.categories.model.CategorySourceType;
 import com.unisync.schedule.common.entity.Category;
 import com.unisync.schedule.common.exception.UnauthorizedAccessException;
 import com.unisync.schedule.common.repository.CategoryRepository;
+import com.unisync.schedule.internal.client.UserServiceClient;
 import com.unisync.schedule.internal.service.GroupPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,10 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final GroupPermissionService groupPermissionService;
+    private final UserServiceClient userServiceClient;
+
+    private static final String USER_CREATED = CategorySourceType.USER_CREATED.name();
+    private static final String CANVAS_COURSE = CategorySourceType.CANVAS_COURSE.name();
 
     /**
      * 카테고리 생성
@@ -53,6 +59,8 @@ public class CategoryService {
                 .name(request.getName())
                 .color(request.getColor())
                 .icon(request.getIcon())
+                .sourceType(USER_CREATED)
+                .sourceId(null)
                 .isDefault(false) // 사용자 생성 카테고리는 기본값이 아님
                 .build();
 
@@ -79,10 +87,43 @@ public class CategoryService {
      * 사용자의 모든 카테고리 조회
      */
     @Transactional(readOnly = true)
-    public List<CategoryResponse> getCategoriesByUserId(String cognitoSub) {
-        log.info("사용자 카테고리 전체 조회 - cognitoSub: {}", cognitoSub);
+    public List<CategoryResponse> getCategoriesByUserId(String cognitoSub, CategorySourceType sourceType) {
+        log.info("사용자 카테고리 조회 - cognitoSub: {}, sourceType: {}", cognitoSub,
+                sourceType != null ? sourceType.name() : "ALL");
 
-        List<Category> categories = categoryRepository.findByCognitoSub(cognitoSub);
+        List<Category> categories = sourceType == null
+                ? categoryRepository.findByCognitoSub(cognitoSub)
+                : categoryRepository.findByCognitoSubAndSourceType(cognitoSub, sourceType.name());
+
+        return categories.stream()
+                .map(CategoryResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 개인/그룹/통합 카테고리 조회
+     */
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getCategories(String cognitoSub, Long groupId, Boolean includeGroups, CategorySourceType sourceType) {
+        List<Category> categories;
+
+        if (groupId != null) {
+            groupPermissionService.validateReadPermission(groupId, cognitoSub);
+            categories = categoryRepository.findByGroupId(groupId);
+        } else if (Boolean.TRUE.equals(includeGroups)) {
+            List<Long> groupIds = userServiceClient.getUserGroupIds(cognitoSub);
+            categories = groupIds.isEmpty()
+                    ? categoryRepository.findByCognitoSub(cognitoSub)
+                    : categoryRepository.findByCognitoSubOrGroupIdIn(cognitoSub, groupIds);
+        } else {
+            categories = categoryRepository.findByCognitoSub(cognitoSub);
+        }
+
+        if (sourceType != null) {
+            categories = categories.stream()
+                    .filter(category -> sourceType.name().equals(category.getSourceType()))
+                    .collect(Collectors.toList());
+        }
 
         return categories.stream()
                 .map(CategoryResponse::from)
@@ -101,6 +142,11 @@ public class CategoryService {
                 .orElseThrow(() -> new CategoryNotFoundException("카테고리를 찾을 수 없습니다. ID: " + categoryId));
 
         validateCategoryOwnership(category, cognitoSub);
+
+        // 연동 카테고리는 수정 불가
+        if (isLinkedCategory(category)) {
+            throw new UnauthorizedAccessException("연동된 카테고리는 수정할 수 없습니다.");
+        }
 
         // 기본 카테고리는 수정 불가
         if (category.getIsDefault()) {
@@ -147,6 +193,11 @@ public class CategoryService {
 
         validateCategoryOwnership(category, cognitoSub);
 
+        // 연동 카테고리는 삭제 불가
+        if (isLinkedCategory(category)) {
+            throw new UnauthorizedAccessException("연동된 카테고리는 삭제할 수 없습니다.");
+        }
+
         // 기본 카테고리는 삭제 불가
         if (category.getIsDefault()) {
             throw new UnauthorizedAccessException("기본 카테고리는 삭제할 수 없습니다.");
@@ -162,8 +213,11 @@ public class CategoryService {
 
     /**
      * Canvas 과제용 기본 카테고리 조회 또는 생성
-     * Assignment → Schedule 변환 시 사용
+     * Assignment → Schedule 변환 시 사용 (Phase 1.0 - 단일 Canvas 카테고리)
+     *
+     * @deprecated Phase 1.1부터 getOrCreateCourseCategory 사용
      */
+    @Deprecated
     @Transactional
     public Long getOrCreateCanvasCategory(String cognitoSub) {
         String canvasCategoryName = "Canvas";
@@ -188,6 +242,73 @@ public class CategoryService {
 
                     return saved.getCategoryId();
                 });
+    }
+
+    /**
+     * Canvas 과목별 카테고리 조회 또는 생성 (Phase 1.1)
+     * Assignment → Schedule 변환 시 사용
+     *
+     * @param cognitoSub 사용자 Cognito Sub
+     * @param courseId Course ID (source_id로 사용)
+     * @param courseName 과목명 (카테고리 이름으로 사용)
+     * @return 카테고리 ID
+     */
+    @Transactional
+    public Long getOrCreateCourseCategory(String cognitoSub, Long courseId, String courseName) {
+        String sourceType = CANVAS_COURSE;
+        String sourceId = courseId.toString();
+
+        // 기존 과목 카테고리 조회 (source_type + source_id로)
+        return categoryRepository.findByCognitoSubAndSourceTypeAndSourceId(cognitoSub, sourceType, sourceId)
+                .map(Category::getCategoryId)
+                .orElseGet(() -> {
+                    // 과목 카테고리 없으면 생성
+                    Category courseCategory = Category.builder()
+                            .cognitoSub(cognitoSub)
+                            .groupId(null)
+                            .name(courseName) // "데이터구조", "알고리즘" 등
+                            .color(generateColorForCourse(courseId)) // 과목별 색상
+                            .icon("📚")
+                            .isDefault(true) // Canvas 과목 카테고리는 기본 카테고리
+                            .sourceType(sourceType)
+                            .sourceId(sourceId)
+                            .build();
+
+                    Category saved = categoryRepository.save(courseCategory);
+                    log.info("✅ Created course category: cognitoSub={}, courseId={}, courseName={}, categoryId={}",
+                            cognitoSub, courseId, courseName, saved.getCategoryId());
+
+                    return saved.getCategoryId();
+                });
+    }
+
+    /**
+     * 과목별 색상 자동 생성
+     * courseId를 해시하여 일관된 색상 할당
+     */
+    private String generateColorForCourse(Long courseId) {
+        // 과목별 미리 정의된 색상 팔레트
+        String[] colors = {
+                "#FF6B6B", // 빨강
+                "#4ECDC4", // 청록
+                "#45B7D1", // 파랑
+                "#FFA07A", // 주황
+                "#98D8C8", // 민트
+                "#F7DC6F", // 노랑
+                "#BB8FCE", // 보라
+                "#85C1E2"  // 하늘
+        };
+
+        // courseId를 색상 개수로 나눈 나머지로 색상 선택
+        int index = (int) (courseId % colors.length);
+        return colors[index];
+    }
+
+    /**
+     * 연동(비사용자) 카테고리 여부
+     */
+    private boolean isLinkedCategory(Category category) {
+        return category.getSourceType() != null && !USER_CREATED.equals(category.getSourceType());
     }
 
     /**

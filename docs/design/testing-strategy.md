@@ -198,8 +198,14 @@ def test_assignment_created_creates_schedule():
 
 **목적**: 전체 E2E 사용자 시나리오 검증
 
+**핵심 원칙**:
+- **DB 직접 조작 금지**: DB fixture (`mysql_connection`, `schedule_db_connection` 등) 사용 금지. 모든 데이터는 API를 통해서만 생성/조회/검증
+- **Gateway 엔드포인트만 사용**: 프론트엔드가 실제로 호출할 수 있는 API Gateway를 통한 엔드포인트만 사용 (내부 서비스 직접 호출 금지)
+- **실제 사용자 플로우**: 사용자가 UI에서 수행하는 동작과 동일한 순서로 테스트
+
 **검증 대상**:
 - 회원가입 → 토큰 등록 → 동기화 → 일정 조회
+- 동기화 모드 전환: `courses` → enrollment 토글 → `assignments` 재동기화 (활성 과목만 반영)
 - 실제 사용자 플로우 전체
 
 **예시**:
@@ -590,6 +596,21 @@ jobs:
 - ✅ 모든 System Tests 통과 (infra → component → integration → scenarios)
 - ✅ 코드 리뷰 승인 (1명 이상)
 
+## 테스트 작성 시 금지사항
+
+### 전체 테스트 공통
+- ❌ 테스트 간 데이터 공유
+- ❌ 순서 의존적 테스트 (각 테스트는 독립적)
+- ❌ 검증 생략 (상태 코드만 확인하고 응답 본문 무시)
+- ❌ 에러만 확인 (에러 타입만 보고 메시지/부작용 무시)
+
+### Scenario Tests 특별 규칙
+- ❌ **DB 직접 조작 금지**: DB fixture (`mysql_connection`, `schedule_db_connection` 등) 사용 금지. 모든 데이터는 API를 통해서만 생성/조회/검증
+- ❌ **내부 서비스 직접 호출 금지**: 프론트엔드가 접근할 수 없는 내부 서비스 엔드포인트 직접 호출 금지. API Gateway를 통한 엔드포인트만 사용
+- ✅ **실제 사용자 플로우만**: 사용자가 UI에서 수행하는 동작과 동일한 순서로 테스트
+
+**이유**: Scenario Tests는 프론트엔드 관점에서 전체 시스템을 검증하는 것이 목적입니다. DB 직접 조작이나 내부 API 호출은 실제 사용자가 할 수 없는 동작이므로 금지됩니다.
+
 ---
 
 ## 테스트 커버리지 현황
@@ -630,8 +651,9 @@ jobs:
 | 폴더 | 테스트 파일 | 테스트 수 | 검증 항목 |
 |------|------------|----------|----------|
 | `user_to_lambda/` | `test_canvas_sync_trigger.py` | 3 | User-Service → Lambda 호출, 에러 처리 |
-| `lambda_to_course/` | `test_canvas_sync.py` | 5 | Lambda → SQS → Course-Service 전체 플로우 |
+| `lambda_to_course/` | `test_canvas_sync.py` | 4 | Lambda → SQS → Course-Service 전체 플로우 |
 | `lambda_to_course/` | `test_assignment_event_flow.py` | 4 | 과제 이벤트 CRUD 플로우 |
+| `lambda_to_course/` | `test_disabled_enrollments.py` | 1 | 활성 수강이 없으면 동기화 스킵 |
 | `course_to_schedule/` | `test_assignment_to_schedule.py` | 5 | Course-Service → Schedule-Service 연동 |
 
 ### Scenario Tests 상세
@@ -641,14 +663,15 @@ jobs:
 | `test_full_user_journey.py` | 전체 사용자 여정 | 회원가입 → Canvas 연동 → 동기화 → 일정 확인 |
 | `test_todo_journey.py` | Todo 관리 | 카테고리 생성 → Todo/서브태스크 생성 → 진행률/상태 관리 → 정리 |
 | `test_category_management.py` | 카테고리 관리 | 다중 카테고리 생성 → 일정/할일 분류 → 색상 커스터마이징 |
+| `test_sync_disable_flow.py` | 비활성 과목 차단 | 과목 비활성화 후 동기화 시 스케줄/카테고리 미생성 확인 |
 
 ### 총 테스트 현황
 
 | 구분 | 테스트 수 |
 |------|---------|
 | Unit Tests | 156 |
-| System Tests | 86 |
-| **Total** | **242** |
+| System Tests | 129 |
+| **Total** | **285** |
 
 ---
 

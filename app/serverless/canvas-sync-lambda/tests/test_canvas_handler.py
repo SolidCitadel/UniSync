@@ -14,6 +14,7 @@ from datetime import datetime
 def setup_env(monkeypatch):
     """Automatically apply environment variables to all tests"""
     monkeypatch.setenv('USER_SERVICE_URL', 'http://localhost:8081')
+    monkeypatch.setenv('COURSE_SERVICE_URL', 'http://localhost:8082')
     monkeypatch.setenv('CANVAS_API_BASE_URL', 'https://canvas.instructure.com/api/v1')
     monkeypatch.setenv('AWS_REGION', 'ap-northeast-2')
     monkeypatch.setenv('SQS_ENDPOINT', 'http://localhost:4566')
@@ -102,6 +103,14 @@ def sample_assignments():
     ]
 
 
+@pytest.fixture
+def sample_enabled_enrollments():
+    return [
+        {"canvasCourseId": 456},
+        {"canvasCourseId": 789},
+    ]
+
+
 class TestExtractCognitoSub:
     """Test extract_cognito_sub function for Phase 1/2/3 input formats"""
 
@@ -139,6 +148,7 @@ class TestExtractCognitoSub:
 class TestLambdaHandler:
     """Test lambda_handler main function"""
 
+    @patch('src.handler.fetch_enabled_enrollments')
     @patch('src.handler.send_to_sqs')
     @patch('src.handler.fetch_canvas_assignments')
     @patch('src.handler.fetch_user_courses')
@@ -149,15 +159,18 @@ class TestLambdaHandler:
         mock_fetch_courses,
         mock_fetch_assignments,
         mock_send_sqs,
+        mock_fetch_enabled,
         sample_event,
         sample_courses,
-        sample_assignments
+        sample_assignments,
+        sample_enabled_enrollments
     ):
         """Test successful Lambda execution (Phase 1)"""
         # Given: Canvas API responds normally
         mock_get_token.return_value = 'test-canvas-token-12345'
         mock_fetch_courses.return_value = sample_courses
         mock_fetch_assignments.return_value = sample_assignments
+        mock_fetch_enabled.return_value = sample_enabled_enrollments
 
         # Import location is important (after environment variable setup)
         from src.handler import lambda_handler
@@ -180,36 +193,16 @@ class TestLambdaHandler:
         mock_fetch_assignments.assert_any_call('test-canvas-token-12345', '456')
         mock_fetch_assignments.assert_any_call('test-canvas-token-12345', '789')
 
-        # Then: Verify SQS sends (2 enrollments + 4 assignments)
-        assert mock_send_sqs.call_count == 6
+        # Then: Verify single SQS sync message sent
+        mock_send_sqs.assert_called_once()
+        queue_name, message = mock_send_sqs.call_args[0]
+        assert queue_name == 'lambda-to-courseservice-sync'
+        assert message['eventType'] == 'CANVAS_SYNC_COMPLETED'
+        assert message['syncMode'] == 'assignments'
+        assert len(message['courses']) == 2
+        assert sum(len(c['assignments']) for c in message['courses']) == 4
 
-        # Then: Verify Enrollment events
-        enrollment_calls = [
-            call for call in mock_send_sqs.call_args_list
-            if call[0][0] == 'lambda-to-courseservice-enrollments'
-        ]
-        assert len(enrollment_calls) == 2
-
-        # Then: Verify enrollment message structure
-        first_enrollment = enrollment_calls[0][0][1]
-        assert first_enrollment['cognitoSub'] == 'test-cognito-sub-123'
-        assert first_enrollment['canvasCourseId'] == 456
-        assert first_enrollment['courseName'] == 'Software Engineering'
-
-        # Then: Verify Assignment events
-        assignment_calls = [
-            call for call in mock_send_sqs.call_args_list
-            if call[0][0] == 'lambda-to-courseservice-assignments'
-        ]
-        assert len(assignment_calls) == 4
-
-        # Then: Verify assignment message structure
-        first_assignment = assignment_calls[0][0][1]
-        assert first_assignment['eventType'] == 'ASSIGNMENT_CREATED'
-        assert first_assignment['canvasCourseId'] == 456
-        assert first_assignment['canvasAssignmentId'] == 1001
-        assert first_assignment['title'] == 'Midterm Project'
-
+    @patch('src.handler.fetch_enabled_enrollments')
     @patch('src.handler.send_to_sqs')
     @patch('src.handler.fetch_canvas_assignments')
     @patch('src.handler.fetch_user_courses')
@@ -220,14 +213,17 @@ class TestLambdaHandler:
         mock_fetch_courses,
         mock_fetch_assignments,
         mock_send_sqs,
+        mock_fetch_enabled,
         sample_event,
-        sample_courses
+        sample_courses,
+        sample_enabled_enrollments
     ):
         """Test Lambda execution when no assignments exist"""
         # Given: Canvas returns courses but no assignments
         mock_get_token.return_value = 'test-canvas-token-12345'
         mock_fetch_courses.return_value = sample_courses
         mock_fetch_assignments.return_value = []  # No assignments
+        mock_fetch_enabled.return_value = sample_enabled_enrollments
 
         from src.handler import lambda_handler
 
@@ -239,13 +235,18 @@ class TestLambdaHandler:
         assert result['body']['coursesCount'] == 2
         assert result['body']['assignmentsCount'] == 0
 
-        # Then: Only enrollment messages sent (2 courses)
-        assert mock_send_sqs.call_count == 2
+        # Then: Sync message sent with assignments empty
+        mock_send_sqs.assert_called_once()
+        _, message = mock_send_sqs.call_args[0]
+        assert len(message['courses']) == 2
+        assert sum(len(c['assignments']) for c in message['courses']) == 0
 
+    @patch('src.handler.fetch_enabled_enrollments')
     @patch('src.handler.get_canvas_token')
-    def test_lambda_handler_token_error(self, mock_get_token, sample_event):
+    def test_lambda_handler_token_error(self, mock_get_token, mock_fetch_enabled, sample_event, sample_enabled_enrollments):
         """Test exception when Canvas token retrieval fails"""
         # Given: Token retrieval fails
+        mock_fetch_enabled.return_value = sample_enabled_enrollments
         mock_get_token.side_effect = Exception('Canvas token not found for user')
 
         from src.handler import lambda_handler
@@ -256,17 +257,77 @@ class TestLambdaHandler:
 
         assert 'Canvas token not found for user' in str(exc_info.value)
 
+    @patch('src.handler.fetch_enabled_enrollments')
+    @patch('src.handler.send_to_sqs')
+    @patch('src.handler.fetch_user_courses')
+    @patch('src.handler.get_canvas_token')
+    def test_lambda_handler_courses_mode_ignores_enabled(
+        self,
+        mock_get_token,
+        mock_fetch_courses,
+        mock_send_sqs,
+        mock_fetch_enabled,
+        sample_courses
+    ):
+        """courses 모드: enabled 목록이 없어도 courses fetch 및 메시지 전송"""
+        mock_get_token.return_value = 'token'
+        mock_fetch_courses.return_value = sample_courses
+        mock_fetch_enabled.return_value = []  # should be ignored in courses mode
+
+        from src.handler import lambda_handler
+
+        event = {'cognitoSub': 'sub-1', 'syncMode': 'courses'}
+
+        result = lambda_handler(event, None)
+
+        assert result['statusCode'] == 200
+        assert result['body']['coursesCount'] == 2
+        assert result['body']['assignmentsCount'] == 0
+        mock_fetch_courses.assert_called_once()
+        mock_send_sqs.assert_called_once()
+        queue_name, message = mock_send_sqs.call_args[0]
+        assert queue_name == 'lambda-to-courseservice-sync'
+        assert message['eventType'] == 'CANVAS_COURSES_SYNCED'
+        assert message['syncMode'] == 'courses'
+        assert len(message['courses']) == 2
+        mock_fetch_enabled.assert_not_called()
+
+    @patch('src.handler.fetch_enabled_enrollments')
+    @patch('src.handler.send_to_sqs')
+    def test_lambda_handler_assignments_mode_no_enabled_returns_zero(
+        self,
+        mock_send_sqs,
+        mock_fetch_enabled
+    ):
+        """assignments 모드: enabled 과목 없으면 Canvas 호출/전송 없이 0건 응답"""
+        mock_fetch_enabled.return_value = []
+
+        from src.handler import lambda_handler
+
+        event = {'cognitoSub': 'sub-1', 'syncMode': 'assignments'}
+
+        result = lambda_handler(event, None)
+
+        assert result['statusCode'] == 200
+        assert result['body']['coursesCount'] == 0
+        assert result['body']['assignmentsCount'] == 0
+        mock_send_sqs.assert_not_called()
+
+    @patch('src.handler.fetch_enabled_enrollments')
     @patch('src.handler.fetch_user_courses')
     @patch('src.handler.get_canvas_token')
     def test_lambda_handler_canvas_api_error(
         self,
         mock_get_token,
+        mock_fetch_enabled,
         mock_fetch_courses,
-        sample_event
+        sample_event,
+        sample_enabled_enrollments
     ):
         """Test exception when Canvas API call fails"""
         # Given: Canvas API returns error
         mock_get_token.return_value = 'test-canvas-token-12345'
+        mock_fetch_enabled.return_value = sample_enabled_enrollments
         mock_fetch_courses.side_effect = Exception('Canvas API error: 503 Service Unavailable')
 
         from src.handler import lambda_handler

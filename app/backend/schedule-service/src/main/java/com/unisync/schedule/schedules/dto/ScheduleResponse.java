@@ -3,6 +3,7 @@ package com.unisync.schedule.schedules.dto;
 import com.unisync.schedule.common.entity.Schedule;
 import com.unisync.schedule.common.entity.Schedule.ScheduleSource;
 import com.unisync.schedule.common.entity.Schedule.ScheduleStatus;
+import com.unisync.schedule.todos.dto.TodoWithSubtasksResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -66,7 +68,14 @@ public class ScheduleResponse {
     @Schema(description = "수정 일시", example = "2025-01-15T10:30:00")
     private LocalDateTime updatedAt;
 
+    @Schema(description = "연결된 할일 및 서브태스크 목록")
+    private List<TodoWithSubtasksResponse> todos;
+
     public static ScheduleResponse from(Schedule schedule) {
+        return from(schedule, null);
+    }
+
+    public static ScheduleResponse from(Schedule schedule, List<TodoWithSubtasksResponse> todos) {
         return ScheduleResponse.builder()
                 .scheduleId(schedule.getScheduleId())
                 .cognitoSub(schedule.getCognitoSub())
@@ -84,6 +93,7 @@ public class ScheduleResponse {
                 .sourceId(schedule.getSourceId())
                 .createdAt(schedule.getCreatedAt())
                 .updatedAt(schedule.getUpdatedAt())
+                .todos(todos)
                 .build();
     }
 }

@@ -101,6 +101,16 @@ public class GroupService {
     }
 
     /**
+     * 사용자가 속한 모든 그룹 ID 조회 (Internal API용)
+     */
+    @Transactional(readOnly = true)
+    public List<Long> getMyGroupIds(String cognitoSub) {
+        return groupMemberRepository.findByUserCognitoSub(cognitoSub).stream()
+                .map(GroupMember::getGroupId)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 그룹 상세 조회 (멤버 목록 포함)
      *
      * @param cognitoSub 요청자 Cognito Sub

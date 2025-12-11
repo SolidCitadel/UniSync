@@ -5,6 +5,7 @@
 # 환경변수:
 # - Gradle bootRun이 루트의 .env.local 파일을 로드하여 주입
 # - 모든 값은 플레이스홀더 사용 (하드코딩 금지)
+# - SQS 큐 이름/endpoint/region은 공통 application.yml에서 읽음
 
 spring:
   datasource:
@@ -18,23 +19,14 @@ spring:
       ddl-auto: update  # 개발 편의를 위한 자동 스키마 업데이트
     show-sql: true
 
-# AWS Configuration (LocalStack)
-aws:
-  sqs:
-    endpoint: ${AWS_SQS_ENDPOINT}
-    region: ${AWS_REGION}
-    queues:
-      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE}
-      task-creation: ${SQS_TASK_CREATION_QUEUE}
-
-# External Service URLs (환경변수에서 주입)
+# External Service URLs
 services:
   user-service:
     url: ${USER_SERVICE_URL}
   course-service:
     url: ${COURSE_SERVICE_URL}
 
-# Logging (상세 로깅)
+# Logging
 logging:
   level:
     com.unisync: DEBUG

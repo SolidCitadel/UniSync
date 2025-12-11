@@ -2,11 +2,16 @@
 
 Course-Service의 Canvas 과제를 Schedule-Service의 일정(Schedule) 및 할일(Todo)로 자동 변환하는 기능입니다.
 
+**버전**: 1.1
+**작성일**: 2025-11-20
+**최종 수정**: 2025-11-30
+
 ## 상태
 
 | Phase | 설명 | 상태 |
 |-------|------|------|
-| Phase 1 | 기본 과제 → 일정 자동 변환 | ✅ 구현 완료 |
+| Phase 1.0 | 기본 과제 → 일정 자동 변환 | ✅ 구현 완료 |
+| Phase 1.1 | 과목별 카테고리 + dueAt null 처리 | 🔄 개선 진행 중 |
 | Phase 2 | 과제 → 할일 자동 변환 (subtask 지원) | 📋 계획 |
 | Phase 3 | LLM 기반 스마트 분할 (과제 분석 → 서브태스크 자동 생성) | 💡 향후 |
 
@@ -33,18 +38,27 @@ Canvas 과제가 Course-Service에 저장되면 자동으로 Schedule-Service에
 
 ## 아키텍처
 
-### 전체 플로우
+### 전체 플로우 (Phase 1.1 - User Batch)
 
 ```
-Lambda → SQS → Course-Service
-                   ↓ Assignment DB 저장
-                   ↓ SQS 발행 (courseservice-to-scheduleservice-assignments)
+Lambda → SQS → Course-Service (CanvasSyncListener)
+                   ↓ CANVAS_SYNC_COMPLETED 수신
+                   ↓ 모든 Assignments DB 저장
+                   ↓ Enabled Enrollment별 그룹핑
+                   ↓ 사용자당 1개 batch 메시지 발행
+                   ↓ SQS: USER_ASSIGNMENTS_CREATED (N명 = N개 메시지)
                    ↓
-              Schedule-Service
-                   ↓ AssignmentListener (SQS consume)
+              Schedule-Service (AssignmentBatchListener)
+                   ↓ 사용자의 모든 assignments 수신
+                   ↓ Course별 Category 생성/조회
+                   ↓ Batch 처리 (dueAt null 스킵)
                    ↓ Schedule/Todo 생성
                    ↓ DB 저장
 ```
+
+**효율성 개선**:
+- **이전**: 401개 assignments × 10명 사용자 = 4,010개 메시지
+- **현재**: 사용자당 1개 batch = **10개 메시지** (99.75% 감소)
 
 ### SQS 기반 통신
 
@@ -63,52 +77,76 @@ Lambda → SQS → Course-Service
 ### 컴포넌트
 
 #### Course-Service
-- **AssignmentEventListener**: Lambda → SQS 메시지 consume (기존)
-- **AssignmentService**: Assignment DB 저장 후 이벤트 발행 (신규)
-- **AssignmentEventPublisher**: SQS 메시지 발행 (신규)
+- **CanvasSyncListener**: Lambda → SQS 메시지 consume (CANVAS_SYNC_COMPLETED)
+- **AssignmentService**: Assignment DB 저장
+- **AssignmentEventPublisher**: 사용자별 batch 메시지 발행 (USER_ASSIGNMENTS_CREATED)
 
 #### Schedule-Service
-- **AssignmentListener**: SQS 메시지 consume (신규)
-- **AssignmentToScheduleConverter**: Assignment → Schedule/Todo 변환 로직 (신규)
+- **AssignmentBatchListener**: SQS batch 메시지 consume (USER_ASSIGNMENTS_CREATED)
+- **AssignmentToScheduleConverter**: Assignment → Schedule/Todo 변환 로직 (batch 처리)
 - **ScheduleService**: Schedule DB 저장 (기존)
 - **TodoService**: Todo DB 저장 (기존)
+- **CategoryService**: 과목별 카테고리 생성/조회 (Phase 1.1)
 
 ## SQS 메시지 스키마
 
-### courseservice-to-scheduleservice-assignments
+### courseservice-to-scheduleservice-assignments (User Batch)
 
 **큐 이름**: `courseservice-to-scheduleservice-assignments`
 **DLQ**: `dlq-queue` (공통)
 
-**메시지 형식**:
+**메시지 형식** (Phase 1.1 - User Batch):
 ```json
 {
-  "eventType": "ASSIGNMENT_CREATED",
-  "assignmentId": "uuid-1234-5678",
+  "eventType": "USER_ASSIGNMENTS_CREATED",
   "cognitoSub": "abc-123-def-456",
-  "canvasAssignmentId": 123456,
-  "canvasCourseId": 789,
-  "title": "중간고사 프로젝트",
-  "description": "Spring Boot 프로젝트를 작성하세요...",
-  "dueAt": "2025-11-20T23:59:59Z",
-  "pointsPossible": 100.0,
-  "courseId": "course-uuid",
-  "courseName": "데이터구조"
+  "syncedAt": "2025-11-30T12:00:00Z",
+  "assignments": [
+    {
+      "assignmentId": "uuid-1234-5678",
+      "canvasAssignmentId": 123456,
+      "canvasCourseId": 789,
+      "courseId": "course-uuid",
+      "courseName": "데이터구조",
+      "title": "중간고사 프로젝트",
+      "description": "Spring Boot 프로젝트를 작성하세요...",
+      "dueAt": "2025-11-20T23:59:59Z",
+      "pointsPossible": 100.0
+    },
+    {
+      "assignmentId": "uuid-2345-6789",
+      "canvasAssignmentId": 123457,
+      "canvasCourseId": 790,
+      "courseId": "course-uuid-2",
+      "courseName": "알고리즘",
+      "title": "기말고사 프로젝트",
+      "description": "정렬 알고리즘 구현...",
+      "dueAt": "2025-12-15T23:59:59Z",
+      "pointsPossible": 150.0
+    }
+  ]
 }
 ```
 
 **필드 설명**:
-- `eventType`: 이벤트 타입 (ASSIGNMENT_CREATED, ASSIGNMENT_UPDATED, ASSIGNMENT_DELETED)
-- `assignmentId`: Course-Service의 Assignment UUID
+- `eventType`: `USER_ASSIGNMENTS_CREATED` (사용자별 assignments batch)
 - `cognitoSub`: 사용자 Cognito Sub (글로벌 식별자)
-- `canvasAssignmentId`: Canvas API의 assignment ID
-- `canvasCourseId`: Canvas API의 course ID
-- `title`: 과제 제목
-- `description`: 과제 설명 (LLM 분석용)
-- `dueAt`: 마감일시 (ISO 8601)
-- `pointsPossible`: 배점
-- `courseId`: Course-Service의 Course UUID
-- `courseName`: 과목명 (일정 표시용)
+- `syncedAt`: 동기화 완료 시각 (ISO 8601)
+- `assignments`: 해당 사용자의 모든 enabled course assignments 배열
+  - `assignmentId`: Course-Service의 Assignment UUID
+  - `canvasAssignmentId`: Canvas API의 assignment ID
+  - `canvasCourseId`: Canvas API의 course ID
+  - `courseId`: Course-Service의 Course UUID
+  - `courseName`: 과목명 (일정 제목 및 카테고리 생성용)
+  - `title`: 과제 제목
+  - `description`: 과제 설명 (LLM 분석용)
+  - `dueAt`: 마감일시 (ISO 8601, null이면 schedule 생성 스킵)
+  - `pointsPossible`: 배점
+
+**발행 시점**: Course-Service가 CANVAS_SYNC_COMPLETED 처리 완료 후, enabled enrollment별로 그룹핑하여 사용자당 1개 발행
+
+**효율성**:
+- 401개 assignments, 10명 사용자 → 기존 4,010개 → **10개 메시지** (99.75% 감소)
 
 ## Phase 1: 기본 과제 → 일정 변환
 
@@ -126,7 +164,9 @@ Lambda → SQS → Course-Service
    - AssignmentToScheduleConverter: 변환 로직
    - Schedule 생성 (start_time, end_time, source=CANVAS)
 
-### 변환 규칙 (Phase 1)
+### 변환 규칙
+
+#### Phase 1.0 (기본)
 
 **Assignment → Schedule 매핑**:
 ```
@@ -138,23 +178,87 @@ Assignment:
 ↓ 변환
 
 Schedule:
-  - title: "[데이터구조] 중간고사 프로젝트"
-  - start_time: "2025-11-20T23:00:00Z" (dueAt - 1시간)
-  - end_time: "2025-11-20T23:59:59Z" (dueAt)
+  - title: "중간고사 프로젝트" (과제 원본 제목)
+  - start_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - end_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - is_all_day: false
   - source: CANVAS
-  - category_id: [Canvas 기본 카테고리]
+  - source_id: "canvas-assignment-123456-user-cognito-sub"
+  - category_id: [Canvas 기본 카테고리 - 모든 과목 공통]
   - cognito_sub: "abc-123-def-456"
-  - canvas_assignment_id: 123456 (외래키)
 ```
 
-**기본 시간 설정**:
-- `start_time`: `dueAt - 1시간` (제출 시간 확보)
-- `end_time`: `dueAt`
-- 시간대: UTC (Canvas API 기본값)
+#### Phase 1.1 (개선)
 
-**카테고리 전략**:
-- Phase 1: "Canvas 과제" 기본 카테고리 자동 생성
-- Phase 2: 과목별 카테고리 (사용자 설정 가능)
+**개선 사항**:
+1. **과목별 카테고리**: "Canvas" 하나 → 과목별 (예: "데이터구조", "알고리즘")
+2. **dueAt null 처리**: 마감일 없는 과제 처리
+3. **is_sync_enabled 필터링**: 비활성화된 과목은 Schedule 생성 안 함
+
+**Assignment → Schedule 매핑 (개선)**:
+```
+Assignment:
+  - title: "중간고사 프로젝트"
+  - dueAt: "2025-11-20T23:59:59Z"
+  - courseId: 10
+  - courseName: "데이터구조"
+
+↓ 변환
+
+Schedule:
+  - title: "중간고사 프로젝트" (과제 원본 제목)
+  - start_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - end_time: "2025-11-20T23:59:59Z" (dueAt 원본 시간 보존)
+  - is_all_day: false
+  - source: CANVAS
+  - source_id: "canvas-assignment-123456-user-cognito-sub"
+  - category_id: [과목별 카테고리 - "데이터구조"]
+  - cognito_sub: "abc-123-def-456"
+```
+
+**카테고리 생성 규칙**:
+```java
+// 과목별 카테고리 이름: 과목명 그대로 사용
+categoryName = courseName  // "데이터구조", "알고리즘" 등
+
+// 중복 방지: source_type + source_id로 식별
+source_type = "CANVAS_COURSE"
+source_id = courseId.toString()  // "10"
+
+// 사용자별 + 과목별 카테고리
+// 예: A학생의 "데이터구조", B학생의 "데이터구조" (별도 카테고리)
+```
+
+**dueAt null 처리**:
+- **CREATE 시**: dueAt이 null이면 일정 생성 건너뛰기
+  - 이유: 마감일 없는 과제는 캘린더에 표시하지 않음
+- **UPDATE 시**: dueAt이 null로 변경되면 기존 일정 삭제
+  - 이유: 마감일이 제거된 과제는 일정에서 제거
+
+**기본 시간 설정** (점 이벤트 - Point Event):
+- `is_all_day`: `false` (시간 정보 보존)
+- `start_time`: dueAt 원본 시간 (예: `2025-11-20T23:59:59Z`)
+- `end_time`: dueAt 원본 시간 (start와 동일)
+- 시간대: UTC (Canvas API 기본값)
+- 예시:
+  ```
+  dueAt: "2025-11-20T23:59:59Z"
+  → startTime: "2025-11-20T23:59:59Z"
+  → endTime: "2025-11-20T23:59:59Z" (동일)
+  ```
+
+**점 이벤트(Point Event)를 사용하는 이유**:
+- Canvas 과제는 "기간" 이벤트가 아닌 **마감 시점(deadline)**
+- 일부 과제는 정각이 아닌 의미있는 마감 시간을 가짐 (예: 14:30)
+- 백엔드는 정확한 시간 정보를 보존하고, 프론트엔드가 렌더링 방식 결정
+  - 프론트엔드는 점 이벤트를 하루 종일 이벤트처럼 표시하거나, 특정 시간 마커로 표시 가능
+- 의미 없는 00:00 시작 시간을 만들지 않아 데이터 무결성 유지
+
+**제목에 과목명을 포함하지 않는 이유**:
+- `category_id`에 이미 과목 정보가 연결되어 있음 (중복 방지)
+- 과목명은 Category 테이블에만 존재 (Single Source of Truth)
+- 프론트엔드가 Category 조인하여 표시 형식 결정 (예: "[과목명]", "과목명:", 아이콘 등)
+- 백엔드는 과제 원본 제목만 저장하여 데이터 정규화 유지
 
 ### 중복 처리
 
@@ -245,30 +349,67 @@ Parent Todo: "중간고사 프로젝트 - REST API 서버 구현"
 
 ```sql
 CREATE TABLE schedules (
-    id BINARY(16) PRIMARY KEY,
+    schedule_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     cognito_sub VARCHAR(255) NOT NULL,
+    group_id BIGINT,                     -- 그룹 일정 (NULL 가능)
+    category_id BIGINT NOT NULL,
     title VARCHAR(500) NOT NULL,
     description TEXT,
+    location VARCHAR(255),
     start_time DATETIME NOT NULL,
     end_time DATETIME NOT NULL,
-    location VARCHAR(255),
-    category_id BINARY(16) NOT NULL,
+    is_all_day BOOLEAN DEFAULT false,
+    status ENUM('TODO', 'IN_PROGRESS', 'DONE') DEFAULT 'TODO',
+    recurrence_rule VARCHAR(500),        -- iCal RRULE 형식
     source ENUM('CANVAS', 'GOOGLE', 'USER') NOT NULL,
-    canvas_assignment_id BIGINT UNIQUE,  -- Canvas 과제 연동 (NULL 가능)
-    google_event_id VARCHAR(255) UNIQUE, -- Google Calendar 연동 (NULL 가능)
+    source_id VARCHAR(500),              -- 외부 시스템 ID (예: "canvas-assignment-123-user-456")
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (category_id) REFERENCES categories(id),
+    FOREIGN KEY (category_id) REFERENCES categories(category_id),
+    FOREIGN KEY (group_id) REFERENCES groups(group_id),
     INDEX idx_cognito_sub (cognito_sub),
-    INDEX idx_canvas_assignment (canvas_assignment_id)
+    INDEX idx_source_id (source, source_id),
+    UNIQUE KEY uk_source_sourceid (source, source_id)  -- 중복 방지
 );
 ```
 
-**중요 컬럼**:
-- `canvas_assignment_id`: Course-Service의 Assignment.canvas_assignment_id와 매핑
+**중요 컬럼 (Phase 1.1 변경)**:
+- `source_id`: 외부 시스템 ID (Phase 1.1에서 `canvas_assignment_id` 대체)
+  - 형식: `"canvas-assignment-{canvasAssignmentId}-{cognitoSub}"`
+  - 이유: 동일 과제도 사용자별로 별도 일정 생성
 - `source`: CANVAS로 설정하여 자동 생성된 일정 구분
-- UNIQUE 제약조건으로 중복 생성 방지
+- UNIQUE 제약조건 (`source` + `source_id`)으로 중복 생성 방지
+
+### Categories 테이블 (Phase 1.1 개선)
+
+```sql
+CREATE TABLE categories (
+    category_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    cognito_sub VARCHAR(255) NOT NULL,
+    group_id BIGINT,                     -- 그룹 카테고리 (NULL 가능)
+    name VARCHAR(100) NOT NULL,
+    color VARCHAR(7) NOT NULL,           -- HEX 색상 코드
+    icon VARCHAR(50),
+    is_default BOOLEAN DEFAULT false,    -- 기본 카테고리 여부
+    source_type VARCHAR(50),             -- Phase 1.1: "CANVAS_COURSE" 등
+    source_id VARCHAR(255),              -- Phase 1.1: courseId 등
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (group_id) REFERENCES groups(group_id),
+    INDEX idx_cognito_sub (cognito_sub),
+    INDEX idx_source (source_type, source_id),
+    UNIQUE KEY uk_user_name (cognito_sub, name),           -- 사용자별 카테고리 이름 중복 방지
+    UNIQUE KEY uk_user_source (cognito_sub, source_type, source_id)  -- 사용자별 외부 소스 중복 방지
+);
+```
+
+**Phase 1.1 추가 컬럼**:
+- `source_type`: 외부 시스템 타입 (예: `"CANVAS_COURSE"`, `"GOOGLE_CALENDAR"`)
+- `source_id`: 외부 시스템 ID (예: courseId `"10"`)
+- 용도: 과목별 카테고리 자동 생성 및 중복 방지
+- 예: 사용자 A의 "데이터구조" 과목 → `{cognitoSub: "A", source_type: "CANVAS_COURSE", source_id: "10"}`
 
 ### Todos 테이블 (Phase 2)
 
@@ -376,7 +517,7 @@ python -m pytest tests/integration/test_assignment_to_schedule_integration.py -v
 
 ## 구현 체크리스트
 
-### Phase 1: 기본 과제 → 일정 변환 ✅
+### Phase 1.0: 기본 과제 → 일정 변환 ✅
 
 #### 인프라
 - [x] LocalStack: `courseservice-to-scheduleservice-assignments` 큐 생성
@@ -390,12 +531,14 @@ python -m pytest tests/integration/test_assignment_to_schedule_integration.py -v
 - [x] 단위 테스트: AssignmentEventPublisherTest
 
 #### Schedule-Service
-- [x] Schedules 테이블: `source`, `sourceId` 컬럼 추가 (canvas_assignment_id 대신)
+- [x] Schedules 테이블: `source`, `source_id` 컬럼 추가
 - [x] AssignmentListener: SQS 메시지 consume
-- [x] AssignmentEventDto: SQS 메시지 DTO (Course-Service와 동일)
-- [x] AssignmentService: 변환 로직 (AssignmentToScheduleConverter 역할)
-- [x] CategoryService: "Canvas 과제" 기본 카테고리 생성
-- [x] ScheduleService: Schedule 저장 로직 (기존 활용)
+- [x] AssignmentEventDto: SQS 메시지 DTO
+- [x] AssignmentService: 변환 로직
+- [x] CategoryService: "Canvas" 기본 카테고리 생성
+- [x] ScheduleService: Schedule 저장 로직
+- [ ] 점 이벤트 처리 (start=end=dueAt 원본, is_all_day=false) - **수정 필요**
+- [x] dueAt null 처리 (CREATE: 건너뛰기, UPDATE: 삭제)
 - [x] 단위 테스트: AssignmentServiceTest
 
 #### 통합 테스트
@@ -405,8 +548,59 @@ python -m pytest tests/integration/test_assignment_to_schedule_integration.py -v
 - [x] test_default_category_creation
 
 #### 문서
-- [x] 이 문서 업데이트 (구현 완료 표시)
+- [x] 이 문서 작성
 - [x] CLAUDE.md: Phase 1 완료 업데이트
+
+---
+
+### Phase 1.1: 과목별 카테고리 + dueAt null 처리 🔄
+
+#### 데이터 모델
+- [ ] Categories 테이블: `source_type`, `source_id` 컬럼 추가
+  - Migration 스크립트 작성
+  - UNIQUE KEY `uk_user_source (cognito_sub, source_type, source_id)`
+- [ ] Enrollments 테이블: `is_sync_enabled` 컬럼 추가 (Course-Service)
+
+#### Course-Service
+- [ ] AssignmentService: 활성화된 enrollment 학생들에게만 이벤트 발행
+  - `publishAssignmentToScheduleEvents()` 수정
+  - `is_sync_enabled=true`인 enrollment만 필터링
+- [ ] AssignmentToScheduleEventDto: `courseId` 필드 추가 (카테고리 생성용)
+
+#### Schedule-Service
+- [ ] CategoryService:
+  - `getOrCreateCourseCategory(cognitoSub, courseId, courseName)` 메서드 추가
+  - source_type="CANVAS_COURSE", source_id=courseId로 중복 방지
+  - 카테고리 이름 = 과목명 (예: "데이터구조")
+  - 카테고리 색상 자동 할당 (과목별로 다른 색상)
+- [ ] AssignmentService:
+  - `createScheduleFromAssignment()`: 과목별 카테고리 사용
+  - dueAt null 처리 로직 (이미 구현됨 ✅)
+- [ ] CourseEventListener: `COURSE_DISABLED` 이벤트 처리
+  - 해당 과목의 모든 Schedule 삭제
+  - `scheduleRepository.deleteBySourceAndCognitoSubAndCategoryId()`
+- [ ] 단위 테스트:
+  - `test_createSchedule_courseCategory`
+  - `test_createSchedule_dueAtNull_skipsCreation` ✅
+  - `test_updateSchedule_dueAtNull_deletesSchedule` ✅
+  - `test_courseDisabled_deletesAllSchedules`
+
+#### LocalStack
+- [ ] `01-create-queues.sh`: `courseservice-to-scheduleservice-course-events` 큐 추가
+
+#### 환경변수
+- [ ] `.env.common`: 새 큐 이름 추가
+
+#### 통합 테스트
+- [ ] 과목별 카테고리 자동 생성 테스트
+- [ ] dueAt null 과제 일정 생성 안 됨 테스트
+- [ ] 과목 비활성화 시 해당 과목 Schedule 전체 삭제 테스트
+
+#### 문서
+- [ ] 이 문서 업데이트 (Phase 1.1 반영) ✅
+- [ ] canvas-sync.md 업데이트 ✅
+
+---
 
 ### Phase 2: 과제 → 할일 변환 (향후)
 - [ ] Todos 테이블: `schedule_id` FK 추가

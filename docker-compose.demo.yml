@@ -1,9 +1,9 @@
 # docker-compose.demo.yml - 데모 환경 (Persistent)
-# Usage: docker-compose -f docker-compose.demo.yml up --build
+# Usage: docker-compose -f docker-compose.demo.yml up
 #
 # 용도:
 # - 전체 시스템 데모 및 시연
-# - 소스 코드 기반 빌드 및 실행 (docker-compose.acceptance.yml 기반)
+# - Docker Hub 이미지 기반 실행 (solidcitadel/unisync-*)
 # - 영구 볼륨 사용 (데이터 유지)
 #
 # 환경변수:
@@ -72,9 +72,7 @@ services:
 
   # User Service
   user-service:
-    build:
-      context: ./app
-      dockerfile: backend/user-service/Dockerfile
+    image: solidcitadel/unisync-user-service:dev
     container_name: unisync-demo-user-service
     ports:
       - "8081:8081"
@@ -105,9 +103,7 @@ services:
 
   # Course Service
   course-service:
-    build:
-      context: ./app
-      dockerfile: backend/course-service/Dockerfile
+    image: solidcitadel/unisync-course-service:dev
     container_name: unisync-demo-course-service
     ports:
       - "8082:8082"
@@ -140,9 +136,7 @@ services:
 
   # Schedule Service
   schedule-service:
-    build:
-      context: ./app
-      dockerfile: backend/schedule-service/Dockerfile
+    image: solidcitadel/unisync-schedule-service:dev
     container_name: unisync-demo-schedule-service
     ports:
       - "8083:8083"
@@ -177,9 +171,7 @@ services:
 
   # API Gateway
   api-gateway:
-    build:
-      context: ./app
-      dockerfile: backend/api-gateway/Dockerfile
+    image: solidcitadel/unisync-api-gateway:dev
     container_name: unisync-demo-api-gateway
     ports:
       - "8080:8080"

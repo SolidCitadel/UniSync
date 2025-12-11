@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unisync.schedule.categories.dto.CategoryRequest;
 import com.unisync.schedule.categories.dto.CategoryResponse;
 import com.unisync.schedule.categories.exception.CategoryNotFoundException;
+import com.unisync.schedule.categories.model.CategorySourceType;
 import com.unisync.schedule.categories.service.CategoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -73,7 +74,7 @@ class CategoryControllerTest {
                         .build()
         );
 
-        given(categoryService.getCategoriesByUserId(COGNITO_SUB))
+        given(categoryService.getCategories(COGNITO_SUB, null, false, null))
                 .willReturn(categories);
 
         // When & Then
@@ -85,14 +86,14 @@ class CategoryControllerTest {
                 .andExpect(jsonPath("$[0].name").value("학업"))
                 .andExpect(jsonPath("$[1].name").value("Canvas"));
 
-        then(categoryService).should().getCategoriesByUserId(COGNITO_SUB);
+        then(categoryService).should().getCategories(COGNITO_SUB, null, false, null);
     }
 
     @Test
     @DisplayName("GET /v1/categories - 빈 목록")
     void getCategories_Empty() throws Exception {
         // Given
-        given(categoryService.getCategoriesByUserId(COGNITO_SUB))
+        given(categoryService.getCategories(COGNITO_SUB, null, false, null))
                 .willReturn(Collections.emptyList());
 
         // When & Then

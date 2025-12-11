@@ -23,7 +23,7 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 특정 기간의 일정 조회 (사용자)
     @Query("SELECT s FROM Schedule s WHERE s.cognitoSub = :cognitoSub " +
-           "AND s.startTime >= :startDate AND s.endTime <= :endDate " +
+           "AND s.startTime < :endDate AND s.endTime > :startDate " +
            "ORDER BY s.startTime")
     List<Schedule> findByCognitoSubAndDateRange(
         @Param("cognitoSub") String cognitoSub,
@@ -33,7 +33,7 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 특정 기간의 일정 조회 (그룹)
     @Query("SELECT s FROM Schedule s WHERE s.groupId = :groupId " +
-           "AND s.startTime >= :startDate AND s.endTime <= :endDate " +
+           "AND s.startTime < :endDate AND s.endTime > :startDate " +
            "ORDER BY s.startTime")
     List<Schedule> findByGroupIdAndDateRange(
         @Param("groupId") Long groupId,
@@ -43,6 +43,12 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 카테고리로 조회
     List<Schedule> findByCategoryIdAndCognitoSub(Long categoryId, String cognitoSub);
+
+    // 사용자 + 소스별 조회 (Canvas batch 정리용)
+    List<Schedule> findByCognitoSubAndSource(String cognitoSub, ScheduleSource source);
+
+    // 카테고리 기반 일정 삭제 (Phase 1.1: 과목 비활성화 시)
+    void deleteAllByCognitoSubAndCategoryId(String cognitoSub, Long categoryId);
 
     // 상태로 조회
     List<Schedule> findByCognitoSubAndStatus(String cognitoSub, ScheduleStatus status);
@@ -58,6 +64,18 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     // 그룹 일정 존재 여부
     boolean existsByGroupId(Long groupId);
+
+    // 여러 그룹 일정 조회
+    List<Schedule> findByGroupIdIn(List<Long> groupIds);
+
+    @Query("SELECT s FROM Schedule s WHERE s.groupId IN :groupIds " +
+           "AND s.startTime < :endDate AND s.endTime > :startDate " +
+           "ORDER BY s.startTime")
+    List<Schedule> findByGroupIdsAndDateRange(
+        @Param("groupIds") List<Long> groupIds,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate
+    );
 
     // 여러 사용자 + 그룹의 일정 조회 (일정 조율용)
     @Query("SELECT s FROM Schedule s WHERE " +

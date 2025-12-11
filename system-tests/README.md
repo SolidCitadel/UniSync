@@ -12,13 +12,14 @@ UniSync 시스템 테스트 (docker-compose.acceptance.yml 기반)
 ```
 system-tests/
 ├── conftest.py                          # 공통 fixtures + 실행 순서 강제
-├── infra/                               # 1단계: 인프라 검증 (10개)
+├── infra/                               # 1단계: 인프라 검증 (12개)
 │   └── test_infrastructure.py
-├── component/                           # 2단계: 개별 서비스 API 검증 (54개)
+├── component/                           # 2단계: 개별 서비스 API 검증 (81개)
 │   ├── api_gateway/
 │   │   └── test_auth.py                 # JWT 인증, 공개 엔드포인트
 │   ├── course_service/
 │   │   ├── test_course_api.py           # 과목/과제 조회
+│   │   ├── test_enrollment_internal_api.py # 내부 enrollment API (동기화 활성 조회)
 │   │   └── test_sync_api.py             # Canvas 동기화 트리거
 │   ├── schedule_service/
 │   │   ├── test_schedule_api.py         # 일정 기본 API
@@ -30,23 +31,25 @@ system-tests/
 │       ├── test_profile_api.py          # 사용자 프로필, 연동 상태
 │       ├── test_friend_api.py           # 친구 관리 API
 │       └── test_group_api.py            # 그룹 관리 API
-├── integration/                         # 3단계: 서비스 간 연동 검증
+├── integration/                         # 3단계: 서비스 간 연동 검증 (20개)
 │   ├── user_to_lambda/                  # User-Service → Lambda
 │   │   └── test_canvas_sync_trigger.py  # 동기화 API → Lambda 호출
 │   ├── lambda_to_course/                # Lambda → Course-Service
 │   │   ├── test_canvas_sync.py
-│   │   └── test_assignment_event_flow.py
+│   │   ├── test_assignment_event_flow.py
+│   │   └── test_disabled_enrollments.py # 활성 수강 없을 때 스킵
 │   └── course_to_schedule/              # Course-Service → Schedule-Service
 │       └── test_assignment_to_schedule.py
-└── scenarios/                           # 4단계: E2E 사용자 시나리오
+└── scenarios/                           # 4단계: E2E 사용자 시나리오 (16개)
     ├── test_full_user_journey.py        # 전체 사용자 여정
     ├── test_todo_journey.py             # Todo 관리 워크플로우
     ├── test_category_management.py      # 카테고리 관리 워크플로우
     ├── test_friend_management.py        # 친구 관리 워크플로우
-    └── test_group_management.py         # 그룹 관리 워크플로우
+    ├── test_group_management.py         # 그룹 관리 워크플로우
+    └── test_sync_disable_flow.py        # 비활성 과목 동기화 차단 시나리오
 ```
 
-**총 테스트 수: 86개** (Unit Tests 156개 별도)
+**총 테스트 수: 129개** (Unit Tests 별도 156개 유지)
 
 ## 실행 순서
 
@@ -189,6 +192,40 @@ integration/
 **장점**:
 - 데이터 흐름 방향이 명확함
 - 어떤 서비스 간 통합인지 즉시 파악 가능
+
+### Scenario Test 원칙
+
+Scenario Tests (`system-tests/scenarios/`)는 실제 사용자가 프론트엔드에서 수행하는 전체 플로우를 검증합니다.
+
+**핵심 원칙**:
+- **DB 직접 조작 금지**: DB fixture (`mysql_connection`, `schedule_db_connection` 등) 사용 금지. 모든 데이터는 API를 통해서만 생성/조회/검증
+- **Gateway 엔드포인트만 사용**: 프론트엔드가 실제로 호출할 수 있는 API Gateway를 통한 엔드포인트만 사용 (내부 서비스 직접 호출 금지)
+- **실제 사용자 플로우**: 사용자가 UI에서 수행하는 동작과 동일한 순서로 테스트
+
+**예시**:
+```python
+# ✅ Good - API만 사용
+def test_full_user_journey_via_gateway():
+    # API Gateway를 통한 회원가입
+    response = requests.post(f"{API_GATEWAY_URL}/v1/auth/signup", ...)
+
+    # API Gateway를 통한 토큰 등록
+    response = requests.post(f"{API_GATEWAY_URL}/v1/credentials", ...)
+
+    # API Gateway를 통한 동기화
+    response = requests.post(f"{API_GATEWAY_URL}/v1/sync/canvas", ...)
+
+    # API Gateway를 통한 일정 조회
+    response = requests.get(f"{API_GATEWAY_URL}/v1/schedules", ...)
+
+# ❌ Bad - DB 직접 조작
+def test_full_user_journey_with_db():
+    # DB에 직접 사용자 생성 (금지)
+    cursor.execute("INSERT INTO users ...")
+
+    # DB에서 직접 조회 (금지)
+    cursor.execute("SELECT * FROM schedules ...")
+```
 
 ### Fixture 사용
 

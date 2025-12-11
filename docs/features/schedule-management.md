@@ -57,17 +57,25 @@ UniSync는 학업 일정 관리를 위한 시스템으로, 사용자가 일정�
 **정의**: 완료해야 하는 작업 또는 과제
 
 **특징**:
-- 시작일(`start_date`)과 마감일(`due_date`)을 **모두 필수**로 가짐 (간트차트 표시를 위해 필요)
+- 시작일(`start_date`)과 목표 완료일(`due_date`)을 **모두 필수**로 가짐 (간트차트 표시를 위해 필요)
+- 실제 최종 마감일(`deadline`) 선택적 지원 (Canvas 과제 제출 마감일 등)
 - 상태(`status`): TODO, IN_PROGRESS, DONE
 - 우선순위(`priority`): LOW, MEDIUM, HIGH, URGENT
 - 서브태스크(`subtasks`) 지원
 - 진행률(`progress_percentage`) 추적 가능
 - 일정 기반 할일인 경우 `schedule_id`로 연결 (Canvas 과제 일정 포함)
 
+**날짜 필드 구분**:
+- `start_date`: 작업 시작 가능한 날짜
+- `due_date`: 사용자가 계획한 목표 완료일 (간트차트에 표시됨)
+- `deadline`: 실제 최종 마감일 (hard deadline, 예: 과제 제출 마감일 11/20 23:59)
+  - deadline을 먼저 정하고, 그 안에서 start_date ~ due_date를 조정하는 방식
+
 **예시**:
-- 11/10-11/15 중간고사 프로젝트 (서브태스크: 요구사항 분석, 설계, 구현, 테스트)
-- 11/12-11/13 과제 보고서 작성
-- 11/18-11/18 논문 리뷰 제출
+- 11/10-11/15 중간고사 프로젝트 (deadline: 11/20 23:59)
+  - 서브태스크: 요구사항 분석, 설계, 구현, 테스트
+- 11/12-11/13 과제 보고서 작성 (deadline: 11/15 18:00)
+- 11/18-11/18 논문 리뷰 제출 (deadline: 11/18 23:59)
 
 ### 2.3 카테고리(Category)
 **정의**: 일정과 할일을 분류하는 체계
@@ -177,7 +185,8 @@ CREATE TABLE todos (
     description TEXT,
 
     start_date DATE NOT NULL,                          -- 시작일 (필수, 간트차트 표시용)
-    due_date DATE NOT NULL,                            -- 마감일 (필수)
+    due_date DATE NOT NULL,                            -- 목표 완료일 (필수, 사용자가 계획한 완료 날짜)
+    deadline TIMESTAMP,                                -- 실제 최종 마감일 (hard deadline, Canvas 과제 제출 마감일 등)
 
     status ENUM('TODO', 'IN_PROGRESS', 'DONE') DEFAULT 'TODO',
     priority ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT') DEFAULT 'MEDIUM',
@@ -203,11 +212,13 @@ CREATE TABLE todos (
     INDEX idx_status (status),
     INDEX idx_priority (priority),
     INDEX idx_due_date (due_date),
+    INDEX idx_deadline (deadline),
     INDEX idx_parent_todo_id (parent_todo_id),
     INDEX idx_schedule_id (schedule_id),
     CHECK ((user_id IS NOT NULL) OR (group_id IS NOT NULL)),  -- 개인 또는 그룹 중 하나는 필수
     CHECK (progress_percentage BETWEEN 0 AND 100),
-    CHECK (start_date <= due_date)                     -- 시작일은 마감일보다 빠르거나 같아야 함
+    CHECK (start_date <= due_date),                    -- 시작일은 목표 완료일보다 빠르거나 같아야 함
+    CHECK (deadline IS NULL OR due_date <= deadline)   -- 목표 완료일은 최종 마감일보다 빠르거나 같아야 함
 );
 ```
 
@@ -353,9 +364,113 @@ Schedule-Service가 SQS 구독
 ### 5.1 Schedule-Service API
 
 #### 일정(Schedule) 관리
-- `GET /api/v1/schedules` - 일정 목록 조회
-  - Query Params: `startDate`, `endDate`, `categoryId`, `groupId`, `status`
+- `GET /api/v1/schedules` - 일정 목록 조회 (개인/그룹/통합)
+  - **개인 일정만 조회**: 파라미터 없이 호출
+  - **특정 그룹 일정 조회**: `?groupId=123` ✅ 구현 완료
+  - **개인 + 모든 그룹 일정 통합 조회**: `?includeGroups=true` ✅ 구현 완료
+  - Query Params:
+    - `groupId` (선택): 특정 그룹의 일정 조회 (이 파라미터가 있으면 includeGroups는 무시됨)
+    - `includeGroups` (선택): true이면 개인 + 사용자가 속한 모든 그룹의 일정 통합 조회
+    - `startDate` (선택): 시작 날짜 필터 (ISO 8601)
+    - `endDate` (선택): 종료 날짜 필터 (ISO 8601)
+    - `categoryId` (선택): 카테고리 필터
+    - `status` (선택): 상태 필터
   - Response: 캘린더 뷰용 일정 목록
+  - **예시**:
+    ```bash
+    # 개인 일정만
+    GET /api/v1/schedules
+
+    # 특정 그룹 일정 (✅ 구현 완료)
+    GET /api/v1/schedules?groupId=123
+
+    # 개인 + 모든 그룹 일정 통합 (✅ 구현 완료)
+    GET /api/v1/schedules?includeGroups=true
+
+    # 날짜 범위 필터링
+    GET /api/v1/schedules?groupId=123&startDate=2025-12-01T00:00:00&endDate=2025-12-31T23:59:59
+
+    # includeGroups + status 필터
+    GET /api/v1/schedules?includeGroups=true&status=DONE
+    ```
+
+- `GET /api/v1/schedules/{scheduleId}` - 일정 상세 조회
+  - Response:
+    ```json
+    {
+      "scheduleId": 1,
+      "title": "중간고사 프로젝트 발표",
+      "description": "데이터베이스 설계 발표",
+      "startTime": "2025-11-20T14:00:00",
+      "endTime": "2025-11-20T16:00:00",
+      "isAllDay": false,
+      "location": "공학관 301호",
+      "status": "TODO",
+      "categoryId": 1,
+      "groupId": null,
+      "recurrenceRule": null,
+      "source": "USER",
+      "sourceId": null,
+      "createdAt": "2025-11-09T10:00:00",
+      "updatedAt": "2025-11-09T10:00:00",
+      "todos": [  // 이 일정과 연결된 할일 목록 (schedule_id 참조)
+        {
+          "todoId": 10,
+          "title": "중간고사 프로젝트",
+          "description": "데이터베이스 설계 및 구현",
+          "startDate": "2025-11-10",
+          "dueDate": "2025-11-18",
+          "deadline": "2025-11-20T23:59:00",
+          "status": "IN_PROGRESS",
+          "priority": "HIGH",
+          "progressPercentage": 60,
+          "categoryId": 1,
+          "scheduleId": 1,
+          "parentTodoId": null,
+          "isAiGenerated": false,
+          "subtasks": [  // 서브태스크 목록
+            {
+              "todoId": 11,
+              "title": "요구사항 분석",
+              "startDate": "2025-11-10",
+              "dueDate": "2025-11-12",
+              "deadline": null,
+              "status": "DONE",
+              "priority": "HIGH",
+              "progressPercentage": 100,
+              "parentTodoId": 10,
+              "subtasks": []
+            },
+            {
+              "todoId": 12,
+              "title": "데이터베이스 설계",
+              "startDate": "2025-11-13",
+              "dueDate": "2025-11-15",
+              "deadline": null,
+              "status": "IN_PROGRESS",
+              "priority": "HIGH",
+              "progressPercentage": 50,
+              "parentTodoId": 10,
+              "subtasks": []
+            },
+            {
+              "todoId": 13,
+              "title": "구현 및 테스트",
+              "startDate": "2025-11-16",
+              "dueDate": "2025-11-18",
+              "deadline": null,
+              "status": "TODO",
+              "priority": "HIGH",
+              "progressPercentage": 0,
+              "parentTodoId": 10,
+              "subtasks": []
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  - **중요**: `todos` 배열에는 이 일정과 연결된 모든 할일(`schedule_id = {scheduleId}`)과 각 할일의 서브태스크(`subtasks`)가 포함됩니다.
 
 - `POST /api/v1/schedules` - 일정 생성
   - Request Body:
@@ -392,9 +507,33 @@ Schedule-Service가 SQS 구독
   - Response: 생성된 Todo ID
 
 #### 할일(Todo) 관리
-- `GET /api/v1/todos` - 할일 목록 조회
-  - Query Params: `startDate`, `endDate`, `categoryId`, `groupId`, `status`, `priority`
+- `GET /api/v1/todos` - 할일 목록 조회 (개인/그룹/통합)
+  - **개인 할일만 조회**: 파라미터 없이 호출
+  - **특정 그룹 할일 조회**: `?groupId=123`
+  - **개인 + 모든 그룹 할일 통합 조회**: `?includeGroups=true`
+  - Query Params:
+    - `groupId` (선택): 특정 그룹의 할일 조회 (이 파라미터가 있으면 includeGroups는 무시됨)
+    - `includeGroups` (선택): true이면 개인 + 사용자가 속한 모든 그룹의 할일 통합 조회
+    - `startDate` (선택): 시작일 필터
+    - `endDate` (선택): 마감일 필터
+    - `categoryId` (선택): 카테고리 필터
+    - `status` (선택): 상태 필터 (TODO, IN_PROGRESS, DONE)
+    - `priority` (선택): 우선순위 필터 (LOW, MEDIUM, HIGH, URGENT)
   - Response: 칸반보드/간트차트용 할일 목록
+  - **예시**:
+    ```bash
+    # 개인 할일만
+    GET /api/v1/todos
+
+    # 특정 그룹 할일
+    GET /api/v1/todos?groupId=123
+
+    # 개인 + 모든 그룹 할일 통합
+    GET /api/v1/todos?includeGroups=true
+
+    # includeGroups + 상태 필터
+    GET /api/v1/todos?includeGroups=true&status=IN_PROGRESS
+    ```
 
 - `POST /api/v1/todos` - 할일 생성
   - Request Body:
@@ -402,11 +541,32 @@ Schedule-Service가 SQS 구독
     {
       "title": "중간고사 프로젝트",
       "description": "데이터베이스 설계 및 구현",
-      "startDate": "2025-11-10",  // 필수
-      "dueDate": "2025-11-20",    // 필수
+      "startDate": "2025-11-10",      // 필수: 작업 시작일
+      "dueDate": "2025-11-18",        // 필수: 목표 완료일
+      "deadline": "2025-11-20T23:59:00",  // 선택: 실제 최종 마감일 (ISO 8601)
       "categoryId": 1,
       "priority": "HIGH",
       "scheduleId": 123  // 일정 기반 할일인 경우 (Canvas 과제 일정 포함)
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "todoId": 1,
+      "title": "중간고사 프로젝트",
+      "description": "데이터베이스 설계 및 구현",
+      "startDate": "2025-11-10",
+      "dueDate": "2025-11-18",
+      "deadline": "2025-11-20T23:59:00",
+      "status": "TODO",
+      "priority": "HIGH",
+      "progressPercentage": 0,
+      "categoryId": 1,
+      "scheduleId": 123,
+      "parentTodoId": null,
+      "isAiGenerated": false,
+      "createdAt": "2025-11-09T10:00:00",
+      "updatedAt": "2025-11-09T10:00:00"
     }
     ```
 
@@ -426,8 +586,29 @@ Schedule-Service가 SQS 구독
   - Request Body: `{ "title": "요구사항 분석", "dueDate": "2025-11-12" }`
 
 #### 카테고리 관리
-- `GET /api/v1/categories` - 카테고리 목록 조회
-  - Query Params: `groupId` (선택)
+- `GET /api/v1/categories` - 카테고리 목록 조회 (개인/그룹/통합)
+  - **개인 카테고리만 조회**: 파라미터 없이 호출
+  - **특정 그룹 카테고리 조회**: `?groupId=123`
+  - **개인 + 모든 그룹 카테고리 통합 조회**: `?includeGroups=true`
+  - Query Params:
+    - `groupId` (선택): 특정 그룹의 카테고리 조회 (이 파라미터가 있으면 includeGroups는 무시됨)
+    - `includeGroups` (선택): true이면 개인 + 사용자가 속한 모든 그룹의 카테고리 통합 조회
+    - `sourceType` (선택): 카테고리 소스 타입 필터 (USER_CREATED, CANVAS_COURSE)
+  - Response: 카테고리 목록
+  - **예시**:
+    ```bash
+    # 개인 카테고리만
+    GET /api/v1/categories
+
+    # 특정 그룹 카테고리
+    GET /api/v1/categories?groupId=123
+
+    # 개인 + 모든 그룹 카테고리 통합
+    GET /api/v1/categories?includeGroups=true
+
+    # includeGroups + sourceType 필터
+    GET /api/v1/categories?includeGroups=true&sourceType=USER_CREATED
+    ```
 
 - `POST /api/v1/categories` - 카테고리 생성
   - Request Body:
@@ -540,6 +721,9 @@ Schedule-Service가 SQS 구독
 - [x] DB 스키마 생성 (Schedules, Todos, Categories)
 - [x] JPA Entity 및 Repository 구현
 - [x] Schedule CRUD API 구현
+  - [x] 개인 일정 CRUD
+  - [x] 그룹 일정 CRUD (생성/수정/삭제 시 권한 검증)
+  - [x] 그룹 일정 목록 조회 (`GET /api/v1/schedules?groupId=123`)
 - [x] Todo CRUD API 구현
 - [x] Category CRUD API 구현
 - [x] 단위 테스트 작성

@@ -2,7 +2,7 @@ package com.unisync.schedule.assignment.listener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.unisync.schedule.assignment.dto.AssignmentToScheduleMessage;
+import com.unisync.schedule.assignment.dto.UserAssignmentsBatchMessage;
 import com.unisync.schedule.assignment.service.AssignmentService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -34,13 +34,13 @@ public class AssignmentEventListener {
     private final AssignmentService assignmentService;
     private final ObjectMapper objectMapper;
 
-    @Value("${aws.sqs.endpoint:}")
+    @Value("${aws.sqs.endpoint}")
     private String sqsEndpoint;
 
     @Value("${aws.region}")
     private String region;
 
-    @Value("${sqs.assignment-to-schedule-queue}")
+    @Value("${aws.sqs.queues.assignment-to-schedule}")
     private String queueName;
 
     private ScheduledExecutorService scheduler;
@@ -110,14 +110,14 @@ public class AssignmentEventListener {
     private void processMessage(String queueUrl, Message message) {
         try {
             // JSON 파싱
-            AssignmentToScheduleMessage event = objectMapper.readValue(
-                    message.body(), AssignmentToScheduleMessage.class);
+            UserAssignmentsBatchMessage event = objectMapper.readValue(
+                    message.body(), UserAssignmentsBatchMessage.class);
 
-            log.info("Processing message: eventType={}, assignmentId={}, cognitoSub={}",
-                    event.getEventType(), event.getAssignmentId(), event.getCognitoSub());
+            log.info("Processing assignment batch: eventType={}, cognitoSub={}, assignments={}",
+                    event.getEventType(), event.getCognitoSub(),
+                    event.getAssignments() != null ? event.getAssignments().size() : 0);
 
-            // Assignment 이벤트 처리
-            assignmentService.processAssignmentEvent(event);
+            assignmentService.processAssignmentsBatch(event);
 
             // 처리 완료 후 메시지 삭제
             deleteMessage(queueUrl, message.receiptHandle());

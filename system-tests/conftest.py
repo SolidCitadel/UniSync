@@ -24,6 +24,17 @@ load_dotenv(project_root / '.env.local')  # 비밀 + localhost
 load_dotenv(project_root / '.env.common')  # compose 환경으로 덮어씌움
 load_dotenv(project_root / '.env.acceptance', override=True)  # 향후 추가 대비
 
+# 호스트에서 docker-compose 포트 포워딩을 이용해 DB에 연결하기 위한 고정 값
+TEST_DB_HOST = "127.0.0.1"
+TEST_DB_PORT = 3307  # docker-compose.acceptance.yml에서 3307:3306 포워딩
+TEST_DB_USER = os.environ.get("MYSQL_USER", "unisync")
+TEST_DB_PASSWORD = os.environ.get("MYSQL_PASSWORD", "unisync_password")
+TEST_DB_NAMES = {
+    "user": os.environ.get("USER_SERVICE_DB_NAME", "user_db"),
+    "course": os.environ.get("COURSE_SERVICE_DB_NAME", "course_db"),
+    "schedule": os.environ.get("SCHEDULE_SERVICE_DB_NAME", "schedule_db"),
+}
+
 
 # =============================================================================
 # 테스트 실행 순서 강제
@@ -168,11 +179,11 @@ def user_service_url() -> str:
 def mysql_connection():
     """MySQL 연결 fixture (Course-Service DB)"""
     max_retries = 30
-    host = os.environ['MYSQL_HOST']
-    port = int(os.environ['MYSQL_PORT'])
-    user = os.environ['MYSQL_USER']
-    password = os.environ['MYSQL_PASSWORD']
-    database = os.environ['COURSE_SERVICE_DB_NAME']
+    host = TEST_DB_HOST
+    port = TEST_DB_PORT
+    user = TEST_DB_USER
+    password = TEST_DB_PASSWORD
+    database = TEST_DB_NAMES["course"]
 
     for i in range(max_retries):
         try:
@@ -196,11 +207,11 @@ def mysql_connection():
 def schedule_db_connection():
     """MySQL 연결 fixture (Schedule-Service DB)"""
     max_retries = 30
-    host = os.environ['MYSQL_HOST']
-    port = int(os.environ['MYSQL_PORT'])
-    user = os.environ['MYSQL_USER']
-    password = os.environ['MYSQL_PASSWORD']
-    database = os.environ['SCHEDULE_SERVICE_DB_NAME']
+    host = TEST_DB_HOST
+    port = TEST_DB_PORT
+    user = TEST_DB_USER
+    password = TEST_DB_PASSWORD
+    database = TEST_DB_NAMES["schedule"]
 
     for i in range(max_retries):
         try:
@@ -224,11 +235,11 @@ def schedule_db_connection():
 def user_db_connection():
     """MySQL 연결 fixture (User-Service DB)"""
     max_retries = 30
-    host = os.environ['MYSQL_HOST']
-    port = int(os.environ['MYSQL_PORT'])
-    user = os.environ['MYSQL_USER']
-    password = os.environ['MYSQL_PASSWORD']
-    database = os.environ['USER_SERVICE_DB_NAME']
+    host = TEST_DB_HOST
+    port = TEST_DB_PORT
+    user = TEST_DB_USER
+    password = TEST_DB_PASSWORD
+    database = TEST_DB_NAMES["user"]
 
     for i in range(max_retries):
         try:
@@ -260,6 +271,7 @@ def clean_database(mysql_connection):
     # 테스트 전: 기존 데이터 삭제
     cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
     cursor.execute("TRUNCATE TABLE assignments")
+    cursor.execute("TRUNCATE TABLE enrollments")
     cursor.execute("TRUNCATE TABLE courses")
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
     mysql_connection.commit()
@@ -269,6 +281,7 @@ def clean_database(mysql_connection):
     # 테스트 후: 생성된 데이터 삭제
     cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
     cursor.execute("TRUNCATE TABLE assignments")
+    cursor.execute("TRUNCATE TABLE enrollments")
     cursor.execute("TRUNCATE TABLE courses")
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
     mysql_connection.commit()

@@ -22,6 +22,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
@@ -39,6 +40,18 @@ public class GlobalExceptionHandler {
         log.error("중복 사용자 에러: {}", e.getMessage());
         ErrorResponse errorResponse = new ErrorResponse("DUPLICATE_USER", e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    /**
+     * 명시적으로 던진 ResponseStatusException 처리
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException e) {
+        HttpStatus status = HttpStatus.resolve(e.getStatusCode().value());
+        HttpStatus effectiveStatus = status != null ? status : HttpStatus.BAD_REQUEST;
+        log.error("요청 오류: {}", e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse("BAD_REQUEST", e.getReason() != null ? e.getReason() : "Invalid request");
+        return ResponseEntity.status(effectiveStatus).body(errorResponse);
     }
 
     /**

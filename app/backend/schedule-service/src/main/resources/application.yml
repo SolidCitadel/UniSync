@@ -23,14 +23,14 @@ spring:
 
 # AWS SQS Configuration
 aws:
+  region: ${AWS_REGION:ap-northeast-2}
   sqs:
     endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
-    region: ${AWS_REGION:ap-northeast-2}
     queues:
-      assignment-events: ${SQS_ASSIGNMENT_EVENTS_QUEUE:unisync-assignment-events}
-      task-creation: ${SQS_TASK_CREATION_QUEUE:unisync-task-creation}
+      assignment-to-schedule: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE:}
+      course-to-schedule: ${SQS_COURSE_TO_SCHEDULE_QUEUE:}
 
-# SQS Queues (absolute queue URLs)
+# SQS Queues (absolute queue URLs - terraform style)
 sqs:
   assignment-to-schedule-queue: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE:}
 

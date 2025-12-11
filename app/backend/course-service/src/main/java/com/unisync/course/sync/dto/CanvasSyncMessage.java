@@ -27,6 +27,9 @@ public class CanvasSyncMessage {
     @JsonProperty("syncedAt")
     private String syncedAt;
 
+    @JsonProperty("syncMode")
+    private String syncMode;
+
     // 배열 형식 (CANVAS_SYNC_COMPLETED)
     @JsonProperty("courses")
     private List<CourseData> courses;
