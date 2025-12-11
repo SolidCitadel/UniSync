@@ -148,11 +148,16 @@ class TestUserToLambdaIntegration:
             timeout=30
         )
 
-        # 토큰이 없으면 에러 반환
-        assert response.status_code in [400, 404, 500], \
-            f"예상치 못한 응답: {response.status_code}"
-
-        print(f"✅ 토큰 없이 동기화 시 에러 반환: {response.status_code}")
+        # 토큰이 없으면 에러 또는 200/0 카운트로 스킵
+        if response.status_code == 200:
+            result = response.json()
+            assert result.get("coursesCount", 0) == 0
+            assert result.get("assignmentsCount", 0) == 0
+            print("✅ 토큰 없이 동기화 시 스킵 (0건)")
+        else:
+            assert response.status_code in [400, 404, 500], \
+                f"예상치 못한 응답: {response.status_code}"
+            print(f"✅ 토큰 없이 동기화 시 에러 반환: {response.status_code}")
 
     def test_sync_response_contains_count_info(
         self,

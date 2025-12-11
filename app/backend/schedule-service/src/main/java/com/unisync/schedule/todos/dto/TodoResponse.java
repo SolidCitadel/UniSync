@@ -43,6 +43,9 @@ public class TodoResponse {
     @Schema(description = "마감 날짜", example = "2025-04-15")
     private LocalDate dueDate;
 
+    @Schema(description = "최종 마감일시", example = "2025-04-15T23:59:00")
+    private LocalDateTime deadline;
+
     @Schema(description = "할일 상태", example = "TODO")
     private TodoStatus status;
 
@@ -77,6 +80,7 @@ public class TodoResponse {
                 .description(todo.getDescription())
                 .startDate(todo.getStartDate())
                 .dueDate(todo.getDueDate())
+                .deadline(todo.getDeadline())
                 .status(todo.getStatus())
                 .priority(todo.getPriority())
                 .progressPercentage(todo.getProgressPercentage())

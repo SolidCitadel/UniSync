@@ -73,7 +73,7 @@
 ```json
 {
   "groupId": 1,
-  "userIds": [123, 456, 789],           // 선택된 멤버 (optional, null이면 전체 그룹 멤버)
+  "userIds": ["abc-123-def", "xyz-456-ghi", "pqr-789-stu"],  // 선택된 멤버 cognitoSub 목록 (optional, null이면 전체 그룹 멤버)
   "startDate": "2025-11-25",
   "endDate": "2025-11-30",
   "minDurationMinutes": 120,            // 최소 지속 시간 (분)
@@ -83,10 +83,12 @@
 }
 ```
 
+**참고**: `userIds` 필드명이지만 실제로는 **cognitoSub 문자열 배열**입니다.
+
 ### 2.2 알고리즘 설계
 
 #### Step 1: 대상 멤버 결정
-- `userIds`가 주어지면: 해당 멤버들의 일정만 조회
+- `userIds`가 주어지면: 해당 멤버들(cognitoSub)의 일정만 조회
 - `userIds`가 null: 그룹 전체 멤버의 일정 조회
 - **권한 확인**: 요청자가 그룹 멤버인지 검증
 
@@ -94,14 +96,14 @@
 ```sql
 SELECT start_time, end_time
 FROM schedules
-WHERE (user_id IN (123, 456, 789) OR group_id = 1)
+WHERE (cognito_sub IN ('abc-123-def', 'xyz-456-ghi', 'pqr-789-stu') OR group_id = 1)
   AND start_time >= '2025-11-25 00:00:00'
   AND end_time <= '2025-11-30 23:59:59'
 ORDER BY start_time;
 ```
 
 **수집 대상**:
-- 개인 일정 (`user_id IN (...)`)
+- 개인 일정 (`cognito_sub IN (...)`)
 - 그룹 일정 (`group_id = 1`) - 이미 확정된 그룹 일정도 포함
 
 #### Step 3: 시간 블록 병합 (Interval Merging)
@@ -247,7 +249,7 @@ POST /api/v1/schedules/find-free-slots
 ```json
 {
   "groupId": 1,
-  "userIds": [123, 456, 789],
+  "userIds": ["abc-123-def", "xyz-456-ghi", "pqr-789-stu"],
   "startDate": "2025-11-25",
   "endDate": "2025-11-30",
   "minDurationMinutes": 120,
@@ -259,7 +261,7 @@ POST /api/v1/schedules/find-free-slots
 
 **필드 설명**:
 - `groupId` (required): 그룹 ID (권한 검증용)
-- `userIds` (optional): 선택된 멤버 목록 (null이면 전체 그룹 멤버)
+- `userIds` (optional): 선택된 멤버 cognitoSub 목록 (null이면 전체 그룹 멤버)
 - `startDate` (required): 검색 시작일 (YYYY-MM-DD)
 - `endDate` (required): 검색 종료일 (YYYY-MM-DD)
 - `minDurationMinutes` (required): 최소 지속 시간 (분)
@@ -362,7 +364,7 @@ POST /api/v1/schedules/check-conflicts
   "hasConflict": true,
   "conflicts": [
     {
-      "userId": 123,
+      "cognitoSub": "abc-123-def",
       "userName": "Alice",
       "schedule": {
         "scheduleId": 456,
@@ -412,7 +414,7 @@ POST /api/v1/schedules/check-conflicts
 // types.ts
 interface FreeSlotsRequest {
   groupId: number;
-  userIds?: number[];
+  userIds?: string[];  // cognitoSub 배열
   startDate: string;
   endDate: string;
   minDurationMinutes: number;
@@ -557,7 +559,7 @@ public ScheduleResponse createSchedule(ScheduleCreateRequest request, String cog
       "startTime": "2025-11-25T14:00:00Z",
       "endTime": "2025-11-25T16:00:00Z",
       "createdBy": {
-        "userId": 456,
+        "cognitoSub": "abc-456-def",
         "name": "Alice",
         "role": "OWNER"
       }
@@ -616,13 +618,13 @@ public class ScheduleCoordinationService {
         groupMemberClient.checkMembership(request.getGroupId(), cognitoSub);
 
         // 2. 멤버 결정
-        List<Long> userIds = request.getUserIds() != null
+        List<String> cognitoSubs = request.getUserIds() != null
             ? request.getUserIds()
-            : groupMemberClient.getGroupMemberUserIds(request.getGroupId());
+            : groupMemberClient.getGroupMemberCognitoSubs(request.getGroupId());
 
         // 3. 일정 조회 (개인 + 그룹)
-        List<Schedule> schedules = scheduleRepository.findByUserIdsOrGroupIdAndDateRange(
-            userIds, request.getGroupId(), request.getStartDate(), request.getEndDate()
+        List<Schedule> schedules = scheduleRepository.findByCognitoSubsOrGroupIdAndDateRange(
+            cognitoSubs, request.getGroupId(), request.getStartDate(), request.getEndDate()
         );
 
         // 4. 알고리즘 실행
@@ -736,14 +738,14 @@ public class GroupMemberInternalController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/{groupId}/members/user-ids")
-    public ResponseEntity<List<Long>> getGroupMemberUserIds(
+    @GetMapping("/{groupId}/members/cognito-subs")
+    public ResponseEntity<List<String>> getGroupMemberCognitoSubs(
         @PathVariable Long groupId,
         @RequestHeader("X-Api-Key") String apiKey
     ) {
         // API Key 검증
-        List<Long> userIds = groupMemberService.getGroupMemberUserIds(groupId);
-        return ResponseEntity.ok(userIds);
+        List<String> cognitoSubs = groupMemberService.getGroupMemberCognitoSubs(groupId);
+        return ResponseEntity.ok(cognitoSubs);
     }
 }
 ```

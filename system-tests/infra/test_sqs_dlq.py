@@ -139,7 +139,8 @@ class TestSqsDlq:
         # 검사할 메인 큐 목록
         target_queues = [
             os.environ.get('SQS_CANVAS_SYNC_QUEUE', 'lambda-to-courseservice-sync'),
-            os.environ.get('SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE', 'courseservice-to-scheduleservice-assignments')
+            os.environ.get('SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE', 'courseservice-to-scheduleservice-assignments'),
+            os.environ.get('SQS_COURSE_TO_SCHEDULE_QUEUE', 'courseservice-to-scheduleservice-courses')
         ]
 
         print("\n🔍 Verifying RedrivePolicy on main queues...")

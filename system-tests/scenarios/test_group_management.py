@@ -474,6 +474,226 @@ class TestGroupPermissionFlow:
         print("=" * 100 + "\n")
 
 
+class TestGroupScheduleIncludeFlow:
+    """그룹 일정 + 개인 일정 통합 조회 플로우"""
+
+    def test_include_groups_schedule_query(self, jwt_auth_tokens, service_urls, clean_user_database):
+        """
+        includeGroups=true 시나리오:
+        1. 그룹 생성 후 그룹 카테고리/일정 생성
+        2. 개인 카테고리/일정 생성
+        3. includeGroups=true로 개인+그룹 일정 모두 조회
+        4. groupId 필터로 그룹 일정만 조회
+        5. status 필터 적용 확인
+        6. 그룹이 없는 사용자의 includeGroups 동작 확인
+        """
+        gateway_url = service_urls.get("gateway", "http://localhost:8080")
+
+        print("\n" + "=" * 100)
+        print("그룹 일정 + 개인 일정 통합 조회 (includeGroups=true) 시나리오")
+        print("=" * 100)
+
+        # 사용자 준비 (OWNER)
+        owner_tokens = jwt_auth_tokens
+        owner_headers = {
+            "Authorization": f"Bearer {owner_tokens['id_token']}",
+            "Content-Type": "application/json"
+        }
+
+        # 1) 그룹 생성
+        group_resp = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            headers=owner_headers,
+            json={"name": "통합 조회 그룹", "description": "includeGroups 테스트"},
+            timeout=5
+        )
+        assert group_resp.status_code == 201, f"그룹 생성 실패: {group_resp.text}"
+        group_id = group_resp.json()["groupId"]
+        print(f"  ✅ 그룹 생성 (groupId={group_id})")
+
+        # 2) 개인/그룹 카테고리 생성
+        personal_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner_headers,
+            json={"name": f"개인카테고리-{uuid.uuid4().hex[:6]}", "color": "#123456"},
+            timeout=5
+        )
+        assert personal_cat_resp.status_code == 201, f"개인 카테고리 생성 실패: {personal_cat_resp.text}"
+        personal_cat_id = personal_cat_resp.json()["categoryId"]
+
+        group_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner_headers,
+            json={
+                "name": f"그룹카테고리-{uuid.uuid4().hex[:6]}",
+                "color": "#FF8844",
+                "groupId": group_id
+            },
+            timeout=5
+        )
+        assert group_cat_resp.status_code == 201, f"그룹 카테고리 생성 실패: {group_cat_resp.text}"
+        group_cat_id = group_cat_resp.json()["categoryId"]
+        print(f"  ✅ 카테고리 생성 (personal={personal_cat_id}, group={group_cat_id})")
+
+        # 3) 개인 일정 생성
+        personal_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            json={
+                "title": f"개인 일정 {uuid.uuid4().hex[:4]}",
+                "categoryId": personal_cat_id,
+                "startTime": "2025-12-10T09:00:00",
+                "endTime": "2025-12-10T10:00:00"
+            },
+            timeout=5
+        )
+        assert personal_schedule_resp.status_code == 201, f"개인 일정 생성 실패: {personal_schedule_resp.text}"
+        personal_schedule = personal_schedule_resp.json()
+        print(f"  ✅ 개인 일정 생성 (scheduleId={personal_schedule['scheduleId']})")
+
+        # 4) 그룹 일정 생성
+        group_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            json={
+                "title": f"그룹 일정 {uuid.uuid4().hex[:4]}",
+                "categoryId": group_cat_id,
+                "groupId": group_id,
+                "startTime": "2025-12-11T11:00:00",
+                "endTime": "2025-12-11T12:00:00"
+            },
+            timeout=5
+        )
+        assert group_schedule_resp.status_code == 201, f"그룹 일정 생성 실패: {group_schedule_resp.text}"
+        group_schedule = group_schedule_resp.json()
+        print(f"  ✅ 그룹 일정 생성 (scheduleId={group_schedule['scheduleId']})")
+
+        # 5) includeGroups=true 조회 (개인+그룹 일정 모두 포함)
+        include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert include_resp.status_code == 200, f"includeGroups 조회 실패: {include_resp.text}"
+        schedules = include_resp.json()
+        assert any(s["scheduleId"] == personal_schedule["scheduleId"] for s in schedules), "개인 일정이 포함되지 않음"
+        assert any(s["scheduleId"] == group_schedule["scheduleId"] and s.get("groupId") == group_id for s in schedules), "그룹 일정이 포함되지 않음"
+        print(f"  ✅ includeGroups=true 조회: 개인+그룹 일정 모두 포함 (total={len(schedules)})")
+
+        # 6) groupId 필터로 그룹 일정만 조회
+        group_only_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert group_only_resp.status_code == 200, f"그룹 일정 조회 실패: {group_only_resp.text}"
+        group_only = group_only_resp.json()
+        assert all(s.get("groupId") == group_id for s in group_only), "groupId 필터에 다른 일정 포함"
+        print(f"  ✅ groupId 필터 조회: 그룹 일정만 포함 (total={len(group_only)})")
+
+        # 7) includeGroups + status 필터(DONE) 검증 (완료 일정만 있는 사용자로 설정)
+        # 개인 일정 상태 변경
+        status_update_resp = requests.patch(
+            f"{gateway_url}/api/v1/schedules/{personal_schedule['scheduleId']}/status",
+            headers=owner_headers,
+            json={"status": "DONE"},
+            timeout=5
+        )
+        assert status_update_resp.status_code == 200, f"개인 일정 상태 변경 실패: {status_update_resp.text}"
+
+        status_filtered_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "includeGroups": "true",
+                "status": "DONE",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert status_filtered_resp.status_code == 200, f"status 필터 조회 실패: {status_filtered_resp.text}"
+        status_schedules = status_filtered_resp.json()
+        assert all(s.get("status") == "DONE" for s in status_schedules), "status=DONE 필터가 적용되지 않음"
+        print(f"  ✅ includeGroups + status=DONE 필터 적용 확인 (total={len(status_schedules)})")
+
+        # 8) includeGroups + groupId 동시 전달 시 groupId 우선 동작 확인
+        group_and_include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=owner_headers,
+            params={
+                "groupId": str(group_id),
+                "includeGroups": "true"
+            },
+            timeout=5
+        )
+        assert group_and_include_resp.status_code == 200, f"groupId+includeGroups 조회 실패: {group_and_include_resp.text}"
+        group_only_again = group_and_include_resp.json()
+        assert all(s.get("groupId") == group_id for s in group_only_again), "groupId 우선 동작이 적용되지 않음"
+        print(f"  ✅ groupId 우선 동작 확인 (total={len(group_only_again)})")
+
+        # 9) 그룹이 없는 사용자의 includeGroups=true 호출 → 개인 일정만 포함
+        solo_user = create_test_user(gateway_url, "Solo User")
+        solo_headers = solo_user["headers"]
+
+        # 개인 카테고리/일정 생성
+        solo_cat_resp = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            headers=solo_headers,
+            json={"name": f"솔로카테-{uuid.uuid4().hex[:6]}", "color": "#888888"},
+            timeout=5
+        )
+        assert solo_cat_resp.status_code == 201, f"솔로 카테고리 생성 실패: {solo_cat_resp.text}"
+        solo_cat_id = solo_cat_resp.json()["categoryId"]
+
+        solo_schedule_resp = requests.post(
+            f"{gateway_url}/api/v1/schedules",
+            headers=solo_headers,
+            json={
+                "title": "솔로 일정",
+                "categoryId": solo_cat_id,
+                "startTime": "2025-12-15T09:00:00",
+                "endTime": "2025-12-15T10:00:00"
+            },
+            timeout=5
+        )
+        assert solo_schedule_resp.status_code == 201, f"솔로 일정 생성 실패: {solo_schedule_resp.text}"
+        solo_schedule = solo_schedule_resp.json()
+
+        solo_include_resp = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=solo_headers,
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-01T00:00:00",
+                "endDate": "2025-12-31T23:59:59"
+            },
+            timeout=5
+        )
+        assert solo_include_resp.status_code == 200, f"솔로 includeGroups 조회 실패: {solo_include_resp.text}"
+        solo_schedules = solo_include_resp.json()
+        assert len(solo_schedules) == 1 and solo_schedules[0]["scheduleId"] == solo_schedule["scheduleId"], "그룹 없는 사용자의 개인 일정만 반환되지 않음"
+        print(f"  ✅ 그룹 없는 사용자의 includeGroups=true: 개인 일정만 반환 (total={len(solo_schedules)})")
+
+        # Cleanup: 그룹 삭제(그룹 일정/카테고리 cascade), 개인 일정/카테고리 삭제
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_id}", headers=owner_headers, timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/schedules/{personal_schedule['scheduleId']}", headers=owner_headers, timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/categories/{personal_cat_id}", headers=owner_headers, timeout=5)
+
+        print("\n" + "=" * 100)
+        print("[PASS] includeGroups=true 통합 조회 시나리오 성공")
+        print("=" * 100 + "\n")
+
 class TestGroupUpdateFlow:
     """그룹 수정 플로우 통합 테스트"""
 
@@ -1133,9 +1353,48 @@ class TestScheduleCoordinationFlow:
         print(f"  ✅ 공강 시간 발견: {found_slot['startTime']} ~ {found_slot['endTime']} ({found_slot['durationMinutes']}분)")
 
         # =================================================================
-        # STEP 5: 그룹 미팅 일정 생성
+        # STEP 5: 특정 멤버만 선택해서 공강 조회
         # =================================================================
-        print(f"\n[STEP 5/6] 그룹 미팅 일정 생성")
+        print(f"\n[STEP 5/7] 특정 멤버만 선택해서 공강 조회 (Leader만)")
+
+        leader_only_response = requests.post(
+            f"{gateway_url}/api/v1/schedules/find-free-slots",
+            headers=leader['headers'],
+            json={
+                "groupId": group_id,
+                "userIds": [leader['cognitoSub']],  # Leader만 선택
+                "startDate": "2025-12-08",
+                "endDate": "2025-12-08",
+                "minDurationMinutes": 120,
+                "workingHoursStart": "09:00",
+                "workingHoursEnd": "20:00"
+            },
+            timeout=5
+        )
+
+        assert leader_only_response.status_code == 200
+        leader_only_data = leader_only_response.json()
+
+        assert leader_only_data["groupId"] == group_id
+        assert leader_only_data["memberCount"] == 1  # Leader만
+        assert len(leader_only_data["freeSlots"]) > 0
+
+        # Leader는 12:00-20:00이 공강이어야 함 (09:00-12:00만 수업)
+        leader_found_slot = None
+        for slot in leader_only_data["freeSlots"]:
+            if "12:00:00" in slot["startTime"] and slot["durationMinutes"] >= 120:
+                leader_found_slot = slot
+                break
+
+        assert leader_found_slot is not None, "Leader의 공강이 발견되지 않음"
+
+        print(f"  ✅ Leader 공강 발견: {leader_found_slot['startTime']} ~ {leader_found_slot['endTime']} ({leader_found_slot['durationMinutes']}분)")
+        print(f"  ✅ userIds 필드 테스트 성공: cognitoSub 배열로 특정 멤버만 선택 가능")
+
+        # =================================================================
+        # STEP 6: 그룹 미팅 일정 생성
+        # =================================================================
+        print(f"\n[STEP 6/7] 그룹 미팅 일정 생성")
 
         # 그룹 카테고리 생성
         group_cat_response = requests.post(
@@ -1170,30 +1429,137 @@ class TestScheduleCoordinationFlow:
         print(f"  ✅ 그룹 미팅 일정 생성 성공 (scheduleId: {meeting_schedule_id})")
 
         # =================================================================
-        # STEP 6: 모든 멤버가 그룹 일정 조회 가능 확인
+        # STEP 7: 모든 멤버가 그룹 일정 조회 가능 확인
         # =================================================================
-        print(f"\n[STEP 6/6] 모든 멤버 그룹 일정 조회 확인")
+        print(f"\n[STEP 7/7] 모든 멤버 그룹 일정 조회 확인")
 
-        # Leader 조회
+        # Leader 개별 조회 (GET /schedules/{id})
         leader_schedule_check = requests.get(
             f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
             headers=leader['headers'],
             timeout=5
         )
         assert leader_schedule_check.status_code == 200
-        assert leader_schedule_check.json()["groupId"] == group_id
+        leader_schedule_data = leader_schedule_check.json()
+        assert leader_schedule_data["scheduleId"] == meeting_schedule_id
+        assert leader_schedule_data["groupId"] == group_id
+        assert leader_schedule_data["categoryId"] == group_cat_id
+        assert leader_schedule_data["title"] == "Team Project Kickoff Meeting"
+        assert leader_schedule_data["description"] == "Discuss project requirements"
+        assert leader_schedule_data["location"] == "Engineering Building Room 301"
+        assert leader_schedule_data["startTime"] == found_slot["startTime"]
+        assert leader_schedule_data["endTime"] == "2025-12-08T18:00:00"
+        assert leader_schedule_data["source"] == "USER"
 
-        # Member 조회
+        print(f"  ✅ Leader 개별 조회 성공 (핵심 필드 검증 완료)")
+
+        # Member 개별 조회 (GET /schedules/{id})
         member_schedule_check = requests.get(
             f"{gateway_url}/api/v1/schedules/{meeting_schedule_id}",
             headers=member['headers'],
             timeout=5
         )
         assert member_schedule_check.status_code == 200
-        assert member_schedule_check.json()["title"] == "Team Project Kickoff Meeting"
+        member_schedule_data = member_schedule_check.json()
+        assert member_schedule_data["scheduleId"] == meeting_schedule_id
+        assert member_schedule_data["groupId"] == group_id
+        assert member_schedule_data["categoryId"] == group_cat_id
+        assert member_schedule_data["title"] == "Team Project Kickoff Meeting"
+        assert member_schedule_data["description"] == "Discuss project requirements"
+        assert member_schedule_data["location"] == "Engineering Building Room 301"
+        assert member_schedule_data["startTime"] == found_slot["startTime"]
+        assert member_schedule_data["endTime"] == "2025-12-08T18:00:00"
+        assert member_schedule_data["source"] == "USER"
 
-        print(f"  ✅ Leader 조회 성공")
-        print(f"  ✅ Member 조회 성공")
+        print(f"  ✅ Member 개별 조회 성공 (핵심 필드 검증 완료)")
+
+        # Leader 목록 조회 (GET /schedules with includeGroups=true)
+        leader_schedules_list = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert leader_schedules_list.status_code == 200
+        leader_schedules = leader_schedules_list.json()
+
+        # 그룹 일정이 목록에 포함되어 있는지 확인
+        group_schedule_in_leader_list = next(
+            (s for s in leader_schedules if s["scheduleId"] == meeting_schedule_id),
+            None
+        )
+        assert group_schedule_in_leader_list is not None, "Leader의 일정 목록에 그룹 일정이 없음"
+        assert group_schedule_in_leader_list["groupId"] == group_id
+        assert group_schedule_in_leader_list["categoryId"] == group_cat_id
+        assert group_schedule_in_leader_list["title"] == "Team Project Kickoff Meeting"
+        assert group_schedule_in_leader_list["startTime"] == found_slot["startTime"]
+        assert group_schedule_in_leader_list["endTime"] == "2025-12-08T18:00:00"
+
+        print(f"  ✅ Leader 목록 조회 성공 (그룹 일정 포함, 핵심 필드 검증 완료)")
+
+        # Member 목록 조회 (GET /schedules with includeGroups=true)
+        member_schedules_list = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=member['headers'],
+            params={
+                "includeGroups": "true",
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert member_schedules_list.status_code == 200
+        member_schedules = member_schedules_list.json()
+
+        # 그룹 일정이 목록에 포함되어 있는지 확인
+        group_schedule_in_member_list = next(
+            (s for s in member_schedules if s["scheduleId"] == meeting_schedule_id),
+            None
+        )
+        assert group_schedule_in_member_list is not None, "Member의 일정 목록에 그룹 일정이 없음"
+        assert group_schedule_in_member_list["groupId"] == group_id
+        assert group_schedule_in_member_list["categoryId"] == group_cat_id
+        assert group_schedule_in_member_list["title"] == "Team Project Kickoff Meeting"
+        assert group_schedule_in_member_list["startTime"] == found_slot["startTime"]
+        assert group_schedule_in_member_list["endTime"] == "2025-12-08T18:00:00"
+
+        print(f"  ✅ Member 목록 조회 성공 (그룹 일정 포함, 핵심 필드 검증 완료)")
+
+        # groupId 필터로 그룹 일정만 조회 (Leader)
+        leader_group_only = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=leader['headers'],
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert leader_group_only.status_code == 200
+        leader_group_schedules = leader_group_only.json()
+        assert any(s["scheduleId"] == meeting_schedule_id for s in leader_group_schedules), "Leader의 groupId 필터 조회에 그룹 일정이 없음"
+
+        # groupId 필터로 그룹 일정만 조회 (Member)
+        member_group_only = requests.get(
+            f"{gateway_url}/api/v1/schedules",
+            headers=member['headers'],
+            params={
+                "groupId": str(group_id),
+                "startDate": "2025-12-08T00:00:00",
+                "endDate": "2025-12-08T23:59:59"
+            },
+            timeout=5
+        )
+        assert member_group_only.status_code == 200
+        member_group_schedules = member_group_only.json()
+        assert any(s["scheduleId"] == meeting_schedule_id for s in member_group_schedules), "Member의 groupId 필터 조회에 그룹 일정이 없음"
+
+        print(f"  ✅ Leader/Member groupId 필터 조회 성공")
 
         # Cleanup
         requests.delete(f"{gateway_url}/api/v1/groups/{group_id}", headers=leader['headers'], timeout=5)
@@ -1207,7 +1573,353 @@ class TestScheduleCoordinationFlow:
         print(f"✅ STEP 1: 사용자 준비 (Leader, Member)")
         print(f"✅ STEP 2: 그룹 생성 및 멤버 초대")
         print(f"✅ STEP 3: 각자 개인 일정 등록")
-        print(f"✅ STEP 4: 공강 시간 조회 (API Gateway)")
-        print(f"✅ STEP 5: 발견된 공강 시간에 그룹 미팅 일정 생성")
-        print(f"✅ STEP 6: 모든 멤버 그룹 일정 조회 가능 확인")
+        print(f"✅ STEP 4: 공강 시간 조회 (전체 멤버)")
+        print(f"✅ STEP 5: 특정 멤버만 선택 공강 조회 (userIds 필드 테스트)")
+        print(f"✅ STEP 6: 발견된 공강 시간에 그룹 미팅 일정 생성")
+        print(f"✅ STEP 7: 모든 멤버 그룹 일정 조회 가능 확인")
+        print(f"   - Leader/Member 개별 조회 (GET /schedules/{{id}})")
+        print(f"   - Leader/Member 목록 조회 (GET /schedules with includeGroups=true)")
+        print(f"   - Leader/Member groupId 필터 조회")
+        print(f"   - 핵심 필드 검증: groupId, categoryId, title, startTime, endTime, description, location, source")
+        print("=" * 100 + "\n")
+
+
+class TestGroupCategoryQueryFlow:
+    """그룹 카테고리 조회 파라미터 테스트 (groupId, includeGroups)"""
+
+    def test_category_group_query_parameters_comprehensive(self, service_urls, clean_user_database):
+        """
+        카테고리 그룹 조회 파라미터 종합 테스트:
+        1. 개인 카테고리만 조회 (기본)
+        2. 특정 그룹 카테고리만 조회 (groupId)
+        3. 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups)
+        4. 다중 그룹 시나리오
+        5. Member도 그룹 카테고리 조회 가능
+        6. sourceType 필터 조합
+        7. 데이터 격리 검증
+        """
+        gateway_url = service_urls.get("gateway", "http://localhost:8080")
+
+        # =================================================================
+        # STEP 1: 사용자 준비 (Owner, Member, Outsider)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 1/9] 사용자 준비: Owner, Member, Outsider 생성")
+        print("=" * 100)
+
+        owner = create_test_user(gateway_url, "Category Owner")
+        member = create_test_user(gateway_url, "Category Member")
+        outsider = create_test_user(gateway_url, "Category Outsider")
+
+        print(f"  ✅ Owner: {owner['email']}")
+        print(f"  ✅ Member: {member['email']}")
+        print(f"  ✅ Outsider: {outsider['email']}")
+
+        # =================================================================
+        # STEP 2: 그룹 2개 생성 및 멤버 초대
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 2/9] 그룹 2개 생성 및 Member 초대")
+        print("=" * 100)
+
+        # Group A 생성 (Owner가 소유, Member 초대)
+        group_a_response = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            json={"name": f"Group A {uuid.uuid4().hex[:8]}", "description": "First group"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        assert group_a_response.status_code == 201
+        group_a_id = group_a_response.json()["groupId"]
+        print(f"  ✅ Group A 생성 (groupId: {group_a_id})")
+
+        # Member를 Group A에 초대
+        requests.post(
+            f"{gateway_url}/api/v1/groups/{group_a_id}/members",
+            json={"cognitoSub": member['cognitoSub'], "role": "MEMBER"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        print(f"  ✅ Member를 Group A에 초대")
+
+        # Group B 생성 (Owner가 소유, Member는 초대 안함)
+        group_b_response = requests.post(
+            f"{gateway_url}/api/v1/groups",
+            json={"name": f"Group B {uuid.uuid4().hex[:8]}", "description": "Second group"},
+            headers=owner['headers'],
+            timeout=5
+        )
+        assert group_b_response.status_code == 201
+        group_b_id = group_b_response.json()["groupId"]
+        print(f"  ✅ Group B 생성 (groupId: {group_b_id})")
+
+        # =================================================================
+        # STEP 3: 카테고리 생성
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 3/9] 카테고리 생성 (개인, Group A, Group B)")
+        print("=" * 100)
+
+        # Owner 개인 카테고리
+        owner_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Owner Personal {uuid.uuid4().hex[:8]}", "color": "#FF0000"},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        owner_personal_cat_id = owner_personal_cat["categoryId"]
+        print(f"  ✅ Owner 개인 카테고리 생성 (categoryId: {owner_personal_cat_id})")
+
+        # Group A 카테고리 (Owner 생성)
+        group_a_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Group A Category {uuid.uuid4().hex[:8]}", "color": "#00FF00", "groupId": group_a_id},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        group_a_cat_id = group_a_cat["categoryId"]
+        print(f"  ✅ Group A 카테고리 생성 (categoryId: {group_a_cat_id})")
+
+        # Group B 카테고리 (Owner 생성)
+        group_b_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Group B Category {uuid.uuid4().hex[:8]}", "color": "#0000FF", "groupId": group_b_id},
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+        group_b_cat_id = group_b_cat["categoryId"]
+        print(f"  ✅ Group B 카테고리 생성 (categoryId: {group_b_cat_id})")
+
+        # Member 개인 카테고리
+        member_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Member Personal {uuid.uuid4().hex[:8]}", "color": "#FFFF00"},
+            headers=member['headers'],
+            timeout=5
+        ).json()
+        member_personal_cat_id = member_personal_cat["categoryId"]
+        print(f"  ✅ Member 개인 카테고리 생성 (categoryId: {member_personal_cat_id})")
+
+        # Outsider 개인 카테고리
+        outsider_personal_cat = requests.post(
+            f"{gateway_url}/api/v1/categories",
+            json={"name": f"Outsider Personal {uuid.uuid4().hex[:8]}", "color": "#FF00FF"},
+            headers=outsider['headers'],
+            timeout=5
+        ).json()
+        outsider_personal_cat_id = outsider_personal_cat["categoryId"]
+        print(f"  ✅ Outsider 개인 카테고리 생성 (categoryId: {outsider_personal_cat_id})")
+
+        # =================================================================
+        # STEP 4: Owner - 개인 카테고리만 조회 (기본 동작)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 4/9] Owner: 개인 카테고리만 조회 (파라미터 없음)")
+        print("=" * 100)
+
+        owner_personal_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            timeout=5
+        ).json()
+
+        owner_personal_cat_ids = {cat["categoryId"] for cat in owner_personal_only}
+        assert owner_personal_cat_id in owner_personal_cat_ids, "Owner 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id not in owner_personal_cat_ids, "Group A 카테고리가 개인 조회에 포함됨"
+        assert group_b_cat_id not in owner_personal_cat_ids, "Group B 카테고리가 개인 조회에 포함됨"
+        assert member_personal_cat_id not in owner_personal_cat_ids, "Member 개인 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Owner 개인 카테고리만 조회됨 (total: {len(owner_personal_only)}개)")
+
+        # =================================================================
+        # STEP 5: Owner - Group A 카테고리만 조회 (groupId 파라미터)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 5/9] Owner: Group A 카테고리만 조회 (groupId 파라미터)")
+        print("=" * 100)
+
+        owner_group_a_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        ).json()
+
+        owner_group_a_cat_ids = {cat["categoryId"] for cat in owner_group_a_only}
+        assert group_a_cat_id in owner_group_a_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert owner_personal_cat_id not in owner_group_a_cat_ids, "개인 카테고리가 Group A 조회에 포함됨"
+        assert group_b_cat_id not in owner_group_a_cat_ids, "Group B 카테고리가 Group A 조회에 포함됨"
+
+        print(f"  ✅ Group A 카테고리만 조회됨 (total: {len(owner_group_a_only)}개)")
+
+        # =================================================================
+        # STEP 6: Owner - 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 6/9] Owner: 개인 + 모든 그룹 카테고리 통합 조회 (includeGroups=true)")
+        print("=" * 100)
+
+        owner_all_categories = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        owner_all_cat_ids = {cat["categoryId"] for cat in owner_all_categories}
+        assert owner_personal_cat_id in owner_all_cat_ids, "Owner 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id in owner_all_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert group_b_cat_id in owner_all_cat_ids, "Group B 카테고리가 조회되지 않음"
+        assert member_personal_cat_id not in owner_all_cat_ids, "Member 개인 카테고리가 조회됨 (격리 실패)"
+        assert outsider_personal_cat_id not in owner_all_cat_ids, "Outsider 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Owner 개인 + 모든 그룹 카테고리 통합 조회 성공 (total: {len(owner_all_categories)}개)")
+        print(f"     - Owner 개인: {owner_personal_cat_id}")
+        print(f"     - Group A: {group_a_cat_id}")
+        print(f"     - Group B: {group_b_cat_id}")
+
+        # =================================================================
+        # STEP 7: Member - 그룹 카테고리 조회 (Member도 가능해야 함)
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 7/9] Member: 그룹 카테고리 조회 (읽기 권한 검증)")
+        print("=" * 100)
+
+        # Member 개인만 조회
+        member_personal_only = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            timeout=5
+        ).json()
+
+        member_personal_cat_ids = {cat["categoryId"] for cat in member_personal_only}
+        assert member_personal_cat_id in member_personal_cat_ids
+        assert group_a_cat_id not in member_personal_cat_ids
+        assert owner_personal_cat_id not in member_personal_cat_ids
+
+        print(f"  ✅ Member 개인 카테고리만 조회됨 (total: {len(member_personal_only)}개)")
+
+        # Member - Group A 카테고리 조회 (groupId)
+        member_group_a = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        ).json()
+
+        member_group_a_cat_ids = {cat["categoryId"] for cat in member_group_a}
+        assert group_a_cat_id in member_group_a_cat_ids, "Member가 Group A 카테고리를 조회하지 못함"
+        assert member_personal_cat_id not in member_group_a_cat_ids
+
+        print(f"  ✅ Member도 Group A 카테고리 조회 가능 (total: {len(member_group_a)}개)")
+
+        # Member - includeGroups (개인 + Group A만, Group B는 제외되어야 함)
+        member_all = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=member['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        member_all_cat_ids = {cat["categoryId"] for cat in member_all}
+        assert member_personal_cat_id in member_all_cat_ids, "Member 개인 카테고리가 조회되지 않음"
+        assert group_a_cat_id in member_all_cat_ids, "Group A 카테고리가 조회되지 않음"
+        assert group_b_cat_id not in member_all_cat_ids, "Member가 속하지 않은 Group B 카테고리가 조회됨"
+        assert owner_personal_cat_id not in member_all_cat_ids, "Owner 개인 카테고리가 조회됨 (격리 실패)"
+
+        print(f"  ✅ Member includeGroups 성공 (개인 + Group A만, total: {len(member_all)}개)")
+
+        # =================================================================
+        # STEP 8: Outsider - 그룹 카테고리 접근 불가 검증
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 8/9] Outsider: 그룹 카테고리 접근 불가 검증")
+        print("=" * 100)
+
+        # Outsider - Group A 조회 시도 (권한 없음, 빈 배열 또는 403)
+        outsider_group_a_resp = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=outsider['headers'],
+            params={"groupId": str(group_a_id)},
+            timeout=5
+        )
+
+        # 권한 없으면 403 또는 빈 배열 반환 (구현에 따라 다름)
+        if outsider_group_a_resp.status_code == 200:
+            outsider_group_a = outsider_group_a_resp.json()
+            assert len(outsider_group_a) == 0, "Outsider가 Group A 카테고리를 조회함 (권한 없어야 함)"
+        else:
+            assert outsider_group_a_resp.status_code == 403, "Outsider 접근 시 403 에러 예상"
+
+        print(f"  ✅ Outsider는 Group A 카테고리 조회 불가")
+
+        # Outsider - includeGroups (개인만 조회되어야 함)
+        outsider_all = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=outsider['headers'],
+            params={"includeGroups": "true"},
+            timeout=5
+        ).json()
+
+        outsider_all_cat_ids = {cat["categoryId"] for cat in outsider_all}
+        assert outsider_personal_cat_id in outsider_all_cat_ids
+        assert group_a_cat_id not in outsider_all_cat_ids
+        assert group_b_cat_id not in outsider_all_cat_ids
+        assert owner_personal_cat_id not in outsider_all_cat_ids
+        assert member_personal_cat_id not in outsider_all_cat_ids
+
+        print(f"  ✅ Outsider includeGroups는 개인만 조회됨 (total: {len(outsider_all)}개)")
+
+        # =================================================================
+        # STEP 9: sourceType 필터 조합 테스트
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[STEP 9/9] sourceType 필터와 groupId/includeGroups 조합 테스트")
+        print("=" * 100)
+
+        # Owner - includeGroups + sourceType=USER_CREATED
+        owner_user_created = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"includeGroups": "true", "sourceType": "USER_CREATED"},
+            timeout=5
+        ).json()
+
+        # 모든 카테고리가 USER_CREATED 타입이어야 함
+        for cat in owner_user_created:
+            assert cat.get("sourceType") == "USER_CREATED", f"sourceType 필터 실패: {cat}"
+
+        print(f"  ✅ sourceType=USER_CREATED 필터 성공 (total: {len(owner_user_created)}개)")
+
+        # Owner - groupId + sourceType=CANVAS_COURSE (Canvas 카테고리는 없으므로 빈 배열)
+        owner_canvas = requests.get(
+            f"{gateway_url}/api/v1/categories",
+            headers=owner['headers'],
+            params={"groupId": str(group_a_id), "sourceType": "CANVAS_COURSE"},
+            timeout=5
+        ).json()
+
+        assert len(owner_canvas) == 0, "CANVAS_COURSE 카테고리가 없는데 조회됨"
+
+        print(f"  ✅ sourceType=CANVAS_COURSE 필터 성공 (빈 배열)")
+
+        # Cleanup
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_a_id}", headers=owner['headers'], timeout=5)
+        requests.delete(f"{gateway_url}/api/v1/groups/{group_b_id}", headers=owner['headers'], timeout=5)
+
+        # =================================================================
+        # 최종 요약
+        # =================================================================
+        print("\n" + "=" * 100)
+        print("[PASS] 카테고리 그룹 조회 파라미터 종합 테스트 성공!")
+        print("=" * 100)
+        print(f"✅ STEP 1: 사용자 3명 준비 (Owner, Member, Outsider)")
+        print(f"✅ STEP 2: 그룹 2개 생성 (Group A: Owner+Member, Group B: Owner만)")
+        print(f"✅ STEP 3: 카테고리 5개 생성 (Owner개인, Member개인, Outsider개인, Group A, Group B)")
+        print(f"✅ STEP 4: Owner 개인 카테고리만 조회 (기본 동작)")
+        print(f"✅ STEP 5: Owner Group A 카테고리만 조회 (groupId 파라미터)")
+        print(f"✅ STEP 6: Owner 개인+모든 그룹 통합 조회 (includeGroups=true)")
+        print(f"✅ STEP 7: Member 그룹 카테고리 조회 (읽기 권한, includeGroups)")
+        print(f"✅ STEP 8: Outsider 그룹 접근 불가 검증")
+        print(f"✅ STEP 9: sourceType 필터 조합 (includeGroups + sourceType, groupId + sourceType)")
         print("=" * 100 + "\n")

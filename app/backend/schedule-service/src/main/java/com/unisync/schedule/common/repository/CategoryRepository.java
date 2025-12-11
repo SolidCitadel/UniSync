@@ -2,6 +2,8 @@ package com.unisync.schedule.common.repository;
 
 import com.unisync.schedule.common.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -10,8 +12,9 @@ import java.util.Optional;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    // 사용자 ID로 조회
-    List<Category> findByCognitoSub(String cognitoSub);
+    // 개인 카테고리 조회
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL")
+    List<Category> findByCognitoSub(@Param("cognitoSub") String cognitoSub);
 
     // 그룹 ID로 조회
     List<Category> findByGroupId(Long groupId);
@@ -19,8 +22,16 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     // 사용자 또는 그룹의 모든 카테고리 조회
     List<Category> findByCognitoSubOrGroupId(String cognitoSub, Long groupId);
 
-    // 기본 카테고리 조회
-    List<Category> findByCognitoSubAndIsDefault(String cognitoSub, Boolean isDefault);
+    // 개인 + 여러 그룹의 카테고리 조회
+    @Query("SELECT c FROM Category c WHERE (c.cognitoSub = :cognitoSub AND c.groupId IS NULL) OR c.groupId IN :groupIds")
+    List<Category> findByCognitoSubOrGroupIdIn(
+            @Param("cognitoSub") String cognitoSub,
+            @Param("groupIds") List<Long> groupIds
+    );
+
+    // 기본 카테고리 조회 (개인)
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL AND c.isDefault = :isDefault")
+    List<Category> findByCognitoSubAndIsDefault(@Param("cognitoSub") String cognitoSub, @Param("isDefault") Boolean isDefault);
 
     // 카테고리명 중복 체크 (사용자)
     boolean existsByCognitoSubAndName(String cognitoSub, String name);
@@ -36,4 +47,26 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     // 그룹 카테고리 존재 여부
     boolean existsByGroupId(Long groupId);
+
+    /**
+     * 외부 소스로 카테고리 조회 (Phase 1.1: 과목별 카테고리)
+     * 예: cognitoSub="user-123", sourceType="CANVAS_COURSE", sourceId="10"
+     */
+    Optional<Category> findByCognitoSubAndSourceTypeAndSourceId(
+            String cognitoSub,
+            String sourceType,
+            String sourceId
+    );
+
+    @Query("SELECT c FROM Category c WHERE c.cognitoSub = :cognitoSub AND c.groupId IS NULL AND c.sourceType = :sourceType")
+    List<Category> findByCognitoSubAndSourceType(@Param("cognitoSub") String cognitoSub, @Param("sourceType") String sourceType);
+
+    /**
+     * 외부 소스 중복 체크
+     */
+    boolean existsByCognitoSubAndSourceTypeAndSourceId(
+            String cognitoSub,
+            String sourceType,
+            String sourceId
+    );
 }

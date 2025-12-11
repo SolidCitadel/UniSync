@@ -21,9 +21,6 @@ public class SqsPublisher {
     private final SqsClient sqsClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${aws.sqs.endpoint}")
-    private String sqsEndpoint;
-
     /**
      * SQS 큐에 메시지를 발행합니다
      *

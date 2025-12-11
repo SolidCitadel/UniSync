@@ -28,3 +28,12 @@ output "courseservice_to_scheduleservice_assignments_queue_arn" {
   value       = aws_sqs_queue.courseservice_to_scheduleservice_assignments.arn
 }
 
+output "courseservice_to_scheduleservice_courses_queue_url" {
+  description = "URL of the courseservice-to-scheduleservice-courses queue"
+  value       = aws_sqs_queue.courseservice_to_scheduleservice_courses.url
+}
+
+output "courseservice_to_scheduleservice_courses_queue_arn" {
+  description = "ARN of the courseservice-to-scheduleservice-courses queue"
+  value       = aws_sqs_queue.courseservice_to_scheduleservice_courses.arn
+}

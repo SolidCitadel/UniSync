@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -81,7 +82,7 @@ class ScheduleControllerTest {
                         .build()
         );
 
-        given(scheduleService.getSchedulesByUserId(COGNITO_SUB))
+        given(scheduleService.getSchedulesByUserId(COGNITO_SUB, null))
                 .willReturn(schedules);
 
         // When & Then
@@ -91,9 +92,9 @@ class ScheduleControllerTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].title").value("중간고사 프로젝트"))
-                .andExpect(jsonPath("$[1].title").value("기말 발표"));
+                        .andExpect(jsonPath("$[1].title").value("기말 발표"));
 
-        then(scheduleService).should().getSchedulesByUserId(COGNITO_SUB);
+        then(scheduleService).should().getSchedulesByUserId(COGNITO_SUB, null);
     }
 
     @Test
@@ -107,7 +108,7 @@ class ScheduleControllerTest {
                         .build()
         );
 
-        given(scheduleService.getSchedulesByDateRange(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class)))
+        given(scheduleService.getSchedulesByDateRange(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(null)))
                 .willReturn(schedules);
 
         // When & Then
@@ -118,7 +119,160 @@ class ScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
 
-        then(scheduleService).should().getSchedulesByDateRange(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class));
+        then(scheduleService).should().getSchedulesByDateRange(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(null));
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?groupId=123 - 그룹 일정 목록 조회 성공")
+    void getSchedules_ByGroupId_Success() throws Exception {
+        // Given
+        Long groupId = 123L;
+        List<ScheduleResponse> schedules = Arrays.asList(
+                ScheduleResponse.builder()
+                        .scheduleId(1L)
+                        .groupId(groupId)
+                        .title("그룹 회의")
+                        .status(ScheduleStatus.TODO)
+                        .source(ScheduleSource.USER)
+                        .build(),
+                ScheduleResponse.builder()
+                        .scheduleId(2L)
+                        .groupId(groupId)
+                        .title("그룹 스터디")
+                        .status(ScheduleStatus.TODO)
+                        .source(ScheduleSource.USER)
+                        .build()
+        );
+
+        given(scheduleService.getSchedulesByGroupId(groupId, COGNITO_SUB, null))
+                .willReturn(schedules);
+
+        // When & Then
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("groupId", "123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].title").value("그룹 회의"))
+                .andExpect(jsonPath("$[1].title").value("그룹 스터디"));
+
+        then(scheduleService).should().getSchedulesByGroupId(groupId, COGNITO_SUB, null);
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?includeGroups=true - 개인+그룹 일정 통합 조회")
+    void getSchedules_IncludeGroups() throws Exception {
+        given(scheduleService.getSchedulesIncludingGroups(COGNITO_SUB, null))
+                .willReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("includeGroups", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        then(scheduleService).should().getSchedulesIncludingGroups(COGNITO_SUB, null);
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?includeGroups=true&startDate=...&status=TODO - 기간/상태 필터 포함 통합 조회")
+    void getSchedules_IncludeGroups_WithDateAndStatus() throws Exception {
+        given(scheduleService.getSchedulesIncludingGroups(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(ScheduleStatus.TODO)))
+                .willReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("includeGroups", "true")
+                        .param("startDate", "2025-12-01T00:00:00")
+                        .param("endDate", "2025-12-31T23:59:59")
+                        .param("status", "TODO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        then(scheduleService).should().getSchedulesIncludingGroups(eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(ScheduleStatus.TODO));
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?groupId=123&includeGroups=true - groupId가 우선 적용")
+    void getSchedules_GroupIdOverridesIncludeGroups() throws Exception {
+        Long groupId = 123L;
+        given(scheduleService.getSchedulesByGroupId(eq(groupId), eq(COGNITO_SUB), eq(null)))
+                .willReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("groupId", groupId.toString())
+                        .param("includeGroups", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        then(scheduleService).should().getSchedulesByGroupId(groupId, COGNITO_SUB, null);
+        then(scheduleService).should(never()).getSchedulesIncludingGroups(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?groupId=123&startDate=xxx - 그룹 일정 날짜 범위 조회")
+    void getSchedules_ByGroupIdAndDateRange() throws Exception {
+        // Given
+        Long groupId = 123L;
+        List<ScheduleResponse> schedules = Collections.singletonList(
+                ScheduleResponse.builder()
+                        .scheduleId(1L)
+                        .groupId(groupId)
+                        .title("11월 그룹 일정")
+                        .build()
+        );
+
+        given(scheduleService.getSchedulesByGroupIdAndDateRange(
+                eq(groupId), eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(null)))
+                .willReturn(schedules);
+
+        // When & Then
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("groupId", "123")
+                        .param("startDate", "2025-11-01T00:00:00")
+                        .param("endDate", "2025-11-30T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].title").value("11월 그룹 일정"));
+
+        then(scheduleService).should().getSchedulesByGroupIdAndDateRange(
+                eq(groupId), eq(COGNITO_SUB), any(LocalDateTime.class), any(LocalDateTime.class), eq(null));
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?groupId=123&status=DONE - 그룹 일정 상태 필터 조회")
+    void getSchedules_ByGroupIdWithStatus() throws Exception {
+        Long groupId = 123L;
+        given(scheduleService.getSchedulesByGroupId(groupId, COGNITO_SUB, ScheduleStatus.DONE))
+                .willReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("groupId", groupId.toString())
+                        .param("status", "DONE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        then(scheduleService).should().getSchedulesByGroupId(groupId, COGNITO_SUB, ScheduleStatus.DONE);
+    }
+
+    @Test
+    @DisplayName("GET /v1/schedules?groupId=123 - 그룹 멤버가 아니면 403")
+    void getSchedules_ByGroupId_Unauthorized() throws Exception {
+        Long groupId = 123L;
+        willThrow(new com.unisync.schedule.common.exception.UnauthorizedAccessException("권한 없음"))
+                .given(scheduleService).getSchedulesByGroupId(groupId, COGNITO_SUB, null);
+
+        mockMvc.perform(get("/v1/schedules")
+                        .header("X-Cognito-Sub", COGNITO_SUB)
+                        .param("groupId", "123"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED_ACCESS"));
+
+        then(scheduleService).should().getSchedulesByGroupId(groupId, COGNITO_SUB, null);
     }
 
     // ========================================
@@ -142,28 +296,30 @@ class ScheduleControllerTest {
                 .source(ScheduleSource.USER)
                 .build();
 
-        given(scheduleService.getScheduleById(1L))
+        given(scheduleService.getScheduleById(1L, COGNITO_SUB))
                 .willReturn(schedule);
 
         // When & Then
-        mockMvc.perform(get("/v1/schedules/1"))
+        mockMvc.perform(get("/v1/schedules/1")
+                        .header("X-Cognito-Sub", COGNITO_SUB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.scheduleId").value(1))
                 .andExpect(jsonPath("$.title").value("중간고사 프로젝트"))
                 .andExpect(jsonPath("$.description").value("Spring Boot 프로젝트 제출"));
 
-        then(scheduleService).should().getScheduleById(1L);
+        then(scheduleService).should().getScheduleById(1L, COGNITO_SUB);
     }
 
     @Test
     @DisplayName("GET /v1/schedules/{scheduleId} - 존재하지 않는 일정 404")
     void getScheduleById_NotFound() throws Exception {
         // Given
-        given(scheduleService.getScheduleById(999L))
+        given(scheduleService.getScheduleById(999L, COGNITO_SUB))
                 .willThrow(new ScheduleNotFoundException("일정을 찾을 수 없습니다: 999"));
 
         // When & Then
-        mockMvc.perform(get("/v1/schedules/999"))
+        mockMvc.perform(get("/v1/schedules/999")
+                        .header("X-Cognito-Sub", COGNITO_SUB))
                 .andExpect(status().isNotFound());
     }
 

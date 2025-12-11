@@ -81,7 +81,7 @@ class TodoControllerTest {
                         .build()
         );
 
-        given(todoService.getTodosByUserId(COGNITO_SUB))
+        given(todoService.getTodos(COGNITO_SUB, null, false, null, null, null, null))
                 .willReturn(todos);
 
         // When & Then
@@ -93,7 +93,7 @@ class TodoControllerTest {
                 .andExpect(jsonPath("$[0].title").value("과제 제출"))
                 .andExpect(jsonPath("$[1].title").value("독서"));
 
-        then(todoService).should().getTodosByUserId(COGNITO_SUB);
+        then(todoService).should().getTodos(COGNITO_SUB, null, false, null, null, null, null);
     }
 
     @Test
@@ -107,7 +107,7 @@ class TodoControllerTest {
                         .build()
         );
 
-        given(todoService.getTodosByDateRange(eq(COGNITO_SUB), any(LocalDate.class), any(LocalDate.class)))
+        given(todoService.getTodos(eq(COGNITO_SUB), eq(null), eq(false), any(LocalDate.class), any(LocalDate.class), eq(null), eq(null)))
                 .willReturn(todos);
 
         // When & Then
@@ -118,7 +118,7 @@ class TodoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
 
-        then(todoService).should().getTodosByDateRange(eq(COGNITO_SUB), any(LocalDate.class), any(LocalDate.class));
+        then(todoService).should().getTodos(eq(COGNITO_SUB), eq(null), eq(false), any(LocalDate.class), any(LocalDate.class), eq(null), eq(null));
     }
 
     // ========================================

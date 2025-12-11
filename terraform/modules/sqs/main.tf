@@ -51,3 +51,21 @@ resource "aws_sqs_queue" "courseservice_to_scheduleservice_assignments" {
   )
 }
 
+# Course Service to Schedule Service Course Events Queue
+resource "aws_sqs_queue" "courseservice_to_scheduleservice_courses" {
+  name                      = "${var.project_name}-courseservice-to-scheduleservice-courses"
+  message_retention_seconds = 345600 # 4 days
+  visibility_timeout_seconds = 30
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-courseservice-to-scheduleservice-courses"
+    }
+  )
+}

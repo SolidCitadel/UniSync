@@ -82,9 +82,12 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_DATASOURCE_URL=${USER_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -114,9 +117,12 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_DATASOURCE_URL=${COURSE_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -148,9 +154,12 @@ services:
       - .env.acceptance # acceptance 오버라이드
     environment:
       - SPRING_PROFILES_ACTIVE=acceptance
+      - SPRING_DATASOURCE_URL=${SCHEDULE_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:
       mysql:
@@ -186,7 +195,7 @@ services:
       - SPRING_PROFILES_ACTIVE=acceptance
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
-      - ./.env.local:/workspace/.env.local:ro
+      - .:/workspace:ro
     user: root  # entrypoint 실행 위해 임시로 root 필요
     entrypoint: ["/wait-for-localstack.sh", "java", "-jar", "app.jar"]
     depends_on:

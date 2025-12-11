@@ -126,6 +126,11 @@ def test_assignment_created_event_creates_schedule():
 ### 4단계: Scenario Tests
 **목적**: 전체 E2E 사용자 플로우
 
+**핵심 원칙**:
+- **DB 직접 조작 금지**: DB fixture (`mysql_connection`, `schedule_db_connection` 등) 사용 금지. 모든 데이터는 API를 통해서만 생성/조회/검증
+- **Gateway 엔드포인트만 사용**: 프론트엔드가 실제로 호출할 수 있는 API Gateway를 통한 엔드포인트만 사용 (내부 서비스 직접 호출 금지)
+- **실제 사용자 플로우**: 사용자가 UI에서 수행하는 동작과 동일한 순서로 테스트
+
 **검증 대상**:
 - 회원가입 → 토큰 등록 → 동기화 → 일정 조회
 - 실제 사용자 시나리오 전체
@@ -368,6 +373,8 @@ poetry run pytest system-tests/component/schedule_service/test_schedule_api.py::
 - ❌ **검증 생략**: 상태 코드만 확인하고 응답 본문 무시
 - ❌ **에러만 확인**: 에러 타입만 보고 메시지/부작용 무시
 - ❌ **상정외 동작 허용**: 예상치 못한 필드를 실패로 처리하지 않음
+- ❌ **Scenario Tests에서 DB 직접 조작**: DB fixture 사용 금지, API Gateway를 통한 검증만 허용
+- ❌ **Scenario Tests에서 내부 서비스 직접 호출**: 프론트엔드가 접근할 수 없는 엔드포인트 사용 금지
 
 ## 트러블슈팅
 

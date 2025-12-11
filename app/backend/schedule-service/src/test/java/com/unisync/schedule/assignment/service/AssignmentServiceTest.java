@@ -1,6 +1,7 @@
 package com.unisync.schedule.assignment.service;
 
-import com.unisync.schedule.assignment.dto.AssignmentToScheduleMessage;
+import com.unisync.schedule.assignment.dto.UserAssignmentsBatchMessage;
+import com.unisync.schedule.assignment.dto.UserAssignmentsBatchMessage.AssignmentPayload;
 import com.unisync.schedule.categories.service.CategoryService;
 import com.unisync.schedule.common.entity.Schedule;
 import com.unisync.schedule.common.entity.Schedule.ScheduleSource;
@@ -17,10 +18,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,242 +49,127 @@ class AssignmentServiceTest {
     @Captor
     private ArgumentCaptor<Schedule> scheduleCaptor;
 
-    private AssignmentToScheduleMessage validMessage;
+    private UserAssignmentsBatchMessage validMessage;
     private Long canvasCategoryId;
 
     @BeforeEach
     void setUp() {
         canvasCategoryId = 100L;
 
-        validMessage = AssignmentToScheduleMessage.builder()
-            .eventType("ASSIGNMENT_CREATED")
-            .assignmentId(1L)
+        validMessage = UserAssignmentsBatchMessage.builder()
+            .eventType("USER_ASSIGNMENTS_CREATED")
             .cognitoSub("user-123")
-            .canvasAssignmentId(456L)
-            .canvasCourseId(789L)
-            .title("중간고사 프로젝트")
-            .description("Spring Boot로 REST API 구현")
-            .dueAt(LocalDateTime.of(2025, 11, 15, 23, 59, 59))
-            .pointsPossible(100)
-            .courseId(10L)
-            .courseName("데이터구조")
+            .assignments(Arrays.asList(
+                AssignmentPayload.builder()
+                    .assignmentId(1L)
+                    .canvasAssignmentId(456L)
+                    .canvasCourseId(789L)
+                    .courseId(10L)
+                    .courseName("데이터구조")
+                    .title("중간고사 프로젝트")
+                    .description("Spring Boot로 REST API 구현")
+                    .dueAt("2025-11-15T23:59:59")
+                    .pointsPossible(100.0)
+                    .build(),
+                AssignmentPayload.builder()
+                    .assignmentId(2L)
+                    .canvasAssignmentId(457L)
+                    .canvasCourseId(790L)
+                    .courseId(11L)
+                    .courseName("알고리즘")
+                    .title("기말 프로젝트")
+                    .description("정렬 알고리즘 구현")
+                    .dueAt("2025-12-20T23:59:59")
+                    .pointsPossible(120.0)
+                    .build()
+            ))
             .build();
     }
 
     @Test
-    @DisplayName("ASSIGNMENT_CREATED 이벤트 처리 성공")
-    void processAssignmentEvent_Created_Success() {
-        // given
-        given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
-            .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
+    @DisplayName("배치 이벤트로 일정 생성 및 불포함 일정 삭제")
+    void processAssignmentsBatch_createsAndPrunesSchedules() {
+        // given: 기존 일정 하나(불포함) + 배치 내 두 개 생성
+        Schedule existingStale = Schedule.builder()
+            .scheduleId(99L)
+            .cognitoSub("user-123")
+            .categoryId(50L)
+            .title("old")
+            .source(ScheduleSource.CANVAS)
+            .sourceId("canvas-assignment-999-user-123")
+            .build();
+
+        given(scheduleRepository.findByCognitoSubAndSource("user-123", ScheduleSource.CANVAS))
+            .willReturn(List.of(existingStale));
+
+        given(categoryService.getOrCreateCourseCategory(eq("user-123"), any(), any()))
             .willReturn(canvasCategoryId);
+
         given(scheduleRepository.save(any(Schedule.class)))
             .willAnswer(invocation -> {
                 Schedule arg = invocation.getArgument(0);
-                arg.setScheduleId(1L);
+                arg.setScheduleId(arg.getScheduleId() == null ? 1L : arg.getScheduleId());
                 return arg;
             });
 
         // when
-        assignmentService.processAssignmentEvent(validMessage);
+        assignmentService.processAssignmentsBatch(validMessage);
 
         // then
-        then(scheduleRepository).should(times(1)).existsBySourceAndSourceId(
-            eq(ScheduleSource.CANVAS),
-            eq("canvas-assignment-456-user-123")
-        );
-        then(categoryService).should(times(1)).getOrCreateCanvasCategory("user-123");
-        then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
+        then(scheduleRepository).should(times(2)).save(scheduleCaptor.capture());
+        then(scheduleRepository).should(times(1)).delete(existingStale);
 
-        Schedule savedSchedule = scheduleCaptor.getValue();
-        assertThat(savedSchedule.getCognitoSub()).isEqualTo("user-123");
-        assertThat(savedSchedule.getGroupId()).isNull();
-        assertThat(savedSchedule.getCategoryId()).isEqualTo(canvasCategoryId);
-        assertThat(savedSchedule.getTitle()).isEqualTo("[데이터구조] 중간고사 프로젝트");
-        assertThat(savedSchedule.getDescription()).isEqualTo("Spring Boot로 REST API 구현");
-        assertThat(savedSchedule.getEndTime()).isEqualTo(validMessage.getDueAt());
-        assertThat(savedSchedule.getStartTime()).isEqualTo(validMessage.getDueAt().minusHours(24));
-        assertThat(savedSchedule.getIsAllDay()).isFalse();
-        assertThat(savedSchedule.getStatus()).isEqualTo(ScheduleStatus.TODO);
-        assertThat(savedSchedule.getSource()).isEqualTo(ScheduleSource.CANVAS);
-        assertThat(savedSchedule.getSourceId()).isEqualTo("canvas-assignment-456-user-123");
+        List<Schedule> saved = scheduleCaptor.getAllValues();
+        assertThat(saved).hasSize(2);
+        assertThat(saved.get(0).getSource()).isEqualTo(ScheduleSource.CANVAS);
+        assertThat(saved.get(0).getIsAllDay()).isFalse();
+        assertThat(saved.get(0).getTitle()).isEqualTo("중간고사 프로젝트");
+        assertThat(saved.get(0).getStartTime()).isEqualTo(LocalDateTime.of(2025, 11, 15, 23, 59, 59));
+        assertThat(saved.get(0).getEndTime()).isEqualTo(LocalDateTime.of(2025, 11, 15, 23, 59, 59));
     }
 
     @Test
-    @DisplayName("중복된 Schedule은 생성하지 않음")
-    void processAssignmentEvent_Created_AlreadyExists() {
-        // given
-        given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
-            .willReturn(true);
-
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
-
-        // then
-        then(scheduleRepository).should(times(1)).existsBySourceAndSourceId(any(), anyString());
-        then(categoryService).should(never()).getOrCreateCanvasCategory(anyString());
-        then(scheduleRepository).should(never()).save(any(Schedule.class));
-    }
-
-    @Test
-    @DisplayName("ASSIGNMENT_UPDATED 이벤트 처리 성공")
-    void processAssignmentEvent_Updated_Success() {
-        // given
-        validMessage.setEventType("ASSIGNMENT_UPDATED");
-        validMessage.setTitle("업데이트된 제목");
-
-        Schedule existingSchedule = Schedule.builder()
-            .scheduleId(1L)
-            .cognitoSub("user-123")
-            .categoryId(canvasCategoryId)
-            .title("[데이터구조] 기존 제목")
-            .description("기존 설명")
-            .startTime(LocalDateTime.of(2025, 11, 10, 23, 59, 59))
-            .endTime(LocalDateTime.of(2025, 11, 11, 23, 59, 59))
-            .isAllDay(false)
-            .status(ScheduleStatus.TODO)
-            .source(ScheduleSource.CANVAS)
-            .sourceId("canvas-assignment-456-user-123")
+    @DisplayName("dueAt이 null인 과제는 기존 일정 삭제 후 건너뜀")
+    void processAssignmentsBatch_dueAtNull_deletesExisting() {
+        AssignmentPayload withoutDue = AssignmentPayload.builder()
+            .assignmentId(3L)
+            .canvasAssignmentId(999L)
+            .canvasCourseId(700L)
+            .courseId(12L)
+            .courseName("네트워크")
+            .title("보고서")
+            .description("null dueAt")
+            .dueAt(null)
             .build();
 
-        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
-            .willReturn(Optional.of(existingSchedule));
-        given(scheduleRepository.save(any(Schedule.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
+        validMessage.setAssignments(List.of(withoutDue));
 
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
-
-        // then
-        then(scheduleRepository).should(times(1)).findBySourceAndSourceId(any(), anyString());
-        then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
-
-        Schedule updatedSchedule = scheduleCaptor.getValue();
-        assertThat(updatedSchedule.getTitle()).isEqualTo("[데이터구조] 업데이트된 제목");
-        assertThat(updatedSchedule.getDescription()).isEqualTo(validMessage.getDescription());
-        assertThat(updatedSchedule.getEndTime()).isEqualTo(validMessage.getDueAt());
-        assertThat(updatedSchedule.getStartTime()).isEqualTo(validMessage.getDueAt().minusHours(24));
-    }
-
-    @Test
-    @DisplayName("ASSIGNMENT_UPDATED 시 Schedule이 없으면 예외 발생")
-    void processAssignmentEvent_Updated_NotFound() {
-        // given
-        validMessage.setEventType("ASSIGNMENT_UPDATED");
-
-        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
-            .willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> assignmentService.processAssignmentEvent(validMessage))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Schedule not found");
-
-        then(scheduleRepository).should(never()).save(any(Schedule.class));
-    }
-
-    @Test
-    @DisplayName("ASSIGNMENT_DELETED 이벤트 처리 성공")
-    void processAssignmentEvent_Deleted_Success() {
-        // given
-        validMessage.setEventType("ASSIGNMENT_DELETED");
-
-        Schedule existingSchedule = Schedule.builder()
-            .scheduleId(1L)
+        Schedule existing = Schedule.builder()
+            .scheduleId(5L)
             .cognitoSub("user-123")
-            .categoryId(canvasCategoryId)
-            .title("[데이터구조] 중간고사 프로젝트")
             .source(ScheduleSource.CANVAS)
-            .sourceId("canvas-assignment-456-user-123")
+            .sourceId("canvas-assignment-999-user-123")
             .build();
 
-        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
-            .willReturn(Optional.of(existingSchedule));
+        given(scheduleRepository.findByCognitoSubAndSource("user-123", ScheduleSource.CANVAS))
+            .willReturn(List.of(existing));
 
         // when
-        assignmentService.processAssignmentEvent(validMessage);
+        assignmentService.processAssignmentsBatch(validMessage);
 
         // then
-        then(scheduleRepository).should(times(1)).findBySourceAndSourceId(any(), anyString());
-        then(scheduleRepository).should(times(1)).delete(existingSchedule);
-    }
-
-    @Test
-    @DisplayName("ASSIGNMENT_DELETED 시 Schedule이 없어도 예외 발생하지 않음")
-    void processAssignmentEvent_Deleted_NotFound() {
-        // given
-        validMessage.setEventType("ASSIGNMENT_DELETED");
-
-        given(scheduleRepository.findBySourceAndSourceId(any(), anyString()))
-            .willReturn(Optional.empty());
-
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
-
-        // then
-        then(scheduleRepository).should(times(1)).findBySourceAndSourceId(any(), anyString());
-        then(scheduleRepository).should(never()).delete(any(Schedule.class));
+        then(scheduleRepository).should(times(1)).delete(existing);
+        then(scheduleRepository).should(never()).save(any(Schedule.class));
     }
 
     @Test
     @DisplayName("알 수 없는 이벤트 타입은 무시")
-    void processAssignmentEvent_UnknownEventType() {
-        // given
-        validMessage.setEventType("UNKNOWN_EVENT");
+    void processAssignmentsBatch_ignoresUnknownEvent() {
+        validMessage.setEventType("UNKNOWN");
 
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
+        assignmentService.processAssignmentsBatch(validMessage);
 
-        // then
         then(scheduleRepository).should(never()).save(any(Schedule.class));
         then(scheduleRepository).should(never()).delete(any(Schedule.class));
-    }
-
-    @Test
-    @DisplayName("Schedule 제목은 [과목명] 과제명 형식으로 생성")
-    void createSchedule_TitleFormat() {
-        // given
-        given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
-            .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
-            .willReturn(canvasCategoryId);
-        given(scheduleRepository.save(any(Schedule.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
-
-        // then
-        then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
-
-        Schedule savedSchedule = scheduleCaptor.getValue();
-        assertThat(savedSchedule.getTitle()).startsWith("[" + validMessage.getCourseName() + "]");
-        assertThat(savedSchedule.getTitle()).contains(validMessage.getTitle());
-    }
-
-    @Test
-    @DisplayName("시작 시간은 마감 시간 24시간 전으로 설정")
-    void createSchedule_StartTime24HoursBeforeDue() {
-        // given
-        LocalDateTime dueAt = LocalDateTime.of(2025, 11, 20, 23, 59, 59);
-        validMessage.setDueAt(dueAt);
-
-        given(scheduleRepository.existsBySourceAndSourceId(any(), anyString()))
-            .willReturn(false);
-        given(categoryService.getOrCreateCanvasCategory(validMessage.getCognitoSub()))
-            .willReturn(canvasCategoryId);
-        given(scheduleRepository.save(any(Schedule.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        // when
-        assignmentService.processAssignmentEvent(validMessage);
-
-        // then
-        then(scheduleRepository).should(times(1)).save(scheduleCaptor.capture());
-
-        Schedule savedSchedule = scheduleCaptor.getValue();
-        assertThat(savedSchedule.getStartTime()).isEqualTo(dueAt.minusHours(24));
-        assertThat(savedSchedule.getEndTime()).isEqualTo(dueAt);
     }
 }

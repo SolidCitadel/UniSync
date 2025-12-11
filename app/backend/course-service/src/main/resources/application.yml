@@ -28,12 +28,15 @@ spring:
       credentials:
         access-key: ${AWS_ACCESS_KEY_ID:}
         secret-key: ${AWS_SECRET_ACCESS_KEY:}
-      sqs:
-        endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
 
-# SQS Queues
+# AWS SQS Configuration (for code that uses aws.* properties)
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+
+# SQS Queues (absolute queue URLs - terraform style)
 sqs:
   assignment-to-schedule-queue: ${SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE:}
+  course-to-schedule-queue: ${SQS_COURSE_TO_SCHEDULE_QUEUE:}
 
 # Swagger/OpenAPI
 springdoc:

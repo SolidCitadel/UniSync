@@ -14,14 +14,15 @@ import java.util.List;
 @Repository
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
-    // 사용자 ID로 조회
-    List<Todo> findByCognitoSub(String cognitoSub);
+    // 개인 할일 조회 (group_id IS NULL)
+    @Query("SELECT t FROM Todo t WHERE t.cognitoSub = :cognitoSub AND t.groupId IS NULL")
+    List<Todo> findByCognitoSub(@Param("cognitoSub") String cognitoSub);
 
     // 그룹 ID로 조회
     List<Todo> findByGroupId(Long groupId);
 
     // 특정 기간의 할일 조회 (사용자)
-    @Query("SELECT t FROM Todo t WHERE t.cognitoSub = :cognitoSub " +
+    @Query("SELECT t FROM Todo t WHERE t.cognitoSub = :cognitoSub AND t.groupId IS NULL " +
            "AND t.startDate >= :startDate AND t.dueDate <= :endDate " +
            "ORDER BY t.dueDate, t.priority DESC")
     List<Todo> findByCognitoSubAndDateRange(
@@ -52,6 +53,16 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     // 서브태스크 조회
     List<Todo> findByParentTodoId(Long parentTodoId);
 
+    // 일정 기반 할일 조회 (루트 Todo)
+    List<Todo> findByScheduleIdAndParentTodoIdIsNull(Long scheduleId);
+
+    // 개인 + 여러 그룹의 Todo 조회
+    @Query("SELECT t FROM Todo t WHERE (t.cognitoSub = :cognitoSub AND t.groupId IS NULL) OR t.groupId IN :groupIds")
+    List<Todo> findByCognitoSubOrGroupIdIn(
+            @Param("cognitoSub") String cognitoSub,
+            @Param("groupIds") List<Long> groupIds
+    );
+
     // 서브태스크 개수 조회
     long countByParentTodoId(Long parentTodoId);
 
@@ -62,7 +73,11 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     List<Todo> findByScheduleId(Long scheduleId);
 
     // AI 생성 할일 조회
-    List<Todo> findByCognitoSubAndIsAiGenerated(String cognitoSub, Boolean isAiGenerated);
+    @Query("SELECT t FROM Todo t WHERE t.cognitoSub = :cognitoSub AND t.groupId IS NULL AND t.isAiGenerated = :isAiGenerated")
+    List<Todo> findByCognitoSubAndIsAiGenerated(
+            @Param("cognitoSub") String cognitoSub,
+            @Param("isAiGenerated") Boolean isAiGenerated
+    );
 
     // 그룹 할일 삭제 (그룹 삭제 시)
     void deleteByGroupId(Long groupId);

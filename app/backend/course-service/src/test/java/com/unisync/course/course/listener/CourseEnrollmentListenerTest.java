@@ -7,7 +7,6 @@ import com.unisync.course.common.entity.Enrollment;
 import com.unisync.course.common.repository.CourseRepository;
 import com.unisync.course.common.repository.EnrollmentRepository;
 import com.unisync.shared.dto.sqs.CourseEnrollmentEvent;
-import io.awspring.cloud.sqs.operations.SqsTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,9 +42,6 @@ class CourseEnrollmentListenerTest {
     @Mock
     private EnrollmentRepository enrollmentRepository;
 
-    @Mock
-    private SqsTemplate sqsTemplate;
-
     private CourseEnrollmentListener courseEnrollmentListener;
 
     private ObjectMapper objectMapper;
@@ -61,7 +57,6 @@ class CourseEnrollmentListenerTest {
         courseEnrollmentListener = new CourseEnrollmentListener(
                 courseRepository,
                 enrollmentRepository,
-                sqsTemplate,
                 objectMapper
         );
 

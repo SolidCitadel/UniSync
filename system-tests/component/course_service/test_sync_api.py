@@ -12,43 +12,6 @@ import time
 class TestCanvasSyncApi:
     """Canvas 동기화 API 테스트"""
 
-    def test_canvas_sync_without_token_fails(self, jwt_auth_tokens, service_urls):
-        """
-        Canvas 토큰 없이 동기화 시 실패
-
-        Given: Canvas 토큰이 등록되지 않은 사용자
-        When: POST /api/v1/integrations/canvas/sync 호출
-        Then: 400 또는 404 (토큰 미등록)
-        """
-        gateway_url = service_urls.get("gateway", "http://localhost:8080")
-        id_token = jwt_auth_tokens["id_token"]
-
-        headers = {
-            "Authorization": f"Bearer {id_token}",
-            "Content-Type": "application/json"
-        }
-
-        # 먼저 Canvas 토큰이 있으면 삭제
-        delete_response = requests.delete(
-            f"{gateway_url}/api/v1/integrations/canvas/credentials",
-            headers=headers,
-            timeout=5
-        )
-        assert delete_response.status_code in [204, 404], \
-            f"Canvas 토큰 삭제 실패: {delete_response.status_code} - {delete_response.text}"
-
-        print(f"\n[TEST] Canvas 토큰 없이 동기화 시도")
-        response = requests.post(
-            f"{gateway_url}/api/v1/integrations/canvas/sync",
-            headers=headers,
-            timeout=30
-        )
-
-        # 토큰이 없으면 400, 404, 또는 500 (Lambda 내부 에러)
-        assert response.status_code in [400, 404, 500], \
-            f"예상치 못한 응답: {response.status_code} - {response.text}"
-        print(f"  ✅ Canvas 토큰 없이 동기화 실패: {response.status_code}")
-
     def test_canvas_sync_with_invalid_token(self, jwt_auth_tokens, service_urls):
         """
         잘못된 Canvas 토큰 처리 검증

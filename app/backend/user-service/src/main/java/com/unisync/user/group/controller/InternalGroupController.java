@@ -56,4 +56,18 @@ public class InternalGroupController {
         List<String> cognitoSubs = groupService.getGroupMemberCognitoSubs(groupId);
         return ResponseEntity.ok(cognitoSubs);
     }
+
+    /**
+     * 사용자가 속한 모든 그룹 ID 목록 조회
+     *
+     * Schedule-Service에서 includeGroups=true인 경우 개인 + 그룹 일정을 함께 조회할 때 사용
+     */
+    @GetMapping("/memberships/{cognitoSub}")
+    @Operation(summary = "사용자 그룹 목록 조회", description = "사용자가 속한 모든 그룹 ID를 반환합니다.")
+    public ResponseEntity<List<Long>> getUserGroupIds(
+            @Parameter(description = "사용자 Cognito Sub") @PathVariable String cognitoSub
+    ) {
+        List<Long> groupIds = groupService.getMyGroupIds(cognitoSub);
+        return ResponseEntity.ok(groupIds);
+    }
 }

@@ -2,7 +2,7 @@ package com.unisync.schedule.assignment.listener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.unisync.schedule.assignment.dto.AssignmentToScheduleMessage;
+import com.unisync.schedule.assignment.dto.UserAssignmentsBatchMessage;
 import com.unisync.schedule.assignment.service.AssignmentService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -33,12 +33,6 @@ public class AssignmentEventListener {
     private final SqsAsyncClient sqsAsyncClient;
     private final AssignmentService assignmentService;
     private final ObjectMapper objectMapper;
-
-    @Value("${aws.sqs.endpoint:}")
-    private String sqsEndpoint;
-
-    @Value("${aws.region}")
-    private String region;
 
     @Value("${sqs.assignment-to-schedule-queue}")
     private String queueName;
@@ -110,14 +104,14 @@ public class AssignmentEventListener {
     private void processMessage(String queueUrl, Message message) {
         try {
             // JSON 파싱
-            AssignmentToScheduleMessage event = objectMapper.readValue(
-                    message.body(), AssignmentToScheduleMessage.class);
+            UserAssignmentsBatchMessage event = objectMapper.readValue(
+                    message.body(), UserAssignmentsBatchMessage.class);
 
-            log.info("Processing message: eventType={}, assignmentId={}, cognitoSub={}",
-                    event.getEventType(), event.getAssignmentId(), event.getCognitoSub());
+            log.info("Processing assignment batch: eventType={}, cognitoSub={}, assignments={}",
+                    event.getEventType(), event.getCognitoSub(),
+                    event.getAssignments() != null ? event.getAssignments().size() : 0);
 
-            // Assignment 이벤트 처리
-            assignmentService.processAssignmentEvent(event);
+            assignmentService.processAssignmentsBatch(event);
 
             // 처리 완료 후 메시지 삭제
             deleteMessage(queueUrl, message.receiptHandle());
@@ -153,19 +147,6 @@ public class AssignmentEventListener {
      * SQS Queue URL 생성
      */
     private String getQueueUrl() {
-        // queueName이 이미 전체 URL인 경우 그대로 사용
-        if (queueName.startsWith("https://")) {
-            return queueName;
-        }
-        
-        // LocalStack: http://localhost:4566/000000000000/queue-name
-        if (sqsEndpoint != null && !sqsEndpoint.isEmpty() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
-            return String.format("%s/000000000000/%s", sqsEndpoint, queueName);
-        }
-        
-        // AWS 실제 환경 - queueName만 있으면 전체 URL 구성 불가 (accountId 필요)
-        // 환경변수로 전체 URL을 주입해야 함
-        log.warn("SQS queue URL cannot be constructed without full URL. Please set SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE with full URL.");
         return queueName;
     }
 }

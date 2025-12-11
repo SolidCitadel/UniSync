@@ -24,8 +24,6 @@ spring:
 # AWS Configuration
 aws:
   region: ${AWS_REGION:ap-northeast-2}
-  sqs:
-    endpoint: ${AWS_SQS_ENDPOINT:https://sqs.ap-northeast-2.amazonaws.com}
   credentials:
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}

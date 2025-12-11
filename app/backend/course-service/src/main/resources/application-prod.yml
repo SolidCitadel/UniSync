@@ -1,6 +1,7 @@
 # application-prod.yml - 운영용 프로파일
 # docker-compose.yml (로컬 운영 환경) 및 실제 ECS 배포 시 사용됩니다.
 # 모든 환경 변수는 docker-compose.yml 또는 ECS Task Definition에서 주입됩니다.
+# SQS 큐 이름/endpoint/region은 공통 application.yml에서 읽음
 
 spring:
   jpa:

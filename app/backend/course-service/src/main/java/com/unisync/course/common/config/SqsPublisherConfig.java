@@ -3,10 +3,9 @@ package com.unisync.course.common.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
 import java.net.URI;
 
@@ -17,19 +16,20 @@ import java.net.URI;
 @Configuration
 public class SqsPublisherConfig {
 
-    @Value("${aws.sqs.endpoint:}")
+    @Value("${AWS_SQS_ENDPOINT:}")
     private String sqsEndpoint;
 
-    @Value("${aws.region}")
+    @Value("${AWS_REGION:ap-northeast-2}")
     private String region;
 
     @Bean
     public SqsAsyncClient sqsAsyncClient() {
         var builder = SqsAsyncClient.builder()
-                .region(Region.of(region));
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create());
 
-        // LocalStack 사용 시 endpoint 설정 (AWS 실제 엔드포인트가 아닐 때만)
-        if (sqsEndpoint != null && !sqsEndpoint.isBlank() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
+        // LocalStack 등 커스텀 엔드포인트 사용 시 override
+        if (sqsEndpoint != null && !sqsEndpoint.isBlank()) {
             builder.endpointOverride(URI.create(sqsEndpoint));
         }
 

@@ -34,6 +34,12 @@ awslocal sqs create-queue \
   --region $REGION \
   --attributes "$ATTRIBUTES"
 
+# Course-Service → Schedule-Service: Course 이벤트 (Phase 1.1: 과목 비활성화)
+awslocal sqs create-queue \
+  --queue-name courseservice-to-scheduleservice-courses \
+  --region $REGION \
+  --attributes "$ATTRIBUTES"
+
 # 3. S3 버킷 생성
 echo "Creating S3 Buckets..."
 awslocal s3 mb s3://unisync-attachments --region $REGION
