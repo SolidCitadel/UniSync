@@ -22,13 +22,7 @@ public class CourseEventPublisher {
     private final SqsAsyncClient sqsAsyncClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${aws.sqs.endpoint}")
-    private String sqsEndpoint;
-
-    @Value("${aws.region}")
-    private String region;
-
-    @Value("${aws.sqs.queues.course-to-schedule}")
+    @Value("${sqs.course-to-schedule-queue}")
     private String queueName;
 
     /**
@@ -62,16 +56,9 @@ public class CourseEventPublisher {
     }
 
     /**
-     * SQS Queue URL 생성
+     * SQS Queue URL 생성 (절대 URL 주입 전제)
      */
     private String getQueueUrl() {
-        // LocalStack: http://localhost:4566/000000000000/queue-name
-        // AWS: https://sqs.{region}.amazonaws.com/{accountId}/{queueName}
-        if (sqsEndpoint != null && !sqsEndpoint.isEmpty()) {
-            return String.format("%s/000000000000/%s", sqsEndpoint, queueName);
-        } else {
-            // AWS 실제 환경 (accountId는 별도 설정 필요)
-            return String.format("https://sqs.%s.amazonaws.com/000000000000/%s", region, queueName);
-        }
+        return queueName;
     }
 }

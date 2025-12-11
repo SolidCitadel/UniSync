@@ -4,8 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
@@ -19,10 +18,10 @@ import java.net.URI;
 @Configuration
 public class SqsConfig {
 
-    @Value("${aws.sqs.endpoint}")
+    @Value("${AWS_SQS_ENDPOINT:}")
     private String sqsEndpoint;
 
-    @Value("${aws.region}")
+    @Value("${AWS_REGION:ap-northeast-2}")
     private String awsRegion;
 
     @Bean
@@ -32,10 +31,11 @@ public class SqsConfig {
         log.info("  - Region: {}", awsRegion);
 
         var builder = SqsClient.builder()
-                .region(Region.of(awsRegion));
+                .region(Region.of(awsRegion))
+                .credentialsProvider(DefaultCredentialsProvider.create());
 
-        if (sqsEndpoint != null && !sqsEndpoint.isBlank() && !sqsEndpoint.contains("sqs.ap-northeast-2.amazonaws.com")) {
-             builder.endpointOverride(URI.create(sqsEndpoint));
+        if (sqsEndpoint != null && !sqsEndpoint.isBlank()) {
+            builder.endpointOverride(URI.create(sqsEndpoint));
         }
 
         return builder.build();
