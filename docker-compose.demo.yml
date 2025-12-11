@@ -83,6 +83,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+      - SPRING_DATASOURCE_URL=${USER_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
       - ./.env.local:/workspace/.env.local:ro
@@ -114,6 +117,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+      - SPRING_DATASOURCE_URL=${COURSE_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
       - ./.env.local:/workspace/.env.local:ro
@@ -147,6 +153,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 테이블 자동 생성 및 유지
+      - SPRING_DATASOURCE_URL=${SCHEDULE_SERVICE_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./scripts/wait-for-localstack.sh:/wait-for-localstack.sh:ro
       - ./.env.local:/workspace/.env.local:ro
