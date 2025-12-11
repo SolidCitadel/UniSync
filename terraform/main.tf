@@ -219,7 +219,8 @@ module "ecs" {
         { name = "SPRING_DATASOURCE_USERNAME", value = var.rds_master_username },
         { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "update" },
         { name = "AWS_SQS_ENDPOINT", value = "https://sqs.${var.aws_region}.amazonaws.com" },
-        { name = "SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_assignments_queue_url }
+        { name = "SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_assignments_queue_url },
+        { name = "SQS_COURSE_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_courses_queue_url }
       ]
       secrets = [
         { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = module.rds.db_secret_arn }
@@ -235,7 +236,8 @@ module "ecs" {
         { name = "SPRING_DATASOURCE_USERNAME", value = var.rds_master_username },
         { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "update" },
         { name = "AWS_SQS_ENDPOINT", value = "https://sqs.${var.aws_region}.amazonaws.com" },
-        { name = "SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_assignments_queue_url }
+        { name = "SQS_ASSIGNMENT_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_assignments_queue_url },
+        { name = "SQS_COURSE_TO_SCHEDULE_QUEUE", value = module.sqs.courseservice_to_scheduleservice_courses_queue_url }
       ]
       secrets = [
         { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = module.rds.db_secret_arn }
@@ -250,5 +252,4 @@ module "ecs" {
 
   tags = var.common_tags
 }
-
 
