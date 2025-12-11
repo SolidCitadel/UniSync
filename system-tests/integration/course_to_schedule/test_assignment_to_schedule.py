@@ -101,9 +101,9 @@ class TestAssignmentToScheduleIntegration:
                         print(f"   - Source: {schedule['source']}")
                         print(f"   - Category ID: {schedule['categoryId']}")
 
-                        # Schedule 검증
+                        # Schedule 검증 (Phase 1.1: 제목은 과제 원본, 과목 정보는 카테고리로 구분)
                         assert schedule['cognitoSub'] == 'test-user-123'
-                        assert schedule['title'] == '[웹 프로그래밍] Spring Boot 중간고사 프로젝트'
+                        assert schedule['title'] == 'Spring Boot 중간고사 프로젝트'
                         assert schedule['source'] == 'CANVAS'
                         assert schedule['sourceId'] == 'canvas-assignment-98765-test-user-123'
                         assert schedule['categoryId'] is not None
@@ -309,7 +309,8 @@ class TestAssignmentToScheduleIntegration:
 
         assert len(matching_schedules) == 1, f"Schedule이 중복 생성됨: {len(matching_schedules)}개"
         assert updated_schedule['scheduleId'] == initial_schedule_id
-        assert updated_schedule['title'] == '[알고리즘] 알고리즘 과제 1 (수정됨)'
+        # Phase 1.1: 제목은 과제 제목만 유지 (과목명은 카테고리로 표현)
+        assert updated_schedule['title'] == '알고리즘 과제 1 (수정됨)'
         assert updated_schedule['description'] == '정렬 및 탐색 알고리즘 구현'
 
         print(f"\n✅ Schedule 업데이트 검증 완료")

@@ -103,7 +103,9 @@ class TestSyncDisableApiFlow:
 
             # 예상치 못한 필드 검증 (API 계약 외 필드 추가 시 실패)
             actual_fields = set(s.keys())
-            unexpected_fields = actual_fields - expected_schedule_fields
+            # Phase 1.1: 스케줄에 연결된 todos 필드 포함 허용
+            allowed_extra_fields = {"todos"}
+            unexpected_fields = actual_fields - expected_schedule_fields - allowed_extra_fields
             assert len(unexpected_fields) == 0, \
                 f"Schedule에 예상치 못한 필드 발견: {unexpected_fields} (API 계약 위반)"
 
@@ -222,9 +224,10 @@ class TestSyncDisableApiFlow:
             assert "source" in s and s["source"] == "CANVAS", f"schedule source가 CANVAS가 아님: {s}"
             assert "categoryId" in s, f"schedule에 categoryId 필드 누락: {s}"
 
-            # 예상치 못한 필드 검증
+            # 예상치 못한 필드 검증 (todos 필드는 허용)
             actual_fields = set(s.keys())
-            unexpected_fields = actual_fields - expected_schedule_fields
+            allowed_extra_fields = {"todos"}
+            unexpected_fields = actual_fields - expected_schedule_fields - allowed_extra_fields
             assert len(unexpected_fields) == 0, \
                 f"Schedule에 예상치 못한 필드 발견: {unexpected_fields} (API 계약 위반)"
 
