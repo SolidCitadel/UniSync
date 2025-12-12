@@ -186,18 +186,20 @@ def lambda_handler(event, context):
                 }
             }
 
-        # 5. 메시지 송신 (배치 방식 - main 브랜치 호환)
-        event_type = 'CANVAS_COURSES_SYNCED' if sync_mode == 'courses' else 'CANVAS_SYNC_COMPLETED'
-
-        sync_message = {
-            'eventType': event_type,
-            'cognitoSub': cognito_sub,
-            'syncedAt': datetime.utcnow().isoformat(),
-            'courses': courses_data,
-            'syncMode': sync_mode
-        }
-
-        send_to_sqs('lambda-to-courseservice-sync', sync_message)
+        # 5. 메시지 송신 (Course 단위 분할 - 256KB 제한 대응)
+        # 각 Course를 개별 메시지로 전송하여 SQS 크기 제한 회피
+        synced_at = datetime.utcnow().isoformat()
+        
+        for course_data in courses_data:
+            course_message = {
+                'eventType': 'CANVAS_COURSE_SYNCED',
+                'cognitoSub': cognito_sub,
+                'syncedAt': synced_at,
+                'course': course_data,  # 단일 Course
+                'syncMode': sync_mode
+            }
+            send_to_sqs('lambda-to-courseservice-sync', course_message)
+            print(f"  - Sent course: {course_data.get('canvasCourseId')} ({len(course_data.get('assignments', []))} assignments)")
 
         print(f"Canvas sync completed: {len(courses_data)} courses, {total_assignments} assignments (mode={sync_mode})")
 
