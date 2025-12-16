@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Assignment 이벤트 Publisher
@@ -28,6 +30,11 @@ public class AssignmentEventPublisher {
     @Value("${sqs.assignment-to-schedule-queue}")
     private String queueName;
 
+    static final int MAX_SQS_MESSAGE_BYTES = 1_048_576;
+    static final int SOFT_SQS_MESSAGE_BYTES = 950 * 1024;
+    static final int DESCRIPTION_MAX_BYTES = 4 * 1024;
+    static final int DESCRIPTION_FALLBACK_BYTES = 2 * 1024;
+
     /**
      * 사용자별 assignments 배치 이벤트를 Schedule-Service로 발행
      *
@@ -38,7 +45,26 @@ public class AssignmentEventPublisher {
 
         for (UserAssignmentsBatchEvent event : events) {
             try {
-                String messageBody = objectMapper.writeValueAsString(event);
+                UserAssignmentsBatchEvent sanitized = sanitizeBatchEvent(event, DESCRIPTION_MAX_BYTES);
+                byte[] bodyBytes = objectMapper.writeValueAsBytes(sanitized);
+
+                if (bodyBytes.length > SOFT_SQS_MESSAGE_BYTES) {
+                    sanitized = sanitizeBatchEvent(event, DESCRIPTION_FALLBACK_BYTES);
+                    bodyBytes = objectMapper.writeValueAsBytes(sanitized);
+                }
+
+                if (bodyBytes.length > MAX_SQS_MESSAGE_BYTES) {
+                    sanitized = dropBatchDescriptions(event);
+                    bodyBytes = objectMapper.writeValueAsBytes(sanitized);
+                }
+
+                if (bodyBytes.length > MAX_SQS_MESSAGE_BYTES) {
+                    log.error("Skipping assignment batch publish: message too large ({} bytes) cognitoSub={}",
+                            bodyBytes.length, event.getCognitoSub());
+                    continue;
+                }
+
+                String messageBody = new String(bodyBytes, StandardCharsets.UTF_8);
 
                 SendMessageRequest request = SendMessageRequest.builder()
                         .queueUrl(queueUrl)
@@ -72,7 +98,8 @@ public class AssignmentEventPublisher {
 
         for (AssignmentToScheduleEventDto event : events) {
             try {
-                String messageBody = objectMapper.writeValueAsString(event);
+                AssignmentToScheduleEventDto sanitized = sanitizeAssignmentEvent(event);
+                String messageBody = objectMapper.writeValueAsString(sanitized);
 
                 SendMessageRequest request = SendMessageRequest.builder()
                         .queueUrl(queueUrl)
@@ -99,5 +126,158 @@ public class AssignmentEventPublisher {
      */
     private String getQueueUrl() {
         return queueName;
+    }
+
+    static UserAssignmentsBatchEvent sanitizeBatchEvent(UserAssignmentsBatchEvent event, int maxDescriptionBytes) {
+        if (event == null) {
+            return null;
+        }
+        List<UserAssignmentsBatchEvent.AssignmentPayload> assignments = event.getAssignments();
+        if (assignments == null || assignments.isEmpty()) {
+            return event;
+        }
+
+        List<UserAssignmentsBatchEvent.AssignmentPayload> sanitizedAssignments = assignments.stream()
+                .map(payload -> sanitizeBatchPayload(payload, maxDescriptionBytes))
+                .toList();
+
+        if (sanitizedAssignments.equals(assignments)) {
+            return event;
+        }
+
+        return UserAssignmentsBatchEvent.builder()
+                .eventType(event.getEventType())
+                .cognitoSub(event.getCognitoSub())
+                .syncedAt(event.getSyncedAt())
+                .assignments(sanitizedAssignments)
+                .build();
+    }
+
+    static UserAssignmentsBatchEvent dropBatchDescriptions(UserAssignmentsBatchEvent event) {
+        if (event == null) {
+            return null;
+        }
+        List<UserAssignmentsBatchEvent.AssignmentPayload> assignments = event.getAssignments();
+        if (assignments == null || assignments.isEmpty()) {
+            return event;
+        }
+
+        List<UserAssignmentsBatchEvent.AssignmentPayload> sanitizedAssignments = assignments.stream()
+                .map(AssignmentEventPublisher::dropBatchPayloadDescription)
+                .toList();
+
+        if (sanitizedAssignments.equals(assignments)) {
+            return event;
+        }
+
+        return UserAssignmentsBatchEvent.builder()
+                .eventType(event.getEventType())
+                .cognitoSub(event.getCognitoSub())
+                .syncedAt(event.getSyncedAt())
+                .assignments(sanitizedAssignments)
+                .build();
+    }
+
+    private static UserAssignmentsBatchEvent.AssignmentPayload sanitizeBatchPayload(
+            UserAssignmentsBatchEvent.AssignmentPayload payload,
+            int maxDescriptionBytes
+    ) {
+        if (payload == null) {
+            return null;
+        }
+
+        String description = payload.getDescription();
+        String sanitizedDescription = truncateUtf8(description, maxDescriptionBytes);
+        if (Objects.equals(description, sanitizedDescription)) {
+            return payload;
+        }
+
+        return UserAssignmentsBatchEvent.AssignmentPayload.builder()
+                .assignmentId(payload.getAssignmentId())
+                .canvasAssignmentId(payload.getCanvasAssignmentId())
+                .canvasCourseId(payload.getCanvasCourseId())
+                .courseId(payload.getCourseId())
+                .courseName(payload.getCourseName())
+                .title(payload.getTitle())
+                .description(sanitizedDescription)
+                .dueAt(payload.getDueAt())
+                .pointsPossible(payload.getPointsPossible())
+                .build();
+    }
+
+    private static UserAssignmentsBatchEvent.AssignmentPayload dropBatchPayloadDescription(
+            UserAssignmentsBatchEvent.AssignmentPayload payload
+    ) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload.getDescription() == null) {
+            return payload;
+        }
+
+        return UserAssignmentsBatchEvent.AssignmentPayload.builder()
+                .assignmentId(payload.getAssignmentId())
+                .canvasAssignmentId(payload.getCanvasAssignmentId())
+                .canvasCourseId(payload.getCanvasCourseId())
+                .courseId(payload.getCourseId())
+                .courseName(payload.getCourseName())
+                .title(payload.getTitle())
+                .description(null)
+                .dueAt(payload.getDueAt())
+                .pointsPossible(payload.getPointsPossible())
+                .build();
+    }
+
+    private static AssignmentToScheduleEventDto sanitizeAssignmentEvent(AssignmentToScheduleEventDto event) {
+        if (event == null) {
+            return null;
+        }
+        String description = event.getDescription();
+        String sanitizedDescription = truncateUtf8(description, DESCRIPTION_MAX_BYTES);
+        if (Objects.equals(description, sanitizedDescription)) {
+            return event;
+        }
+
+        return AssignmentToScheduleEventDto.builder()
+                .eventType(event.getEventType())
+                .assignmentId(event.getAssignmentId())
+                .cognitoSub(event.getCognitoSub())
+                .canvasAssignmentId(event.getCanvasAssignmentId())
+                .canvasCourseId(event.getCanvasCourseId())
+                .title(event.getTitle())
+                .description(sanitizedDescription)
+                .dueAt(event.getDueAt())
+                .pointsPossible(event.getPointsPossible())
+                .courseId(event.getCourseId())
+                .courseName(event.getCourseName())
+                .build();
+    }
+
+    static String truncateUtf8(String value, int maxBytes) {
+        if (value == null || value.isEmpty() || maxBytes <= 0) {
+            return value;
+        }
+
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length <= maxBytes) {
+            return value;
+        }
+
+        int low = 0;
+        int high = value.length();
+        while (low < high) {
+            int mid = (low + high + 1) >>> 1;
+            int midBytes = value.substring(0, mid).getBytes(StandardCharsets.UTF_8).length;
+            if (midBytes <= maxBytes) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        if (low <= 0) {
+            return "";
+        }
+        return value.substring(0, low);
     }
 }

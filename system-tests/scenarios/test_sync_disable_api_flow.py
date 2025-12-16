@@ -75,8 +75,31 @@ class TestSyncDisableApiFlow:
         )
         assert full_sync.get("assignmentsCount", 0) >= 0, f"assignments 동기화 실패: {full_sync}"
 
+        # (사전 점검) dueAt이 있는 과제가 포함된 과목이 2개 이상인지 확인
+        # 이 시나리오는 "일부 과목만 비활성화"를 검증하므로, dueAt이 있는 과제가 있는 과목이 최소 2개 필요함.
+        course_id_to_name = {}
+        for c in courses:
+            cid = c.get("courseId") or c.get("id")
+            cname = self._extract_course_name(c)
+            if cid is not None and cname:
+                course_id_to_name[cid] = cname
+
+        course_assignments = self._fetch_course_assignments(gateway, headers, courses)
+        courses_with_due_assignments = {
+            course_id_to_name.get(cid)
+            for cid, assignments in course_assignments.items()
+            if any(a.get("dueAt") for a in assignments) and cid in course_id_to_name
+        }
+        courses_with_due_assignments.discard(None)
+
+        assert len(courses_with_due_assignments) >= 2, (
+            "테스트를 위해서는 dueAt이 있는 과제가 포함된 과목이 최소 2개 필요합니다. "
+            "현재 Canvas 계정/토큰 데이터 조건을 만족하지 못했습니다. "
+            f"(found={len(courses_with_due_assignments)}: {courses_with_due_assignments})"
+        )
+
         # 4) schedules 확인 → CANVAS schedule이 실제로 생성된 과목 파악
-        schedules_before = self._wait_for_schedules(gateway, headers, max_attempts=20, delay=3)
+        schedules_before = self._wait_for_schedules(gateway, headers, max_attempts=30, delay=3, min_canvas_category_count=2)
         canvas_schedules_before = [s for s in schedules_before if s.get("source") == "CANVAS"]
         assert canvas_schedules_before, "CANVAS 스케줄이 하나도 생성되지 않음 (모든 과제의 dueAt이 null일 수 있음)"
 
@@ -129,9 +152,11 @@ class TestSyncDisableApiFlow:
                 course_name = category_id_to_name[cat_id]
                 courses_with_schedules.add(course_name)
 
-        assert len(courses_with_schedules) >= 2, \
-            f"schedule이 생성된 과목이 2개 미만입니다 ({len(courses_with_schedules)}개). " \
-            f"테스트를 위해서는 dueAt이 있는 과제가 있는 과목이 최소 2개 필요합니다."
+        assert len(courses_with_schedules) >= 2, (
+            "dueAt이 있는 과제가 포함된 과목이 2개 이상인데도 Schedule 생성이 2개 미만입니다. "
+            "동기화/변환 로직 또는 비동기 처리 지연 문제일 수 있습니다. "
+            f"(due_courses={courses_with_due_assignments}, schedule_courses={courses_with_schedules})"
+        )
 
         # schedule이 있는 과목을 반으로 나눔: 일부는 활성화, 일부는 비활성화
         courses_list = list(courses_with_schedules)
@@ -210,7 +235,7 @@ class TestSyncDisableApiFlow:
             # 비활성 과목의 assignments는 검증하지 않음 (DB에 남아있지만 더 이상 업데이트되지 않음)
 
         # 8-2) Schedule 확인: CANVAS 일정이 활성 과목에만 존재 (엄격한 검증)
-        schedules_final = self._wait_for_schedules(gateway, headers, max_attempts=20, delay=3)
+        schedules_final = self._wait_for_schedules(gateway, headers, max_attempts=30, delay=3, min_canvas_category_count=1)
         canvas_schedules_final = [s for s in schedules_final if s.get("source") == "CANVAS"]
         assert canvas_schedules_final, "재동기화 후 CANVAS 스케줄이 하나도 없음"
 
@@ -330,13 +355,17 @@ class TestSyncDisableApiFlow:
             time.sleep(delay)
         return []
 
-    def _wait_for_schedules(self, gateway: str, headers: dict, max_attempts=20, delay=3):
+    def _wait_for_schedules(self, gateway: str, headers: dict, max_attempts=20, delay=3, min_canvas_category_count=1):
         for _ in range(max_attempts):
             resp = requests.get(f"{gateway}/api/v1/schedules", headers=headers, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 if data:
-                    return data
+                    canvas_schedules = [s for s in data if s.get("source") == "CANVAS"]
+                    if canvas_schedules:
+                        category_ids = {s.get("categoryId") for s in canvas_schedules if s.get("categoryId")}
+                        if len(category_ids) >= min_canvas_category_count:
+                            return data
             time.sleep(delay)
         return []
 

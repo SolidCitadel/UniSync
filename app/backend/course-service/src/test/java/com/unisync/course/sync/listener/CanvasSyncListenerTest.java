@@ -5,6 +5,7 @@ import com.unisync.course.assignment.service.AssignmentService;
 import com.unisync.course.assignment.publisher.AssignmentEventPublisher;
 import com.unisync.course.common.entity.Course;
 import com.unisync.course.common.entity.Enrollment;
+import com.unisync.course.common.repository.AssignmentRepository;
 import com.unisync.course.common.repository.CourseRepository;
 import com.unisync.course.common.repository.EnrollmentRepository;
 import com.unisync.course.sync.dto.CanvasSyncMessage;
@@ -35,6 +36,9 @@ class CanvasSyncListenerTest {
     private EnrollmentRepository enrollmentRepository;
 
     @Mock
+    private AssignmentRepository assignmentRepository;
+
+    @Mock
     private AssignmentService assignmentService;
 
     @Mock
@@ -49,7 +53,14 @@ class CanvasSyncListenerTest {
 void setUp() {
     MockitoAnnotations.openMocks(this);
     objectMapper = new ObjectMapper();
-    canvasSyncListener = new CanvasSyncListener(courseRepository, enrollmentRepository, assignmentService, assignmentEventPublisher, objectMapper);
+    canvasSyncListener = new CanvasSyncListener(
+            courseRepository,
+            enrollmentRepository,
+            assignmentRepository,
+            assignmentService,
+            assignmentEventPublisher,
+            objectMapper
+    );
 }
 
 @Test

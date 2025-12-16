@@ -91,6 +91,11 @@ public class CanvasSyncListener {
                 log.info("   Processed course: id={}, name={}, assignments={}",
                         course.getId(), course.getName(),
                         courseData.getAssignments() != null ? courseData.getAssignments().size() : 0);
+
+                // assignments 모드일 때 사용자별 배치 이벤트 발행 (단일 Course 형식)
+                if (!"courses".equals(syncMode) && !"CANVAS_COURSES_SYNCED".equals(eventType)) {
+                    publishSingleCourseAssignmentBatch(cognitoSub, syncMessage.getSyncedAt());
+                }
             }
 
             // 배열 형식 지원 (CANVAS_SYNC_COMPLETED) - main 방식
@@ -327,5 +332,56 @@ public class CanvasSyncListener {
                 .build();
 
         assignmentService.createAssignment(eventMessage);
+    }
+
+    /**
+     * 단일 Course 처리 후 사용자별 Assignment 배치 이벤트 발행
+     * (이미 assignments는 DB에 저장된 상태)
+     */
+    private void publishSingleCourseAssignmentBatch(String cognitoSub, String syncedAt) {
+        // 사용자별로 Assignment를 조회하여 배치 메시지 구성
+        Map<String, List<Enrollment>> enrollmentsByUser = enrollmentRepository.findAllByIsSyncEnabledTrue()
+                .stream()
+                .collect(Collectors.groupingBy(Enrollment::getCognitoSub));
+
+        List<UserAssignmentsBatchEvent> batchEvents = new ArrayList<>();
+
+        for (Map.Entry<String, List<Enrollment>> entry : enrollmentsByUser.entrySet()) {
+            String userSub = entry.getKey();
+
+            // 해당 사용자의 과제 전체 조회 (enabled 과목만)
+            List<AssignmentPayload> assignments = enrollmentRepository.findAssignmentsByCognitoSub(userSub)
+                    .stream()
+                    .map(a -> AssignmentPayload.builder()
+                            .assignmentId(a.getAssignmentId())
+                            .canvasAssignmentId(a.getCanvasAssignmentId())
+                            .canvasCourseId(a.getCanvasCourseId())
+                            .courseId(a.getCourseId())
+                            .courseName(a.getCourseName())
+                            .title(a.getTitle())
+                            .description(a.getDescription())
+                            .dueAt(a.getDueAt())
+                            .pointsPossible(a.getPointsPossible())
+                            .build())
+                    .collect(Collectors.toList());
+
+            if (assignments.isEmpty()) {
+                continue;
+            }
+
+            batchEvents.add(UserAssignmentsBatchEvent.builder()
+                    .eventType("USER_ASSIGNMENTS_CREATED")
+                    .cognitoSub(userSub)
+                    .syncedAt(syncedAt)
+                    .assignments(assignments)
+                    .build());
+        }
+
+        if (!batchEvents.isEmpty()) {
+            assignmentEventPublisher.publishAssignmentBatchEvents(batchEvents);
+            log.info("Published {} batch events for assignments (single course mode)", batchEvents.size());
+        } else {
+            log.info("No assignments to publish for enabled users (single course mode)");
+        }
     }
 }
